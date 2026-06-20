@@ -5,3 +5,38 @@
 html, body, #root { min-height: 100%; }
 body { background: #0f172a; }
 * { box-sizing: border-box; }
+/* Mobil scroll düzeltmeleri */
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+body {
+  position: static;
+}
+
+/* Mobilde tablo/listeler ekrana sığmazsa yatay kaydır */
+.mobile-scroll-x {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobilde uzun listeler dikey kayabilsin */
+.mobile-scroll-y {
+  max-height: 75vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Tablo içeriği ezilmesin, yatay kaydırılsın */
+.mobile-table {
+  min-width: 720px;
+  width: 100%;
+}
