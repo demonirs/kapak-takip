@@ -227,7 +227,7 @@ export default function Stock() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 overflow-y-auto">
       <h1 className="text-2xl font-bold text-white">Stok Takip</h1>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -286,12 +286,12 @@ export default function Stock() {
           <div className="grid md:grid-cols-4 gap-3 bg-slate-900 rounded-lg p-3 border border-slate-700">
             <div>
               <div className="text-xs text-slate-400">ÜRÜN ADI</div>
-              <div className="font-semibold">{parsed.urun_adi}</div>
+              <div className="font-semibold break-words">{parsed.urun_adi}</div>
             </div>
 
             <div>
               <div className="text-xs text-slate-400">LOT</div>
-              <div className="font-semibold">{parsed.lot_no}</div>
+              <div className="font-semibold break-words">{parsed.lot_no}</div>
             </div>
 
             <div>
@@ -328,47 +328,51 @@ export default function Stock() {
       {loading ? (
         <div className="text-slate-400">Yükleniyor...</div>
       ) : (
-        <div className="bg-slate-800 rounded-xl overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-slate-700">
-              <tr>
-                <th className="text-left p-3">ÜRÜN ADI</th>
-                <th className="text-left p-3">LOT</th>
-                <th className="text-left p-3">SKT</th>
-                <th className="text-left p-3">KALAN GÜN</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {filteredItems.length === 0 ? (
+        <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+          <div className="w-full max-w-full overflow-x-auto overflow-y-visible">
+            <table className="min-w-[720px] w-full">
+              <thead className="bg-slate-700">
                 <tr>
-                  <td colSpan={4} className="p-4 text-slate-400 text-center">
-                    Bu filtrede stok yok.
-                  </td>
+                  <th className="text-left p-3 whitespace-nowrap">ÜRÜN ADI</th>
+                  <th className="text-left p-3 whitespace-nowrap">LOT</th>
+                  <th className="text-left p-3 whitespace-nowrap">SKT</th>
+                  <th className="text-left p-3 whitespace-nowrap">KALAN GÜN</th>
                 </tr>
-              ) : (
-                filteredItems.map(item => {
-                  const days = kalanGun(item.son_kullanma_tarihi);
+              </thead>
 
-                  return (
-                    <tr
-                      key={item.id}
-                      className={`border-t border-slate-700 ${rowClass(days)}`}
-                    >
-                      <td className="p-3">{item.urun_adi}</td>
-                      <td className="p-3">{item.lot_no}</td>
-                      <td className="p-3">{formatDate(item.son_kullanma_tarihi)}</td>
-                      <td className="p-3">
-                        <span className={`px-3 py-1 rounded-full border text-sm ${badgeClass(days)}`}>
-                          {days}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+              <tbody>
+                {filteredItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-4 text-slate-400 text-center">
+                      Bu filtrede stok yok.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredItems.map(item => {
+                    const days = kalanGun(item.son_kullanma_tarihi);
+
+                    return (
+                      <tr
+                        key={item.id}
+                        className={`border-t border-slate-700 ${rowClass(days)}`}
+                      >
+                        <td className="p-3 whitespace-nowrap">{item.urun_adi}</td>
+                        <td className="p-3 whitespace-nowrap">{item.lot_no}</td>
+                        <td className="p-3 whitespace-nowrap">
+                          {formatDate(item.son_kullanma_tarihi)}
+                        </td>
+                        <td className="p-3 whitespace-nowrap">
+                          <span className={`px-3 py-1 rounded-full border text-sm ${badgeClass(days)}`}>
+                            {days}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
