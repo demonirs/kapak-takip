@@ -8,20 +8,42 @@ type StockItem = {
   son_kullanma_tarihi: string;
 };
 
+type ParsedBarcode = {
+  gtin: string;
+  urun_adi: string;
+  kapak_boyutu: number;
+  lot_no: string;
+  son_kullanma_tarihi: string;
+  barkod_raw: string;
+};
+
+const GTIN_MAP: Record<string, number> = {
+  '00763000655419': 23,
+  '00763000655426': 26,
+  '00763000655433': 29,
+  '00763000655440': 34,
+};
+
 export default function Stock() {
   const [items, setItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [barcode, setBarcode] = useState('');
+  const [parsed, setParsed] = useState<ParsedBarcode | null>(null);
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     loadStock();
   }, []);
 
   async function loadStock() {
+    setLoading(true);
+
     const { data, error } = await supabase
       .from('kapak_stok')
       .select('*')
       .eq('durum', 'stokta')
-      .order('kapak_boyutu');
+      .order('kapak_boyutu')
+      .order('son_kullanma_tarihi');
 
     if (!error && data) {
       setItems(data);
@@ -30,13 +52,99 @@ export default function Stock() {
     setLoading(false);
   }
 
+  function parseBarcode() {
+    setMessage('');
+    setParsed(null);
+
+    const raw = barcode.trim();
+
+    if (!raw) {
+      setMessage('Barkod alanı boş.');
+      return;
+    }
+
+    const gtinMatch = raw.match(/\(01\)(\d{14})/);
+    const sktMatch = raw.match(/\(17\)(\d{6})/);
+    const lotMatch = raw.match(/\(21\)([A-Za-z0-9]+)/);
+
+    if (!gtinMatch) {
+      setMessage('(01) GTIN / UBB bulunamadı.');
+      return;
+    }
+
+    if (!sktMatch) {
+      setMessage('(17) son kullanma tarihi bulunamadı.');
+      return;
+    }
+
+    if (!lotMatch) {
+      setMessage('(21) lot no bulunamadı.');
+      return;
+    }
+
+    const gtin = gtinMatch[1];
+    const kapakBoyutu = GTIN_MAP[gtin];
+
+    if (!kapakBoyutu) {
+      setMessage(`Tanımsız GTIN: ${gtin}`);
+      return;
+    }
+
+    const yy = sktMatch[1].slice(0, 2);
+    const mm = sktMatch[1].slice(2, 4);
+    const dd = sktMatch[1].slice(4, 6);
+
+    const parsedData: ParsedBarcode = {
+      gtin,
+      urun_adi: `EVPROPLUS-${kapakBoyutu}`,
+      kapak_boyutu: kapakBoyutu,
+      lot_no: lotMatch[1],
+      son_kullanma_tarihi: `20${yy}-${mm}-${dd}`,
+      barkod_raw: raw,
+    };
+
+    setParsed(parsedData);
+    setMessage('Barkod çözümlendi.');
+  }
+
+  async function addToStock() {
+    if (!parsed) {
+      setMessage('Önce barkodu çözümle.');
+      return;
+    }
+
+    const { error } = await supabase.from('kapak_stok').insert({
+      urun_adi: parsed.urun_adi,
+      gtin: parsed.gtin,
+      kapak_adi: 'EVPROPLUS',
+      kapak_boyutu: parsed.kapak_boyutu,
+      lot_no: parsed.lot_no,
+      son_kullanma_tarihi: parsed.son_kullanma_tarihi,
+      barkod_raw: parsed.barkod_raw,
+      durum: 'stokta',
+    });
+
+    if (error) {
+      setMessage(`Stoka eklenemedi: ${error.message}`);
+      return;
+    }
+
+    setBarcode('');
+    setParsed(null);
+    setMessage('Kapak stoka eklendi.');
+    await loadStock();
+  }
+
   function kalanGun(date: string) {
     const today = new Date();
     const expiry = new Date(date);
-
     const diff = expiry.getTime() - today.getTime();
 
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  }
+
+  function formatDate(date: string) {
+    return new Date(date).toLocaleDateString('tr-TR');
   }
 
   return (
@@ -44,6 +152,77 @@ export default function Stock() {
       <h1 className="text-2xl font-bold text-white">
         Stok Takip
       </h1>
+
+      <div className="bg-slate-800 rounded-xl p-4 space-y-4">
+        <div>
+          <label className="block text-sm text-slate-300 mb-2">
+            Barkod Yapıştır / Okut
+          </label>
+
+          <input
+            value={barcode}
+            onChange={(e) => setBarcode(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                parseBarcode();
+              }
+            }}
+            placeholder="(01)00763000655419(17)260625(21)J276941(20)01"
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={parseBarcode}
+            className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-medium"
+          >
+            Çözümle
+          </button>
+
+          <button
+            onClick={addToStock}
+            disabled={!parsed}
+            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Stoka Ekle
+          </button>
+        </div>
+
+        {message && (
+          <div className="text-sm text-slate-300">
+            {message}
+          </div>
+        )}
+
+        {parsed && (
+          <div className="grid md:grid-cols-4 gap-3 bg-slate-900 rounded-lg p-3 border border-slate-700">
+            <div>
+              <div className="text-xs text-slate-400">ÜRÜN ADI</div>
+              <div className="font-semibold">{parsed.urun_adi}</div>
+            </div>
+
+            <div>
+              <div className="text-xs text-slate-400">LOT</div>
+              <div className="font-semibold">{parsed.lot_no}</div>
+            </div>
+
+            <div>
+              <div className="text-xs text-slate-400">SKT</div>
+              <div className="font-semibold">
+                {formatDate(parsed.son_kullanma_tarihi)}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs text-slate-400">KAPAK BOYUTU</div>
+              <div className="font-semibold">
+                {parsed.kapak_boyutu} mm
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {loading ? (
         <div className="text-slate-400">
@@ -62,30 +241,39 @@ export default function Stock() {
             </thead>
 
             <tbody>
-              {items.map((item) => (
-                <tr
-                  key={item.id}
-                  className="border-t border-slate-700"
-                >
-                  <td className="p-3">
-                    {item.urun_adi}
-                  </td>
-
-                  <td className="p-3">
-                    {item.lot_no}
-                  </td>
-
-                  <td className="p-3">
-                    {new Date(
-                      item.son_kullanma_tarihi
-                    ).toLocaleDateString('tr-TR')}
-                  </td>
-
-                  <td className="p-3">
-                    {kalanGun(item.son_kullanma_tarihi)}
+              {items.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="p-4 text-slate-400 text-center"
+                  >
+                    Stokta kayıt yok.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                items.map((item) => (
+                  <tr
+                    key={item.id}
+                    className="border-t border-slate-700"
+                  >
+                    <td className="p-3">
+                      {item.urun_adi}
+                    </td>
+
+                    <td className="p-3">
+                      {item.lot_no}
+                    </td>
+
+                    <td className="p-3">
+                      {formatDate(item.son_kullanma_tarihi)}
+                    </td>
+
+                    <td className="p-3">
+                      {kalanGun(item.son_kullanma_tarihi)}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
