@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 type StockItem = {
   id: string;
   urun_adi: string;
+  kapak_boyutu: number;
   lot_no: string;
   son_kullanma_tarihi: string;
 };
@@ -24,12 +25,15 @@ const GTIN_MAP: Record<string, number> = {
   '00763000655440': 34,
 };
 
+const FILTERS = ['Tümü', '23', '26', '29', '34'] as const;
+
 export default function Stock() {
   const [items, setItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [barcode, setBarcode] = useState('');
   const [parsed, setParsed] = useState<ParsedBarcode | null>(null);
   const [message, setMessage] = useState('');
+  const [activeFilter, setActiveFilter] = useState<(typeof FILTERS)[number]>('Tümü');
 
   useEffect(() => {
     loadStock();
@@ -40,7 +44,7 @@ export default function Stock() {
 
     const { data, error } = await supabase
       .from('kapak_stok')
-      .select('*')
+      .select('id, urun_adi, kapak_boyutu, lot_no, son_kullanma_tarihi')
       .eq('durum', 'stokta')
       .order('kapak_boyutu')
       .order('son_kullanma_tarihi');
@@ -51,6 +55,21 @@ export default function Stock() {
 
     setLoading(false);
   }
+
+  const counts = useMemo(() => {
+    return {
+      toplam: items.length,
+      23: items.filter(i => i.kapak_boyutu === 23).length,
+      26: items.filter(i => i.kapak_boyutu === 26).length,
+      29: items.filter(i => i.kapak_boyutu === 29).length,
+      34: items.filter(i => i.kapak_boyutu === 34).length,
+    };
+  }, [items]);
+
+  const filteredItems = useMemo(() => {
+    if (activeFilter === 'Tümü') return items;
+    return items.filter(item => item.kapak_boyutu === Number(activeFilter));
+  }, [items, activeFilter]);
 
   function parseBarcode() {
     setMessage('');
@@ -94,16 +113,15 @@ export default function Stock() {
     const mm = sktMatch[1].slice(2, 4);
     const dd = sktMatch[1].slice(4, 6);
 
-    const parsedData: ParsedBarcode = {
+    setParsed({
       gtin,
       urun_adi: `EVPROPLUS-${kapakBoyutu}`,
       kapak_boyutu: kapakBoyutu,
       lot_no: lotMatch[1],
       son_kullanma_tarihi: `20${yy}-${mm}-${dd}`,
       barkod_raw: raw,
-    };
+    });
 
-    setParsed(parsedData);
     setMessage('Barkod çözümlendi.');
   }
 
@@ -147,11 +165,35 @@ export default function Stock() {
     return new Date(date).toLocaleDateString('tr-TR');
   }
 
+  function rowClass(days: number) {
+    if (days <= 30) return 'bg-red-500/15 text-red-100';
+    if (days <= 90) return 'bg-orange-500/15 text-orange-100';
+    return '';
+  }
+
+  function badgeClass(days: number) {
+    if (days <= 30) return 'bg-red-500/20 text-red-200 border-red-500/30';
+    if (days <= 90) return 'bg-orange-500/20 text-orange-200 border-orange-500/30';
+    return 'bg-emerald-500/20 text-emerald-200 border-emerald-500/30';
+  }
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">
-        Stok Takip
-      </h1>
+      <h1 className="text-2xl font-bold text-white">Stok Takip</h1>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+          <div className="text-sm text-slate-400">Toplam Stok</div>
+          <div className="text-2xl font-bold">{counts.toplam}</div>
+        </div>
+
+        {[23, 26, 29, 34].map(size => (
+          <div key={size} className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+            <div className="text-sm text-slate-400">{size} mm</div>
+            <div className="text-2xl font-bold">{counts[size as 23 | 26 | 29 | 34]}</div>
+          </div>
+        ))}
+      </div>
 
       <div className="bg-slate-800 rounded-xl p-4 space-y-4">
         <div>
@@ -163,9 +205,7 @@ export default function Stock() {
             value={barcode}
             onChange={(e) => setBarcode(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                parseBarcode();
-              }
+              if (e.key === 'Enter') parseBarcode();
             }}
             placeholder="(01)00763000655419(17)260625(21)J276941(20)01"
             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
@@ -189,11 +229,7 @@ export default function Stock() {
           </button>
         </div>
 
-        {message && (
-          <div className="text-sm text-slate-300">
-            {message}
-          </div>
-        )}
+        {message && <div className="text-sm text-slate-300">{message}</div>}
 
         {parsed && (
           <div className="grid md:grid-cols-4 gap-3 bg-slate-900 rounded-lg p-3 border border-slate-700">
@@ -209,25 +245,35 @@ export default function Stock() {
 
             <div>
               <div className="text-xs text-slate-400">SKT</div>
-              <div className="font-semibold">
-                {formatDate(parsed.son_kullanma_tarihi)}
-              </div>
+              <div className="font-semibold">{formatDate(parsed.son_kullanma_tarihi)}</div>
             </div>
 
             <div>
               <div className="text-xs text-slate-400">KAPAK BOYUTU</div>
-              <div className="font-semibold">
-                {parsed.kapak_boyutu} mm
-              </div>
+              <div className="font-semibold">{parsed.kapak_boyutu} mm</div>
             </div>
           </div>
         )}
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        {FILTERS.map(filter => (
+          <button
+            key={filter}
+            onClick={() => setActiveFilter(filter)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium ${
+              activeFilter === filter
+                ? 'bg-cyan-600 text-white'
+                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+            }`}
+          >
+            {filter === 'Tümü' ? 'Tümü' : `${filter} mm`}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
-        <div className="text-slate-400">
-          Yükleniyor...
-        </div>
+        <div className="text-slate-400">Yükleniyor...</div>
       ) : (
         <div className="bg-slate-800 rounded-xl overflow-hidden">
           <table className="w-full">
@@ -241,38 +287,32 @@ export default function Stock() {
             </thead>
 
             <tbody>
-              {items.length === 0 ? (
+              {filteredItems.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={4}
-                    className="p-4 text-slate-400 text-center"
-                  >
-                    Stokta kayıt yok.
+                  <td colSpan={4} className="p-4 text-slate-400 text-center">
+                    Bu filtrede stok yok.
                   </td>
                 </tr>
               ) : (
-                items.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="border-t border-slate-700"
-                  >
-                    <td className="p-3">
-                      {item.urun_adi}
-                    </td>
+                filteredItems.map((item) => {
+                  const days = kalanGun(item.son_kullanma_tarihi);
 
-                    <td className="p-3">
-                      {item.lot_no}
-                    </td>
-
-                    <td className="p-3">
-                      {formatDate(item.son_kullanma_tarihi)}
-                    </td>
-
-                    <td className="p-3">
-                      {kalanGun(item.son_kullanma_tarihi)}
-                    </td>
-                  </tr>
-                ))
+                  return (
+                    <tr
+                      key={item.id}
+                      className={`border-t border-slate-700 ${rowClass(days)}`}
+                    >
+                      <td className="p-3">{item.urun_adi}</td>
+                      <td className="p-3">{item.lot_no}</td>
+                      <td className="p-3">{formatDate(item.son_kullanma_tarihi)}</td>
+                      <td className="p-3">
+                        <span className={`px-3 py-1 rounded-full border text-sm ${badgeClass(days)}`}>
+                          {days}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
