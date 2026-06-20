@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 type Movement = {
@@ -35,6 +36,26 @@ export default function StockMovements() {
     setLoading(false);
   }
 
+  async function deleteMovement(id: string) {
+    const ok = window.confirm(
+      'Bu hareket kaydı silinsin mi?'
+    );
+
+    if (!ok) return;
+
+    const { error } = await supabase
+      .from('stok_hareketleri')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    loadMovements();
+  }
+
   function formatDate(date: string | null) {
     if (!date) return '-';
     return new Date(date).toLocaleDateString('tr-TR');
@@ -51,22 +72,31 @@ export default function StockMovements() {
   }
 
   function islemClass(islem: Movement['islem']) {
-    if (islem === 'giris') return 'bg-emerald-500/20 text-emerald-200 border-emerald-500/30';
-    if (islem === 'kullanildi') return 'bg-cyan-500/20 text-cyan-200 border-cyan-500/30';
+    if (islem === 'giris')
+      return 'bg-emerald-500/20 text-emerald-200 border-emerald-500/30';
+
+    if (islem === 'kullanildi')
+      return 'bg-cyan-500/20 text-cyan-200 border-cyan-500/30';
+
     return 'bg-red-500/20 text-red-200 border-red-500/30';
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Stok Hareketleri</h1>
+        <h1 className="text-2xl font-bold text-white">
+          Stok Hareketleri
+        </h1>
+
         <p className="text-slate-400">
-          Kapak girişleri ve vakada kullanılan kapak hareketleri
+          Kapak girişleri ve kullanım geçmişi
         </p>
       </div>
 
       {loading ? (
-        <div className="text-slate-400">Yükleniyor...</div>
+        <div className="text-slate-400">
+          Yükleniyor...
+        </div>
       ) : (
         <div className="bg-slate-800 rounded-xl overflow-hidden border border-slate-700">
           <table className="w-full">
@@ -77,28 +107,65 @@ export default function StockMovements() {
                 <th className="text-left p-3">ÜRÜN</th>
                 <th className="text-left p-3">LOT</th>
                 <th className="text-left p-3">SKT</th>
+                <th className="text-left p-3"></th>
               </tr>
             </thead>
 
             <tbody>
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-4 text-slate-400 text-center">
-                    Henüz stok hareketi yok.
+                  <td
+                    colSpan={6}
+                    className="p-4 text-slate-400 text-center"
+                  >
+                    Henüz hareket yok.
                   </td>
                 </tr>
               ) : (
                 items.map(item => (
-                  <tr key={item.id} className="border-t border-slate-700">
-                    <td className="p-3">{formatDateTime(item.created_at)}</td>
+                  <tr
+                    key={item.id}
+                    className="border-t border-slate-700"
+                  >
                     <td className="p-3">
-                      <span className={`px-3 py-1 rounded-full border text-sm ${islemClass(item.islem)}`}>
+                      {formatDateTime(item.created_at)}
+                    </td>
+
+                    <td className="p-3">
+                      <span
+                        className={`px-3 py-1 rounded-full border text-sm ${islemClass(
+                          item.islem
+                        )}`}
+                      >
                         {islemText(item.islem)}
                       </span>
                     </td>
-                    <td className="p-3">{item.urun_adi}</td>
-                    <td className="p-3">{item.lot_no}</td>
-                    <td className="p-3">{formatDate(item.son_kullanma_tarihi)}</td>
+
+                    <td className="p-3">
+                      {item.urun_adi}
+                    </td>
+
+                    <td className="p-3">
+                      {item.lot_no}
+                    </td>
+
+                    <td className="p-3">
+                      {formatDate(
+                        item.son_kullanma_tarihi
+                      )}
+                    </td>
+
+                    <td className="p-3">
+                      <button
+                        onClick={() =>
+                          deleteMovement(item.id)
+                        }
+                        className="text-red-400 hover:text-red-300"
+                        title="Kaydı Sil"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
