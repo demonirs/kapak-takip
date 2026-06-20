@@ -11,6 +11,9 @@ import Search from './components/Search';
 import Stock from './components/Stock';
 import StockMovements from './components/StockMovements';
 import ArchivedMovements from './components/ArchivedMovements';
+import CompetitorCases from './components/CompetitorCases';
+import MarketShare from './components/MarketShare';
+import CenterAnalysis from './components/CenterAnalysis';
 import Users from './components/Users';
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -50,11 +53,17 @@ function AppRoutes() {
         <Route path="list" element={<List />} />
         <Route path="view/:id" element={<ViewCase />} />
         <Route path="search" element={<Search />} />
+        <Route path="export" element={<Export />} />
+
         <Route path="stock" element={<Stock />} />
         <Route path="stock-movements" element={<StockMovements />} />
         <Route path="archive" element={<ArchivedMovements />} />
+
+        <Route path="competitor-cases" element={<CompetitorCases />} />
+        <Route path="market-share" element={<MarketShare />} />
+        <Route path="center-analysis" element={<CenterAnalysis />} />
+
         <Route path="users" element={<Users />} />
-        <Route path="export" element={<Export />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
