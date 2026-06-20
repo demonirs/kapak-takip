@@ -10,6 +10,7 @@ import Export from './components/Export';
 import Search from './components/Search';
 import Stock from './components/Stock';
 import StockMovements from './components/StockMovements';
+import Users from './components/Users';
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -50,6 +51,7 @@ function AppRoutes() {
         <Route path="search" element={<Search />} />
         <Route path="stock" element={<Stock />} />
         <Route path="stock-movements" element={<StockMovements />} />
+        <Route path="users" element={<Users />} />
         <Route path="export" element={<Export />} />
       </Route>
 
