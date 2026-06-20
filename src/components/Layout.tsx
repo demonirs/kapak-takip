@@ -35,8 +35,8 @@ function getPageTitle(pathname: string) {
   if (pathname.startsWith('/list')) return 'Vakalar';
   if (pathname.startsWith('/view')) return 'Vaka Detayı';
   if (pathname.startsWith('/search')) return 'Arama';
-  if (pathname.startsWith('/stock')) return 'Stok Takip';
   if (pathname.startsWith('/stock-movements')) return 'Stok Hareketleri';
+  if (pathname.startsWith('/stock')) return 'Stok Takip';
   if (pathname.startsWith('/users')) return 'Kullanıcı Yönetimi';
   if (pathname.startsWith('/export')) return 'Excel Aktar';
   return 'Kapak Takip';
@@ -47,7 +47,7 @@ export default function Layout() {
   const location = useLocation();
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-dvh bg-slate-950 text-white overflow-x-hidden">
       <header className="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800">
         <div className="px-4 py-3">
           <div className="flex items-center justify-between gap-3">
@@ -88,7 +88,7 @@ export default function Layout() {
             </div>
           </div>
 
-          <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
+          <div className="mt-3 flex items-center gap-2 overflow-x-auto overflow-y-hidden pb-1">
             {quickMenuItems.map(item => {
               const Icon = item.icon;
 
@@ -118,7 +118,7 @@ export default function Layout() {
         </div>
       </header>
 
-      <main className="px-3 sm:px-4 py-4 pb-24 max-w-5xl mx-auto">
+      <main className="w-full max-w-5xl mx-auto px-3 sm:px-4 py-4 pb-28 overflow-x-hidden">
         <Outlet />
       </main>
 
