@@ -61,7 +61,6 @@ export default function AddCase() {
   const [form, setForm] = useState<FormState>(initial);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [selectedStockId, setSelectedStockId] = useState('');
-  const [selectedStock, setSelectedStock] = useState<StockItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,44 +82,44 @@ export default function AddCase() {
       return;
     }
 
-    const load = async () => {
-      setLoading(true);
-
-      try {
-        const { data, error } = await timeout(
-          supabase.from('kapaklar').select('*').eq('id', id).maybeSingle(),
-          10000
-        );
-
-        if (error) throw error;
-
-        if (data) {
-          const k = data as Kapak;
-
-          setForm({
-            vaka_tarihi: k.vaka_tarihi,
-            merkez_hastane: k.merkez_hastane,
-            doktor: k.doktor,
-            hasta_adi: k.hasta_adi,
-            kapak_tipi: k.kapak_tipi,
-            kapak_size: k.kapak_size,
-            lot_no: k.lot_no,
-            son_kul_tarihi: k.son_kul_tarihi,
-            pre_balon: k.pre_balon,
-            post_balon: k.post_balon,
-            paravalvuler_ay: k.paravalvuler_ay,
-            proglide_adedi: k.proglide_adedi,
-          });
-        }
-      } catch (e: any) {
-        setError(e.message || 'Vaka yüklenemedi');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
+    loadCase();
   }, [id]);
+
+  async function loadCase() {
+    setLoading(true);
+
+    try {
+      const { data, error } = await timeout(
+        supabase.from('kapaklar').select('*').eq('id', id).maybeSingle(),
+        10000
+      );
+
+      if (error) throw error;
+
+      if (data) {
+        const k = data as Kapak;
+
+        setForm({
+          vaka_tarihi: k.vaka_tarihi,
+          merkez_hastane: k.merkez_hastane,
+          doktor: k.doktor,
+          hasta_adi: k.hasta_adi,
+          kapak_tipi: k.kapak_tipi,
+          kapak_size: k.kapak_size,
+          lot_no: k.lot_no,
+          son_kul_tarihi: k.son_kul_tarihi,
+          pre_balon: k.pre_balon,
+          post_balon: k.post_balon,
+          paravalvuler_ay: k.paravalvuler_ay,
+          proglide_adedi: k.proglide_adedi,
+        });
+      }
+    } catch (e: any) {
+      setError(e.message || 'Vaka yüklenemedi');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function loadStockItems() {
     const { data, error } = await supabase
@@ -142,15 +141,14 @@ export default function AddCase() {
     setSelectedStockId(stockId);
 
     if (!stockId) {
-      setSelectedStock(null);
       return;
     }
 
     const selected = stockItems.find(item => item.id === stockId);
 
-    if (!selected) return;
-
-    setSelectedStock(selected);
+    if (!selected) {
+      return;
+    }
 
     setForm(prev => ({
       ...prev,
@@ -159,6 +157,43 @@ export default function AddCase() {
       lot_no: selected.lot_no,
       son_kul_tarihi: selected.son_kullanma_tarihi,
     }));
+  }
+
+  async function markStockAsUsed(stockId: string, vakaId: string) {
+    const selected = stockItems.find(item => item.id === stockId);
+
+    if (!selected) {
+      throw new Error('Seçilen stok kaydı bulunamadı.');
+    }
+
+    const { error: stockError } = await timeout(
+      supabase
+        .from('kapak_stok')
+        .update({
+          durum: 'kullanildi',
+          kullanilan_vaka_id: vakaId,
+        })
+        .eq('id', stockId),
+      10000
+    );
+
+    if (stockError) throw stockError;
+
+    const { error: movementError } = await timeout(
+      supabase.from('stok_hareketleri').insert({
+        kapak_stok_id: stockId,
+        islem: 'kullanildi',
+        urun_adi: selected.urun_adi,
+        lot_no: selected.lot_no,
+        kapak_boyutu: selected.kapak_boyutu,
+        son_kullanma_tarihi: selected.son_kullanma_tarihi,
+        vaka_id: vakaId,
+        created_by: user?.id,
+      }),
+      10000
+    );
+
+    if (movementError) throw movementError;
   }
 
   const submit = async (e: React.FormEvent) => {
@@ -205,34 +240,8 @@ export default function AddCase() {
 
         if (error) throw error;
 
-        if (selectedStockId && data?.id && selectedStock) {
-          const { error: stockError } = await timeout(
-            supabase
-              .from('kapak_stok')
-              .update({
-                durum: 'kullanildi',
-                kullanilan_vaka_id: data.id,
-              })
-              .eq('id', selectedStockId),
-            10000
-          );
-
-          if (stockError) throw stockError;
-
-          const { error: hareketError } = await timeout(
-            supabase.from('stok_hareketleri').insert({
-              kapak_stok_id: selectedStockId,
-              islem: 'kullanildi',
-              urun_adi: selectedStock.urun_adi,
-              lot_no: selectedStock.lot_no,
-              kapak_boyutu: selectedStock.kapak_boyutu,
-              son_kullanma_tarihi: selectedStock.son_kullanma_tarihi,
-              vaka_id: data.id,
-            }),
-            10000
-          );
-
-          if (hareketError) throw hareketError;
+        if (selectedStockId && data?.id) {
+          await markStockAsUsed(selectedStockId, data.id);
         }
       }
 
@@ -270,7 +279,9 @@ export default function AddCase() {
       </button>
 
       <form onSubmit={submit} className="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-6">
-        <h1 className="text-2xl font-bold">{isEdit ? 'Vakayı Düzenle' : 'Yeni Vaka Ekle'}</h1>
+        <h1 className="text-2xl font-bold">
+          {isEdit ? 'Vakayı Düzenle' : 'Yeni Vaka Ekle'}
+        </h1>
 
         {error && (
           <p className="bg-red-500/10 border border-red-500/30 text-red-300 p-3 rounded-xl">
@@ -294,7 +305,8 @@ export default function AddCase() {
 
                 {stockItems.map(item => (
                   <option key={item.id} value={item.id}>
-                    {item.urun_adi} | LOT: {item.lot_no} | SKT: {new Date(item.son_kullanma_tarihi).toLocaleDateString('tr-TR')}
+                    {item.urun_adi} | LOT: {item.lot_no} | SKT:{' '}
+                    {new Date(item.son_kullanma_tarihi).toLocaleDateString('tr-TR')}
                   </option>
                 ))}
               </select>
@@ -347,11 +359,19 @@ export default function AddCase() {
           </Field>
 
           <Field label="Kapak Tipi">
-            <Select value={form.kapak_tipi} onChange={v => set('kapak_tipi', v)} options={KAPAK_TIPLERI} />
+            <Select
+              value={form.kapak_tipi}
+              onChange={v => set('kapak_tipi', v)}
+              options={KAPAK_TIPLERI}
+            />
           </Field>
 
           <Field label="Kapak Size">
-            <Select value={form.kapak_size} onChange={v => set('kapak_size', v)} options={KAPAK_SIZES} />
+            <Select
+              value={form.kapak_size}
+              onChange={v => set('kapak_size', v)}
+              options={KAPAK_SIZES}
+            />
           </Field>
 
           <Field label="Lot No">
@@ -374,11 +394,19 @@ export default function AddCase() {
           </Field>
 
           <Field label="Pre Balon">
-            <Select value={form.pre_balon} onChange={v => set('pre_balon', v)} options={BALON_SIZES} />
+            <Select
+              value={form.pre_balon}
+              onChange={v => set('pre_balon', v)}
+              options={BALON_SIZES}
+            />
           </Field>
 
           <Field label="Post Balon">
-            <Select value={form.post_balon} onChange={v => set('post_balon', v)} options={BALON_SIZES} />
+            <Select
+              value={form.post_balon}
+              onChange={v => set('post_balon', v)}
+              options={BALON_SIZES}
+            />
           </Field>
 
           <Field label="Paravalvüler AY">
