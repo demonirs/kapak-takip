@@ -48,6 +48,10 @@ export default function Layout() {
               Stok Takip
             </NavLink>
 
+            <NavLink className={navClass} to="/stock-movements">
+              Hareketler
+            </NavLink>
+
             <NavLink className={navClass} to="/export">
               Excel Aktar
             </NavLink>
