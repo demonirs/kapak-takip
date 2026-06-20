@@ -10,6 +10,7 @@ import {
   PlusCircle,
   Search,
   Shuffle,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -24,6 +25,7 @@ const mainMenuItems = [
 const quickMenuItems = [
   { to: '/search', label: 'Arama', icon: Search },
   { to: '/export', label: 'Excel', icon: FileSpreadsheet },
+  { to: '/users', label: 'Kullanıcılar', icon: Users },
 ];
 
 function getPageTitle(pathname: string) {
@@ -33,8 +35,9 @@ function getPageTitle(pathname: string) {
   if (pathname.startsWith('/list')) return 'Vakalar';
   if (pathname.startsWith('/view')) return 'Vaka Detayı';
   if (pathname.startsWith('/search')) return 'Arama';
-  if (pathname.startsWith('/stock-movements')) return 'Stok Hareketleri';
   if (pathname.startsWith('/stock')) return 'Stok Takip';
+  if (pathname.startsWith('/stock-movements')) return 'Stok Hareketleri';
+  if (pathname.startsWith('/users')) return 'Kullanıcı Yönetimi';
   if (pathname.startsWith('/export')) return 'Excel Aktar';
   return 'Kapak Takip';
 }
@@ -57,6 +60,7 @@ export default function Layout() {
                 <p className="text-sm font-semibold leading-tight truncate">
                   Fokus Sağlık
                 </p>
+
                 <p className="text-xs text-slate-400 leading-tight truncate">
                   {getPageTitle(location.pathname)}
                 </p>
@@ -68,6 +72,7 @@ export default function Layout() {
                 <p className="text-xs text-slate-400 leading-tight">
                   Kullanıcı
                 </p>
+
                 <p className="text-sm text-slate-200 font-medium leading-tight max-w-[140px] truncate">
                   {profile?.full_name || 'Kullanıcı'}
                 </p>
@@ -78,7 +83,7 @@ export default function Layout() {
                 className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-300 hover:text-red-200 hover:bg-red-500/10"
                 title="Çıkış Yap"
               >
-                <LogOut className="w-4.5 h-4.5" />
+                <LogOut className="w-4 h-4" />
               </button>
             </div>
           </div>
