@@ -1,33 +1,64 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
   Archive,
+  BarChart3,
+  Bell,
+  Building2,
   FileSpreadsheet,
   HeartPulse,
   Home,
   List,
   LogOut,
+  Menu,
   Package,
   PlusCircle,
   Search,
   Shuffle,
+  TrendingDown,
   Users,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-const mainMenuItems = [
-  { to: '/', label: 'Ana Sayfa', icon: Home },
-  { to: '/add', label: 'Yeni Vaka', icon: PlusCircle },
-  { to: '/list', label: 'Vakalar', icon: List },
-  { to: '/stock', label: 'Stok', icon: Package },
-  { to: '/stock-movements', label: 'Hareket', icon: Shuffle },
-];
-
-const quickMenuItems = [
-  { to: '/search', label: 'Arama', icon: Search },
-  { to: '/export', label: 'Excel', icon: FileSpreadsheet },
-  { to: '/archive', label: 'Arşiv', icon: Archive },
-  { to: '/users', label: 'Kullanıcılar', icon: Users },
+const menuSections = [
+  {
+    title: 'VAKA YÖNETİMİ',
+    items: [
+      { to: '/', label: 'Ana Sayfa', icon: Home },
+      { to: '/add', label: 'Yeni Vaka', icon: PlusCircle },
+      { to: '/list', label: 'Vakalar', icon: List },
+      { to: '/search', label: 'Arama', icon: Search },
+      { to: '/export', label: 'Excel Aktar', icon: FileSpreadsheet },
+    ],
+  },
+  {
+    title: 'STOK YÖNETİMİ',
+    items: [
+      { to: '/stock', label: 'Stok Takip', icon: Package },
+      { to: '/stock-movements', label: 'Stok Hareketleri', icon: Shuffle },
+      { to: '/archive', label: 'Arşiv', icon: Archive },
+    ],
+  },
+  {
+    title: 'RAKİP TAKİBİ',
+    items: [
+      { to: '/competitor-cases', label: 'Rakip Vakalar', icon: Users },
+      { to: '/market-share', label: 'Pazar Payı', icon: BarChart3 },
+      { to: '/center-analysis', label: 'Merkez Analizi', icon: Building2 },
+      { to: '/operator-preference', label: 'Operatör Tercihi', icon: Users },
+      { to: '/lost-cases', label: 'Kaybedilen Vakalar', icon: TrendingDown },
+      { to: '/competitor-stock', label: 'Rakip Stok', icon: Package },
+      { to: '/competitor-alerts', label: 'Rakip Alarm', icon: Bell },
+    ],
+  },
+  {
+    title: 'SİSTEM',
+    items: [
+      { to: '/users', label: 'Kullanıcılar', icon: Users },
+    ],
+  },
 ];
 
 function getPageTitle(pathname: string) {
@@ -42,22 +73,123 @@ function getPageTitle(pathname: string) {
   if (pathname.startsWith('/archive')) return 'Arşiv';
   if (pathname.startsWith('/users')) return 'Kullanıcı Yönetimi';
   if (pathname.startsWith('/export')) return 'Excel Aktar';
+  if (pathname.startsWith('/competitor-cases')) return 'Rakip Vakalar';
+  if (pathname.startsWith('/market-share')) return 'Pazar Payı';
+  if (pathname.startsWith('/center-analysis')) return 'Merkez Analizi';
+  if (pathname.startsWith('/operator-preference')) return 'Operatör Tercihi';
+  if (pathname.startsWith('/lost-cases')) return 'Kaybedilen Vakalar';
+  if (pathname.startsWith('/competitor-stock')) return 'Rakip Stok';
+  if (pathname.startsWith('/competitor-alerts')) return 'Rakip Alarm';
   return 'Kapak Takip';
 }
 
 export default function Layout() {
   const { profile, signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  function goHome() {
+    setMenuOpen(false);
+    navigate('/');
+  }
+
+  async function handleSignOut() {
+    setMenuOpen(false);
+    await signOut();
+  }
 
   return (
     <div className="min-h-dvh bg-slate-950 text-white overflow-x-hidden">
+      {menuOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
+
+      <aside
+        className={`fixed top-0 left-0 z-50 h-dvh w-[82%] max-w-[320px] bg-slate-950 border-r border-slate-800 shadow-2xl transition-transform duration-300 ${
+          menuOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="flex items-center justify-between px-4 py-4 border-b border-slate-800">
+          <button
+            onClick={goHome}
+            className="flex items-center gap-3 text-left"
+          >
+            <div className="w-10 h-10 rounded-xl bg-cyan-500 flex items-center justify-center shadow-md shadow-cyan-500/20">
+              <HeartPulse className="w-5 h-5" />
+            </div>
+
+            <div>
+              <p className="text-sm font-bold leading-tight">Fokus Sağlık</p>
+              <p className="text-xs text-slate-400">TAVI Kapak Takip Sistemi</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setMenuOpen(false)}
+            className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-300"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="h-[calc(100dvh-73px)] overflow-y-auto px-3 py-4 pb-8">
+          {menuSections.map(section => (
+            <div key={section.title} className="mb-6">
+              <p className="px-3 mb-2 text-xs font-bold text-slate-500">
+                {section.title}
+              </p>
+
+              <div className="space-y-1">
+                {section.items.map(item => {
+                  const Icon = item.icon;
+
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      onClick={() => setMenuOpen(false)}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium ${
+                          isActive
+                            ? 'bg-cyan-500/15 text-cyan-200'
+                            : 'text-slate-300 hover:bg-slate-900 hover:text-white'
+                        }`
+                      }
+                    >
+                      <Icon className="w-5 h-5 shrink-0" />
+                      <span>{item.label}</span>
+                    </NavLink>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          <button
+            onClick={handleSignOut}
+            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-red-300 hover:bg-red-500/10"
+          >
+            <LogOut className="w-5 h-5" />
+            Çıkış Yap
+          </button>
+        </div>
+      </aside>
+
       <header className="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800">
         <div className="px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-cyan-500 flex items-center justify-center shadow-md shadow-cyan-500/20 shrink-0">
+              <button
+                onClick={goHome}
+                className="w-9 h-9 rounded-xl bg-cyan-500 flex items-center justify-center shadow-md shadow-cyan-500/20 shrink-0"
+                title="Ana Sayfa"
+              >
                 <HeartPulse className="w-5 h-5" />
-              </div>
+              </button>
 
               <div className="min-w-0">
                 <p className="text-sm font-semibold leading-tight truncate">
@@ -71,6 +203,14 @@ export default function Layout() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setMenuOpen(true)}
+                className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-cyan-300"
+                title="Menü"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+
               <div className="hidden sm:block text-right">
                 <p className="text-xs text-slate-400 leading-tight">
                   Kullanıcı
@@ -82,7 +222,7 @@ export default function Layout() {
               </div>
 
               <button
-                onClick={signOut}
+                onClick={handleSignOut}
                 className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-300 hover:text-red-200 hover:bg-red-500/10"
                 title="Çıkış Yap"
               >
@@ -92,26 +232,47 @@ export default function Layout() {
           </div>
 
           <div className="mt-3 flex items-center gap-2 overflow-x-auto overflow-y-hidden pb-1">
-            {quickMenuItems.map(item => {
-              const Icon = item.icon;
+            <NavLink
+              to="/search"
+              className={({ isActive }) =>
+                `shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border ${
+                  isActive
+                    ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/30'
+                    : 'bg-slate-900 text-slate-300 border-slate-800'
+                }`
+              }
+            >
+              <Search className="w-4 h-4" />
+              Arama
+            </NavLink>
 
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) =>
-                    `shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border ${
-                      isActive
-                        ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/30'
-                        : 'bg-slate-900 text-slate-300 border-slate-800'
-                    }`
-                  }
-                >
-                  <Icon className="w-4 h-4" />
-                  {item.label}
-                </NavLink>
-              );
-            })}
+            <NavLink
+              to="/export"
+              className={({ isActive }) =>
+                `shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border ${
+                  isActive
+                    ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/30'
+                    : 'bg-slate-900 text-slate-300 border-slate-800'
+                }`
+              }
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Excel
+            </NavLink>
+
+            <NavLink
+              to="/archive"
+              className={({ isActive }) =>
+                `shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border ${
+                  isActive
+                    ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/30'
+                    : 'bg-slate-900 text-slate-300 border-slate-800'
+                }`
+              }
+            >
+              <Archive className="w-4 h-4" />
+              Arşiv
+            </NavLink>
 
             <div className="shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium bg-slate-900 border border-slate-800 text-slate-400">
               <Activity className="w-4 h-4 text-cyan-300" />
@@ -121,34 +282,9 @@ export default function Layout() {
         </div>
       </header>
 
-      <main className="w-full max-w-5xl mx-auto px-3 sm:px-4 py-4 pb-28 overflow-x-hidden">
+      <main className="w-full max-w-5xl mx-auto px-3 sm:px-4 py-4 pb-8 overflow-x-hidden">
         <Outlet />
       </main>
-
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur border-t border-slate-800">
-        <div className="grid grid-cols-5 gap-1 px-2 py-2 max-w-5xl mx-auto">
-          {mainMenuItems.map(item => {
-            const Icon = item.icon;
-
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  `flex flex-col items-center justify-center gap-1 rounded-xl py-2 min-h-[58px] text-[11px] font-medium ${
-                    isActive
-                      ? 'bg-cyan-500/15 text-cyan-200'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`
-                }
-              >
-                <Icon className="w-5 h-5" />
-                <span className="leading-none">{item.label}</span>
-              </NavLink>
-            );
-          })}
-        </div>
-      </nav>
     </div>
   );
 }
