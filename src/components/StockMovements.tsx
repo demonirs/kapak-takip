@@ -37,9 +37,7 @@ export default function StockMovements() {
   }
 
   async function deleteMovement(id: string) {
-    const ok = window.confirm(
-      'Bu hareket kaydı silinsin mi?'
-    );
+    const ok = window.confirm('Bu hareket kaydı silinsin mi?');
 
     if (!ok) return;
 
@@ -82,7 +80,7 @@ export default function StockMovements() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 overflow-y-auto">
       <div>
         <h1 className="text-2xl font-bold text-white">
           Stok Hareketleri
@@ -99,78 +97,76 @@ export default function StockMovements() {
         </div>
       ) : (
         <div className="bg-slate-800 rounded-xl overflow-hidden border border-slate-700">
-          <table className="w-full">
-            <thead className="bg-slate-700">
-              <tr>
-                <th className="text-left p-3">TARİH</th>
-                <th className="text-left p-3">İŞLEM</th>
-                <th className="text-left p-3">ÜRÜN</th>
-                <th className="text-left p-3">LOT</th>
-                <th className="text-left p-3">SKT</th>
-                <th className="text-left p-3"></th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {items.length === 0 ? (
+          <div className="w-full max-w-full overflow-x-auto overflow-y-visible">
+            <table className="min-w-[860px] w-full">
+              <thead className="bg-slate-700">
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="p-4 text-slate-400 text-center"
-                  >
-                    Henüz hareket yok.
-                  </td>
+                  <th className="text-left p-3 whitespace-nowrap">TARİH</th>
+                  <th className="text-left p-3 whitespace-nowrap">İŞLEM</th>
+                  <th className="text-left p-3 whitespace-nowrap">ÜRÜN</th>
+                  <th className="text-left p-3 whitespace-nowrap">LOT</th>
+                  <th className="text-left p-3 whitespace-nowrap">SKT</th>
+                  <th className="text-left p-3 whitespace-nowrap"></th>
                 </tr>
-              ) : (
-                items.map(item => (
-                  <tr
-                    key={item.id}
-                    className="border-t border-slate-700"
-                  >
-                    <td className="p-3">
-                      {formatDateTime(item.created_at)}
-                    </td>
+              </thead>
 
-                    <td className="p-3">
-                      <span
-                        className={`px-3 py-1 rounded-full border text-sm ${islemClass(
-                          item.islem
-                        )}`}
-                      >
-                        {islemText(item.islem)}
-                      </span>
-                    </td>
-
-                    <td className="p-3">
-                      {item.urun_adi}
-                    </td>
-
-                    <td className="p-3">
-                      {item.lot_no}
-                    </td>
-
-                    <td className="p-3">
-                      {formatDate(
-                        item.son_kullanma_tarihi
-                      )}
-                    </td>
-
-                    <td className="p-3">
-                      <button
-                        onClick={() =>
-                          deleteMovement(item.id)
-                        }
-                        className="text-red-400 hover:text-red-300"
-                        title="Kaydı Sil"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+              <tbody>
+                {items.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="p-4 text-slate-400 text-center"
+                    >
+                      Henüz hareket yok.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  items.map(item => (
+                    <tr
+                      key={item.id}
+                      className="border-t border-slate-700"
+                    >
+                      <td className="p-3 whitespace-nowrap">
+                        {formatDateTime(item.created_at)}
+                      </td>
+
+                      <td className="p-3 whitespace-nowrap">
+                        <span
+                          className={`px-3 py-1 rounded-full border text-sm ${islemClass(
+                            item.islem
+                          )}`}
+                        >
+                          {islemText(item.islem)}
+                        </span>
+                      </td>
+
+                      <td className="p-3 whitespace-nowrap">
+                        {item.urun_adi}
+                      </td>
+
+                      <td className="p-3 whitespace-nowrap">
+                        {item.lot_no}
+                      </td>
+
+                      <td className="p-3 whitespace-nowrap">
+                        {formatDate(item.son_kullanma_tarihi)}
+                      </td>
+
+                      <td className="p-3 whitespace-nowrap text-right">
+                        <button
+                          onClick={() => deleteMovement(item.id)}
+                          className="inline-flex items-center justify-center rounded-lg p-2 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                          title="Kaydı Sil"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
