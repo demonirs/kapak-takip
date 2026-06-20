@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   Activity,
+  Archive,
   FileSpreadsheet,
   HeartPulse,
   Home,
@@ -25,6 +26,7 @@ const mainMenuItems = [
 const quickMenuItems = [
   { to: '/search', label: 'Arama', icon: Search },
   { to: '/export', label: 'Excel', icon: FileSpreadsheet },
+  { to: '/archive', label: 'Arşiv', icon: Archive },
   { to: '/users', label: 'Kullanıcılar', icon: Users },
 ];
 
@@ -37,6 +39,7 @@ function getPageTitle(pathname: string) {
   if (pathname.startsWith('/search')) return 'Arama';
   if (pathname.startsWith('/stock-movements')) return 'Stok Hareketleri';
   if (pathname.startsWith('/stock')) return 'Stok Takip';
+  if (pathname.startsWith('/archive')) return 'Arşiv';
   if (pathname.startsWith('/users')) return 'Kullanıcı Yönetimi';
   if (pathname.startsWith('/export')) return 'Excel Aktar';
   return 'Kapak Takip';
