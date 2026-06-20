@@ -33,7 +33,8 @@ export default function Stock() {
   const [barcode, setBarcode] = useState('');
   const [parsed, setParsed] = useState<ParsedBarcode | null>(null);
   const [message, setMessage] = useState('');
-  const [activeFilter, setActiveFilter] = useState<(typeof FILTERS)[number]>('Tümü');
+  const [activeFilter, setActiveFilter] =
+    useState<(typeof FILTERS)[number]>('Tümü');
 
   useEffect(() => {
     loadStock();
@@ -126,66 +127,48 @@ export default function Stock() {
   }
 
   async function addToStock() {
-  if (!parsed) {
-    setMessage('Önce barkodu çözümle.');
-    return;
-  }
-
-  const { data, error } = await supabase
-    .from('kapak_stok')
-    .insert({
-      urun_adi: parsed.urun_adi,
-      gtin: parsed.gtin,
-      kapak_adi: 'EVPROPLUS',
-      kapak_boyutu: parsed.kapak_boyutu,
-      lot_no: parsed.lot_no,
-      son_kullanma_tarihi: parsed.son_kullanma_tarihi,
-      barkod_raw: parsed.barkod_raw,
-      durum: 'stokta',
-    })
-    .select('id')
-    .single();
-
-  if (error) {
-    setMessage(`Stoka eklenemedi: ${error.message}`);
-    return;
-  }
-
-  if (data?.id) {
-    await supabase.from('stok_hareketleri').insert({
-      kapak_stok_id: data.id,
-      islem: 'giris',
-      urun_adi: parsed.urun_adi,
-      lot_no: parsed.lot_no,
-      kapak_boyutu: parsed.kapak_boyutu,
-      son_kullanma_tarihi: parsed.son_kullanma_tarihi,
-    });
-  }
-
-  setBarcode('');
-  setParsed(null);
-  setMessage('Kapak stoka eklendi.');
-  await loadStock();
-}
     if (!parsed) {
       setMessage('Önce barkodu çözümle.');
       return;
     }
 
-    const { error } = await supabase.from('kapak_stok').insert({
-      urun_adi: parsed.urun_adi,
-      gtin: parsed.gtin,
-      kapak_adi: 'EVPROPLUS',
-      kapak_boyutu: parsed.kapak_boyutu,
-      lot_no: parsed.lot_no,
-      son_kullanma_tarihi: parsed.son_kullanma_tarihi,
-      barkod_raw: parsed.barkod_raw,
-      durum: 'stokta',
-    });
+    const { data, error } = await supabase
+      .from('kapak_stok')
+      .insert({
+        urun_adi: parsed.urun_adi,
+        gtin: parsed.gtin,
+        kapak_adi: 'EVPROPLUS',
+        kapak_boyutu: parsed.kapak_boyutu,
+        lot_no: parsed.lot_no,
+        son_kullanma_tarihi: parsed.son_kullanma_tarihi,
+        barkod_raw: parsed.barkod_raw,
+        durum: 'stokta',
+      })
+      .select('id')
+      .single();
 
     if (error) {
       setMessage(`Stoka eklenemedi: ${error.message}`);
       return;
+    }
+
+    if (data?.id) {
+      const { error: hareketError } = await supabase
+        .from('stok_hareketleri')
+        .insert({
+          kapak_stok_id: data.id,
+          islem: 'giris',
+          urun_adi: parsed.urun_adi,
+          lot_no: parsed.lot_no,
+          kapak_boyutu: parsed.kapak_boyutu,
+          son_kullanma_tarihi: parsed.son_kullanma_tarihi,
+        });
+
+      if (hareketError) {
+        setMessage(`Stok eklendi ama hareket kaydı yazılamadı: ${hareketError.message}`);
+        await loadStock();
+        return;
+      }
     }
 
     setBarcode('');
@@ -231,7 +214,9 @@ export default function Stock() {
         {[23, 26, 29, 34].map(size => (
           <div key={size} className="bg-slate-800 rounded-xl p-4 border border-slate-700">
             <div className="text-sm text-slate-400">{size} mm</div>
-            <div className="text-2xl font-bold">{counts[size as 23 | 26 | 29 | 34]}</div>
+            <div className="text-2xl font-bold">
+              {counts[size as 23 | 26 | 29 | 34]}
+            </div>
           </div>
         ))}
       </div>
@@ -244,8 +229,8 @@ export default function Stock() {
 
           <input
             value={barcode}
-            onChange={(e) => setBarcode(e.target.value)}
-            onKeyDown={(e) => {
+            onChange={e => setBarcode(e.target.value)}
+            onKeyDown={e => {
               if (e.key === 'Enter') parseBarcode();
             }}
             placeholder="(01)00763000655419(17)260625(21)J276941(20)01"
@@ -286,7 +271,9 @@ export default function Stock() {
 
             <div>
               <div className="text-xs text-slate-400">SKT</div>
-              <div className="font-semibold">{formatDate(parsed.son_kullanma_tarihi)}</div>
+              <div className="font-semibold">
+                {formatDate(parsed.son_kullanma_tarihi)}
+              </div>
             </div>
 
             <div>
@@ -335,7 +322,7 @@ export default function Stock() {
                   </td>
                 </tr>
               ) : (
-                filteredItems.map((item) => {
+                filteredItems.map(item => {
                   const days = kalanGun(item.son_kullanma_tarihi);
 
                   return (
