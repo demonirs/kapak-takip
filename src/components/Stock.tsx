@@ -126,6 +126,47 @@ export default function Stock() {
   }
 
   async function addToStock() {
+  if (!parsed) {
+    setMessage('Önce barkodu çözümle.');
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from('kapak_stok')
+    .insert({
+      urun_adi: parsed.urun_adi,
+      gtin: parsed.gtin,
+      kapak_adi: 'EVPROPLUS',
+      kapak_boyutu: parsed.kapak_boyutu,
+      lot_no: parsed.lot_no,
+      son_kullanma_tarihi: parsed.son_kullanma_tarihi,
+      barkod_raw: parsed.barkod_raw,
+      durum: 'stokta',
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    setMessage(`Stoka eklenemedi: ${error.message}`);
+    return;
+  }
+
+  if (data?.id) {
+    await supabase.from('stok_hareketleri').insert({
+      kapak_stok_id: data.id,
+      islem: 'giris',
+      urun_adi: parsed.urun_adi,
+      lot_no: parsed.lot_no,
+      kapak_boyutu: parsed.kapak_boyutu,
+      son_kullanma_tarihi: parsed.son_kullanma_tarihi,
+    });
+  }
+
+  setBarcode('');
+  setParsed(null);
+  setMessage('Kapak stoka eklendi.');
+  await loadStock();
+}
     if (!parsed) {
       setMessage('Önce barkodu çözümle.');
       return;
