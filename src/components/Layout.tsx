@@ -3,8 +3,6 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
   Archive,
-  BarChart3,
-  Building2,
   FileSpreadsheet,
   HeartPulse,
   Home,
@@ -43,8 +41,6 @@ const menuSections = [
     title: 'RAKİP TAKİBİ',
     items: [
       { to: '/competitor-cases', label: 'Rakip Vakalar', icon: Users },
-      { to: '/market-share', label: 'Pazar Payı', icon: BarChart3 },
-      { to: '/center-analysis', label: 'Merkez Analizi', icon: Building2 },
     ],
   },
   {
@@ -66,8 +62,6 @@ function getPageTitle(pathname: string) {
   if (pathname.startsWith('/users')) return 'Kullanıcı Yönetimi';
   if (pathname.startsWith('/export')) return 'Excel Aktar';
   if (pathname.startsWith('/competitor-cases')) return 'Rakip Vakalar';
-  if (pathname.startsWith('/market-share')) return 'Pazar Payı';
-  if (pathname.startsWith('/center-analysis')) return 'Merkez Analizi';
   return 'Kapak Takip';
 }
 
@@ -255,6 +249,20 @@ export default function Layout() {
             >
               <Archive className="w-4 h-4" />
               Arşiv
+            </NavLink>
+
+            <NavLink
+              to="/competitor-cases"
+              className={({ isActive }) =>
+                `shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border ${
+                  isActive
+                    ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/30'
+                    : 'bg-slate-900 text-slate-300 border-slate-800'
+                }`
+              }
+            >
+              <Users className="w-4 h-4" />
+              Rakip
             </NavLink>
 
             <div className="shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium bg-slate-900 border border-slate-800 text-slate-400">
