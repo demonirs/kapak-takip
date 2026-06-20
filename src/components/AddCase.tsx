@@ -61,6 +61,7 @@ export default function AddCase() {
   const [form, setForm] = useState<FormState>(initial);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [selectedStockId, setSelectedStockId] = useState('');
+  const [selectedStock, setSelectedStock] = useState<StockItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -140,11 +141,16 @@ export default function AddCase() {
   function handleStockSelect(stockId: string) {
     setSelectedStockId(stockId);
 
-    if (!stockId) return;
+    if (!stockId) {
+      setSelectedStock(null);
+      return;
+    }
 
     const selected = stockItems.find(item => item.id === stockId);
 
     if (!selected) return;
+
+    setSelectedStock(selected);
 
     setForm(prev => ({
       ...prev,
@@ -199,7 +205,7 @@ export default function AddCase() {
 
         if (error) throw error;
 
-        if (selectedStockId && data?.id) {
+        if (selectedStockId && data?.id && selectedStock) {
           const { error: stockError } = await timeout(
             supabase
               .from('kapak_stok')
@@ -212,6 +218,21 @@ export default function AddCase() {
           );
 
           if (stockError) throw stockError;
+
+          const { error: hareketError } = await timeout(
+            supabase.from('stok_hareketleri').insert({
+              kapak_stok_id: selectedStockId,
+              islem: 'kullanildi',
+              urun_adi: selectedStock.urun_adi,
+              lot_no: selectedStock.lot_no,
+              kapak_boyutu: selectedStock.kapak_boyutu,
+              son_kullanma_tarihi: selectedStock.son_kullanma_tarihi,
+              vaka_id: data.id,
+            }),
+            10000
+          );
+
+          if (hareketError) throw hareketError;
         }
       }
 
@@ -281,7 +302,7 @@ export default function AddCase() {
 
             {selectedStockId && (
               <p className="text-sm text-cyan-200 mt-3">
-                Seçilen kapak vaka kaydedilince otomatik stoktan düşecektir.
+                Seçilen kapak vaka kaydedilince otomatik stoktan düşecek ve hareket kaydı oluşturulacaktır.
               </p>
             )}
           </div>
