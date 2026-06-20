@@ -4,7 +4,6 @@ import {
   Activity,
   Archive,
   BarChart3,
-  Bell,
   Building2,
   FileSpreadsheet,
   HeartPulse,
@@ -16,7 +15,6 @@ import {
   PlusCircle,
   Search,
   Shuffle,
-  TrendingDown,
   Users,
   X,
 } from 'lucide-react';
@@ -47,17 +45,11 @@ const menuSections = [
       { to: '/competitor-cases', label: 'Rakip Vakalar', icon: Users },
       { to: '/market-share', label: 'Pazar Payı', icon: BarChart3 },
       { to: '/center-analysis', label: 'Merkez Analizi', icon: Building2 },
-      { to: '/operator-preference', label: 'Operatör Tercihi', icon: Users },
-      { to: '/lost-cases', label: 'Kaybedilen Vakalar', icon: TrendingDown },
-      { to: '/competitor-stock', label: 'Rakip Stok', icon: Package },
-      { to: '/competitor-alerts', label: 'Rakip Alarm', icon: Bell },
     ],
   },
   {
     title: 'SİSTEM',
-    items: [
-      { to: '/users', label: 'Kullanıcılar', icon: Users },
-    ],
+    items: [{ to: '/users', label: 'Kullanıcılar', icon: Users }],
   },
 ];
 
@@ -76,10 +68,6 @@ function getPageTitle(pathname: string) {
   if (pathname.startsWith('/competitor-cases')) return 'Rakip Vakalar';
   if (pathname.startsWith('/market-share')) return 'Pazar Payı';
   if (pathname.startsWith('/center-analysis')) return 'Merkez Analizi';
-  if (pathname.startsWith('/operator-preference')) return 'Operatör Tercihi';
-  if (pathname.startsWith('/lost-cases')) return 'Kaybedilen Vakalar';
-  if (pathname.startsWith('/competitor-stock')) return 'Rakip Stok';
-  if (pathname.startsWith('/competitor-alerts')) return 'Rakip Alarm';
   return 'Kapak Takip';
 }
 
@@ -114,10 +102,7 @@ export default function Layout() {
         }`}
       >
         <div className="flex items-center justify-between px-4 py-4 border-b border-slate-800">
-          <button
-            onClick={goHome}
-            className="flex items-center gap-3 text-left"
-          >
+          <button onClick={goHome} className="flex items-center gap-3 text-left">
             <div className="w-10 h-10 rounded-xl bg-cyan-500 flex items-center justify-center shadow-md shadow-cyan-500/20">
               <HeartPulse className="w-5 h-5" />
             </div>
@@ -212,9 +197,7 @@ export default function Layout() {
               </button>
 
               <div className="hidden sm:block text-right">
-                <p className="text-xs text-slate-400 leading-tight">
-                  Kullanıcı
-                </p>
+                <p className="text-xs text-slate-400 leading-tight">Kullanıcı</p>
 
                 <p className="text-sm text-slate-200 font-medium leading-tight max-w-[140px] truncate">
                   {profile?.full_name || 'Kullanıcı'}
