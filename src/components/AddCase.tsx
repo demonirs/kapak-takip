@@ -13,27 +13,6 @@ import {
 } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
-const HASTANELER = [
-  'Bilkent Şehir',
-  'Gazi Hastanesi',
-  'Ankara Şehir Hastanesi',
-  'Etlik Şehir Hastanesi',
-  'Hacettepe',
-];
-
-const DOKTORLAR = [
-  'Telat KELEŞ',
-  'Kevser BALCI',
-  'Kadri AKBOĞA',
-  'Tahir DURMAZ',
-  'Orhan MADEN',
-  'Mehmet Akif ERDÖL',
-  'Gökhan ÇİÇEK',
-  'Timur SELÇUK',
-  'Özlem ÇELEBİ',
-  'Burak AKÇAY',
-];
-
 const initial = {
   vaka_tarihi: '',
   merkez_hastane: '',
@@ -93,6 +72,7 @@ export default function AddCase() {
 
     const load = async () => {
       setLoading(true);
+
       try {
         const { data, error } = await timeout(
           supabase.from('kapaklar').select('*').eq('id', id).maybeSingle(),
@@ -103,6 +83,7 @@ export default function AddCase() {
 
         if (data) {
           const k = data as Kapak;
+
           setForm({
             vaka_tarihi: k.vaka_tarihi,
             merkez_hastane: k.merkez_hastane,
@@ -214,18 +195,6 @@ export default function AddCase() {
           </p>
         )}
 
-        <datalist id="hastane-listesi">
-          {HASTANELER.map(h => (
-            <option key={h} value={h} />
-          ))}
-        </datalist>
-
-        <datalist id="doktor-listesi">
-          {DOKTORLAR.map(d => (
-            <option key={d} value={d} />
-          ))}
-        </datalist>
-
         <div className="grid md:grid-cols-2 gap-4">
           <Field label="Vaka Tarihi">
             <input
@@ -240,7 +209,6 @@ export default function AddCase() {
           <Field label="Merkez Hastane">
             <input
               className={inputClass}
-              list="hastane-listesi"
               value={form.merkez_hastane}
               onChange={e => set('merkez_hastane', e.target.value)}
               required
@@ -250,7 +218,6 @@ export default function AddCase() {
           <Field label="Doktor">
             <input
               className={inputClass}
-              list="doktor-listesi"
               value={form.doktor}
               onChange={e => set('doktor', e.target.value)}
               required
@@ -302,11 +269,19 @@ export default function AddCase() {
           </Field>
 
           <Field label="Paravalvüler AY">
-            <Select value={form.paravalvuler_ay} onChange={v => set('paravalvuler_ay', v)} options={PARAVALVULER_OPTIONS} />
+            <Select
+              value={form.paravalvuler_ay}
+              onChange={v => set('paravalvuler_ay', v)}
+              options={PARAVALVULER_OPTIONS}
+            />
           </Field>
 
           <Field label="Proglide Adedi">
-            <Select value={form.proglide_adedi} onChange={v => set('proglide_adedi', Number(v))} options={PROGLIDE_OPTIONS} />
+            <Select
+              value={form.proglide_adedi}
+              onChange={v => set('proglide_adedi', Number(v))}
+              options={PROGLIDE_OPTIONS}
+            />
           </Field>
         </div>
 
