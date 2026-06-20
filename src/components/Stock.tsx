@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 type StockItem = {
   id: string;
@@ -28,6 +30,13 @@ const GTIN_MAP: Record<string, number> = {
 const FILTERS = ['Tümü', '23', '26', '29', '34'] as const;
 
 export default function Stock() {
+  const { profile } = useAuth();
+  const currentProfile = profile as any;
+  const isAdmin =
+    currentProfile?.role === 'admin' ||
+    currentProfile?.yetki === 'admin' ||
+    currentProfile?.is_admin === true;
+
   const [items, setItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [barcode, setBarcode] = useState('');
@@ -187,6 +196,7 @@ export default function Stock() {
           lot_no: parsed.lot_no,
           kapak_boyutu: parsed.kapak_boyutu,
           son_kullanma_tarihi: parsed.son_kullanma_tarihi,
+          arsivlendi: false,
         });
 
       if (hareketError) {
@@ -199,6 +209,28 @@ export default function Stock() {
     setBarcode('');
     setParsed(null);
     setMessage('Kapak stoka eklendi.');
+    await loadStock();
+  }
+
+  async function deleteStockItem(id: string) {
+    if (!isAdmin) {
+      alert('Bu işlemi sadece admin yapabilir.');
+      return;
+    }
+
+    const ok = window.confirm('Bu stok kaydı silinsin mi?');
+    if (!ok) return;
+
+    const { error } = await supabase
+      .from('kapak_stok')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
     await loadStock();
   }
 
@@ -330,20 +362,26 @@ export default function Stock() {
       ) : (
         <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
           <div className="w-full max-w-full overflow-x-auto overflow-y-visible">
-            <table className="min-w-[720px] w-full">
+            <table className="min-w-[820px] w-full">
               <thead className="bg-slate-700">
                 <tr>
                   <th className="text-left p-3 whitespace-nowrap">ÜRÜN ADI</th>
                   <th className="text-left p-3 whitespace-nowrap">LOT</th>
                   <th className="text-left p-3 whitespace-nowrap">SKT</th>
                   <th className="text-left p-3 whitespace-nowrap">KALAN GÜN</th>
+                  {isAdmin && (
+                    <th className="text-left p-3 whitespace-nowrap">SİL</th>
+                  )}
                 </tr>
               </thead>
 
               <tbody>
                 {filteredItems.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="p-4 text-slate-400 text-center">
+                    <td
+                      colSpan={isAdmin ? 5 : 4}
+                      className="p-4 text-slate-400 text-center"
+                    >
                       Bu filtrede stok yok.
                     </td>
                   </tr>
@@ -366,6 +404,19 @@ export default function Stock() {
                             {days}
                           </span>
                         </td>
+
+                        {isAdmin && (
+                          <td className="p-3 whitespace-nowrap">
+                            <button
+                              onClick={() => deleteStockItem(item.id)}
+                              className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-red-300 hover:bg-red-500/10"
+                              title="Stok Kaydını Sil"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Sil
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     );
                   })
