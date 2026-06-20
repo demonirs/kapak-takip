@@ -8,7 +8,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
 });
 
 export type Kapak = {
@@ -30,15 +34,44 @@ export type Kapak = {
   created_at: string;
 };
 
-export const KAPAK_TIPLERI = ['Evolut R', 'Evolut Pro', 'Evolut Pro+', 'Evolut FX', 'Evolut FX+'] as const;
-export const KAPAK_SIZES = ['23 mm', '26 mm', '29 mm', '34 mm'] as const;
-export const BALON_SIZES = ['Yok', '16 mm', '18 mm', '20 mm', '22 mm', '23 mm', '25 mm', '26 mm', '28 mm', '30 mm'] as const;
-export const PARAVALVULER_OPTIONS = ['Yok', 'Hafif', 'Orta', 'Ciddi'] as const;
+export const KAPAK_TIPLERI = [
+  'Evolut R',
+  'Evolut Pro',
+  'Evolut Pro+',
+  'Evolut FX',
+  'Evolut FX+',
+] as const;
+
+export const KAPAK_SIZES = [
+  '23 mm',
+  '26 mm',
+  '29 mm',
+  '34 mm',
+] as const;
+
+export const BALON_SIZES = [
+  'Yok',
+  '18 mm',
+  '20 mm',
+  '23 mm',
+  '25 mm',
+  '28 mm',
+] as const;
+
+export const PARAVALVULER_OPTIONS = [
+  'Yok',
+  'Hafif',
+  'Orta',
+  'Ciddi',
+] as const;
+
 export const PROGLIDE_OPTIONS = [1, 2, 3, 4] as const;
 
 export function timeout<T>(promise: Promise<T>, ms = 10000): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('İstek zaman aşımına uğradı.')), ms)),
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error('İstek zaman aşımına uğradı.')), ms)
+    ),
   ]);
 }
