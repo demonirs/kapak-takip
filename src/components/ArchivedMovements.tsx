@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 type Movement = {
   id: string;
@@ -13,6 +14,13 @@ type Movement = {
 };
 
 export default function ArchivedMovements() {
+  const { profile } = useAuth();
+  const currentProfile = profile as any;
+  const isAdmin =
+    currentProfile?.role === 'admin' ||
+    currentProfile?.yetki === 'admin' ||
+    currentProfile?.is_admin === true;
+
   const [items, setItems] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -42,6 +50,28 @@ export default function ArchivedMovements() {
     const { error } = await supabase
       .from('stok_hareketleri')
       .update({ arsivlendi: false })
+      .eq('id', id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    loadArchived();
+  }
+
+  async function deleteMovement(id: string) {
+    if (!isAdmin) {
+      alert('Bu işlemi sadece admin yapabilir.');
+      return;
+    }
+
+    const ok = window.confirm('Bu arşiv kaydı kalıcı olarak silinsin mi?');
+    if (!ok) return;
+
+    const { error } = await supabase
+      .from('stok_hareketleri')
+      .delete()
       .eq('id', id);
 
     if (error) {
@@ -89,7 +119,7 @@ export default function ArchivedMovements() {
       ) : (
         <div className="bg-slate-800 rounded-xl overflow-hidden border border-slate-700">
           <div className="w-full max-w-full overflow-x-auto overflow-y-visible">
-            <table className="min-w-[900px] w-full">
+            <table className="min-w-[980px] w-full">
               <thead className="bg-slate-700">
                 <tr>
                   <th className="text-left p-3 whitespace-nowrap">TARİH</th>
@@ -97,7 +127,7 @@ export default function ArchivedMovements() {
                   <th className="text-left p-3 whitespace-nowrap">ÜRÜN</th>
                   <th className="text-left p-3 whitespace-nowrap">LOT</th>
                   <th className="text-left p-3 whitespace-nowrap">SKT</th>
-                  <th className="text-left p-3 whitespace-nowrap">GERİ AL</th>
+                  <th className="text-left p-3 whitespace-nowrap">İŞLEM</th>
                 </tr>
               </thead>
 
@@ -121,13 +151,25 @@ export default function ArchivedMovements() {
                       <td className="p-3 whitespace-nowrap">{item.lot_no}</td>
                       <td className="p-3 whitespace-nowrap">{formatDate(item.son_kullanma_tarihi)}</td>
                       <td className="p-3 whitespace-nowrap">
-                        <button
-                          onClick={() => restoreMovement(item.id)}
-                          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-cyan-300 hover:bg-cyan-500/10"
-                        >
-                          <RotateCcw className="w-4 h-4" />
-                          Geri Al
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => restoreMovement(item.id)}
+                            className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-cyan-300 hover:bg-cyan-500/10"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                            Geri Al
+                          </button>
+
+                          {isAdmin && (
+                            <button
+                              onClick={() => deleteMovement(item.id)}
+                              className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-red-300 hover:bg-red-500/10"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Sil
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
