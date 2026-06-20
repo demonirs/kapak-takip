@@ -9,6 +9,7 @@ import ViewCase from './components/ViewCase';
 import Export from './components/Export';
 import Search from './components/Search';
 import Stock from './components/Stock';
+import StockMovements from './components/StockMovements';
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -48,6 +49,7 @@ function AppRoutes() {
         <Route path="view/:id" element={<ViewCase />} />
         <Route path="search" element={<Search />} />
         <Route path="stock" element={<Stock />} />
+        <Route path="stock-movements" element={<StockMovements />} />
         <Route path="export" element={<Export />} />
       </Route>
 
