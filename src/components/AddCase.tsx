@@ -30,6 +30,14 @@ const initial = {
 
 type FormState = typeof initial;
 
+type StockItem = {
+  id: string;
+  urun_adi: string;
+  kapak_boyutu: number;
+  lot_no: string;
+  son_kullanma_tarihi: string;
+};
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
@@ -51,12 +59,16 @@ export default function AddCase() {
   const isEdit = Boolean(id);
 
   const [form, setForm] = useState<FormState>(initial);
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [selectedStockId, setSelectedStockId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const crimpYapan = profile?.full_name || user?.email?.split('@')[0] || 'Kullanıcı';
 
   useEffect(() => {
+    loadStockItems();
+
     if (!id) {
       const lastHospital = localStorage.getItem('lastHospital') || '';
       const lastDoctor = localStorage.getItem('lastDoctor') || '';
@@ -109,8 +121,39 @@ export default function AddCase() {
     load();
   }, [id]);
 
+  async function loadStockItems() {
+    const { data, error } = await supabase
+      .from('kapak_stok')
+      .select('id, urun_adi, kapak_boyutu, lot_no, son_kullanma_tarihi')
+      .eq('durum', 'stokta')
+      .order('kapak_boyutu')
+      .order('son_kullanma_tarihi');
+
+    if (!error && data) {
+      setStockItems(data);
+    }
+  }
+
   const set = (name: keyof FormState, value: string | number) =>
     setForm(prev => ({ ...prev, [name]: value }));
+
+  function handleStockSelect(stockId: string) {
+    setSelectedStockId(stockId);
+
+    if (!stockId) return;
+
+    const selected = stockItems.find(item => item.id === stockId);
+
+    if (!selected) return;
+
+    setForm(prev => ({
+      ...prev,
+      kapak_tipi: 'Evolut Pro+',
+      kapak_size: `${selected.kapak_boyutu} mm`,
+      lot_no: selected.lot_no,
+      son_kul_tarihi: selected.son_kullanma_tarihi,
+    }));
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,12 +188,31 @@ export default function AddCase() {
 
         if (error) throw error;
       } else {
-        const { error } = await timeout(
-          supabase.from('kapaklar').insert({ ...payload, user_id: user.id }),
+        const { data, error } = await timeout(
+          supabase
+            .from('kapaklar')
+            .insert({ ...payload, user_id: user.id })
+            .select('id')
+            .single(),
           10000
         );
 
         if (error) throw error;
+
+        if (selectedStockId && data?.id) {
+          const { error: stockError } = await timeout(
+            supabase
+              .from('kapak_stok')
+              .update({
+                durum: 'kullanildi',
+                kullanilan_vaka_id: data.id,
+              })
+              .eq('id', selectedStockId),
+            10000
+          );
+
+          if (stockError) throw stockError;
+        }
       }
 
       navigate('/list');
@@ -193,6 +255,36 @@ export default function AddCase() {
           <p className="bg-red-500/10 border border-red-500/30 text-red-300 p-3 rounded-xl">
             {error}
           </p>
+        )}
+
+        {!isEdit && (
+          <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-4">
+            <label className="block">
+              <span className="block text-sm text-cyan-200 mb-2">
+                Stoktan Kapak Seç
+              </span>
+
+              <select
+                className={inputClass}
+                value={selectedStockId}
+                onChange={e => handleStockSelect(e.target.value)}
+              >
+                <option value="">Stoktan kapak seçmeden devam et</option>
+
+                {stockItems.map(item => (
+                  <option key={item.id} value={item.id}>
+                    {item.urun_adi} | LOT: {item.lot_no} | SKT: {new Date(item.son_kullanma_tarihi).toLocaleDateString('tr-TR')}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {selectedStockId && (
+              <p className="text-sm text-cyan-200 mt-3">
+                Seçilen kapak vaka kaydedilince otomatik stoktan düşecektir.
+              </p>
+            )}
+          </div>
         )}
 
         <div className="grid md:grid-cols-2 gap-4">
