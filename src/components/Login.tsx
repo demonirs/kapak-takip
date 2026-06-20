@@ -60,7 +60,10 @@ export default function Login() {
             className="w-full p-3 rounded-xl bg-slate-700 text-white"
             placeholder="Ad Soyad"
             value={fullName}
-            onChange={e => setFullName(e.target.value)}
+            onChange={e => {
+  setEmail(e.target.value);
+  if (rememberMe) localStorage.setItem('rememberedEmail', e.target.value);
+}}
             required
           />
         )}
