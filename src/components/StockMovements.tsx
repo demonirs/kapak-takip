@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Archive } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 type Movement = {
@@ -26,6 +26,7 @@ export default function StockMovements() {
     const { data, error } = await supabase
       .from('stok_hareketleri')
       .select('*')
+      .eq('arsivlendi', false)
       .order('created_at', { ascending: false })
       .limit(100);
 
@@ -36,14 +37,14 @@ export default function StockMovements() {
     setLoading(false);
   }
 
-  async function deleteMovement(id: string) {
-    const ok = window.confirm('Bu hareket kaydı silinsin mi?');
+  async function archiveMovement(id: string) {
+    const ok = window.confirm('Bu hareket kaydı arşivlensin mi?');
 
     if (!ok) return;
 
     const { error } = await supabase
       .from('stok_hareketleri')
-      .delete()
+      .update({ arsivlendi: true })
       .eq('id', id);
 
     if (error) {
@@ -106,26 +107,20 @@ export default function StockMovements() {
                   <th className="text-left p-3 whitespace-nowrap">ÜRÜN</th>
                   <th className="text-left p-3 whitespace-nowrap">LOT</th>
                   <th className="text-left p-3 whitespace-nowrap">SKT</th>
-                  <th className="text-left p-3 whitespace-nowrap"></th>
+                  <th className="text-left p-3 whitespace-nowrap">ARŞİV</th>
                 </tr>
               </thead>
 
               <tbody>
                 {items.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={6}
-                      className="p-4 text-slate-400 text-center"
-                    >
+                    <td colSpan={6} className="p-4 text-slate-400 text-center">
                       Henüz hareket yok.
                     </td>
                   </tr>
                 ) : (
                   items.map(item => (
-                    <tr
-                      key={item.id}
-                      className="border-t border-slate-700"
-                    >
+                    <tr key={item.id} className="border-t border-slate-700">
                       <td className="p-3 whitespace-nowrap">
                         {formatDateTime(item.created_at)}
                       </td>
@@ -140,25 +135,22 @@ export default function StockMovements() {
                         </span>
                       </td>
 
-                      <td className="p-3 whitespace-nowrap">
-                        {item.urun_adi}
-                      </td>
+                      <td className="p-3 whitespace-nowrap">{item.urun_adi}</td>
 
-                      <td className="p-3 whitespace-nowrap">
-                        {item.lot_no}
-                      </td>
+                      <td className="p-3 whitespace-nowrap">{item.lot_no}</td>
 
                       <td className="p-3 whitespace-nowrap">
                         {formatDate(item.son_kullanma_tarihi)}
                       </td>
 
-                      <td className="p-3 whitespace-nowrap text-right">
+                      <td className="p-3 whitespace-nowrap">
                         <button
-                          onClick={() => deleteMovement(item.id)}
-                          className="inline-flex items-center justify-center rounded-lg p-2 text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                          title="Kaydı Sil"
+                          onClick={() => archiveMovement(item.id)}
+                          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-orange-300 hover:bg-orange-500/10"
+                          title="Arşivle"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Archive className="w-4 h-4" />
+                          Arşivle
                         </button>
                       </td>
                     </tr>
