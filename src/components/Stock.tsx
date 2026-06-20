@@ -148,6 +148,31 @@ export default function Stock() {
       .single();
 
     if (error) {
+      if (error.message.includes('kapak_stok_lot_unique')) {
+        const { data: existing } = await supabase
+          .from('kapak_stok')
+          .select('durum, urun_adi, lot_no')
+          .eq('lot_no', parsed.lot_no)
+          .maybeSingle();
+
+        if (existing?.durum === 'stokta') {
+          setMessage(
+            `${existing.urun_adi} / LOT: ${existing.lot_no} zaten stokta mevcut.`
+          );
+          return;
+        }
+
+        if (existing?.durum === 'kullanildi') {
+          setMessage(
+            `${existing.urun_adi} / LOT: ${existing.lot_no} daha önce kullanılmış.`
+          );
+          return;
+        }
+
+        setMessage('Bu lot numarası daha önce sisteme kaydedilmiş.');
+        return;
+      }
+
       setMessage(`Stoka eklenemedi: ${error.message}`);
       return;
     }
