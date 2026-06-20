@@ -10,6 +10,7 @@ import Export from './components/Export';
 import Search from './components/Search';
 import Stock from './components/Stock';
 import StockMovements from './components/StockMovements';
+import ArchivedMovements from './components/ArchivedMovements';
 import Users from './components/Users';
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -51,6 +52,7 @@ function AppRoutes() {
         <Route path="search" element={<Search />} />
         <Route path="stock" element={<Stock />} />
         <Route path="stock-movements" element={<StockMovements />} />
+        <Route path="archive" element={<ArchivedMovements />} />
         <Route path="users" element={<Users />} />
         <Route path="export" element={<Export />} />
       </Route>
