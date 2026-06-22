@@ -21,7 +21,7 @@ export default function List() {
         supabase
           .from('kapaklar')
           .select('*')
-          .eq('arsivlendi', false)
+          .or('arsivlendi.eq.false,arsivlendi.is.null')
           .order('created_at', { ascending: false }),
         10000
       );
