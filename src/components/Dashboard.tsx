@@ -82,16 +82,22 @@ export default function Dashboard() {
         .toISOString()
         .slice(0, 10);
 
+      const activeCaseFilter = 'arsivlendi.eq.false,arsivlendi.is.null';
+
       const [totalRes, monthRes, recentRes, stockRes, movementRes] =
         await Promise.all([
           timeout(
-            supabase.from('kapaklar').select('*', { count: 'exact', head: true }),
+            supabase
+              .from('kapaklar')
+              .select('*', { count: 'exact', head: true })
+              .or(activeCaseFilter),
             10000
           ),
           timeout(
             supabase
               .from('kapaklar')
               .select('merkez_hastane,doktor')
+              .or(activeCaseFilter)
               .gte('vaka_tarihi', firstDay),
             10000
           ),
@@ -99,6 +105,7 @@ export default function Dashboard() {
             supabase
               .from('kapaklar')
               .select('*')
+              .or(activeCaseFilter)
               .order('created_at', { ascending: false })
               .limit(5),
             10000
@@ -114,6 +121,7 @@ export default function Dashboard() {
             supabase
               .from('stok_hareketleri')
               .select('id, islem, urun_adi, lot_no, created_at')
+              .or('arsivlendi.eq.false,arsivlendi.is.null')
               .order('created_at', { ascending: false })
               .limit(5),
             10000
