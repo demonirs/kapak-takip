@@ -11,6 +11,7 @@ type Movement = {
   kapak_boyutu: number | null;
   son_kullanma_tarihi: string | null;
   created_at: string;
+  arsivlendi: boolean | null;
 };
 
 export default function ArchivedMovements() {
@@ -23,6 +24,7 @@ export default function ArchivedMovements() {
 
   const [items, setItems] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     loadArchived();
@@ -30,16 +32,23 @@ export default function ArchivedMovements() {
 
   async function loadArchived() {
     setLoading(true);
+    setMessage('');
 
     const { data, error } = await supabase
       .from('stok_hareketleri')
       .select('*')
-      .eq('arsivlendi', true)
+      .is('arsivlendi', true)
       .order('created_at', { ascending: false })
       .limit(200);
 
-    if (!error && data) setItems(data);
+    if (error) {
+      setMessage(error.message);
+      setItems([]);
+      setLoading(false);
+      return;
+    }
 
+    setItems(data || []);
     setLoading(false);
   }
 
@@ -57,7 +66,7 @@ export default function ArchivedMovements() {
       return;
     }
 
-    loadArchived();
+    await loadArchived();
   }
 
   async function deleteMovement(id: string) {
@@ -79,7 +88,7 @@ export default function ArchivedMovements() {
       return;
     }
 
-    loadArchived();
+    await loadArchived();
   }
 
   function formatDate(date: string | null) {
@@ -114,6 +123,12 @@ export default function ArchivedMovements() {
         <p className="text-slate-400">Arşivlenen stok hareketleri</p>
       </div>
 
+      {message && (
+        <div className="bg-red-500/10 border border-red-500/30 text-red-200 rounded-xl p-4 text-sm">
+          {message}
+        </div>
+      )}
+
       {loading ? (
         <div className="text-slate-400">Yükleniyor...</div>
       ) : (
@@ -141,15 +156,24 @@ export default function ArchivedMovements() {
                 ) : (
                   items.map(item => (
                     <tr key={item.id} className="border-t border-slate-700">
-                      <td className="p-3 whitespace-nowrap">{formatDateTime(item.created_at)}</td>
+                      <td className="p-3 whitespace-nowrap">
+                        {formatDateTime(item.created_at)}
+                      </td>
+
                       <td className="p-3 whitespace-nowrap">
                         <span className={`px-3 py-1 rounded-full border text-sm ${islemClass(item.islem)}`}>
                           {islemText(item.islem)}
                         </span>
                       </td>
+
                       <td className="p-3 whitespace-nowrap">{item.urun_adi}</td>
+
                       <td className="p-3 whitespace-nowrap">{item.lot_no}</td>
-                      <td className="p-3 whitespace-nowrap">{formatDate(item.son_kullanma_tarihi)}</td>
+
+                      <td className="p-3 whitespace-nowrap">
+                        {formatDate(item.son_kullanma_tarihi)}
+                      </td>
+
                       <td className="p-3 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <button
