@@ -26,7 +26,7 @@ export default function StockMovements() {
     const { data, error } = await supabase
       .from('stok_hareketleri')
       .select('*')
-      .eq('arsivlendi', false)
+      .or('arsivlendi.eq.false,arsivlendi.is.null')
       .order('created_at', { ascending: false })
       .limit(100);
 
