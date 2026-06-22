@@ -8,9 +8,8 @@ import {
   Package,
   Plus,
   User,
-  Shuffle,
 } from 'lucide-react';
-import { Kapak, supabase, timeout } from '../lib/supabase';
+import { supabase, timeout } from '../lib/supabase';
 
 type Stats = {
   total: number;
@@ -28,14 +27,6 @@ type StockItem = {
   son_kullanma_tarihi: string;
 };
 
-type Movement = {
-  id: string;
-  islem: 'giris' | 'kullanildi' | 'iptal';
-  urun_adi: string;
-  lot_no: string;
-  created_at: string;
-};
-
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats>({
     total: 0,
@@ -46,9 +37,7 @@ export default function Dashboard() {
     criticalStock: 0,
   });
 
-  const [recent, setRecent] = useState<Kapak[]>([]);
   const [criticalItems, setCriticalItems] = useState<StockItem[]>([]);
-  const [movements, setMovements] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,12 +50,6 @@ export default function Dashboard() {
 
   function formatDate(date: string) {
     return new Date(date).toLocaleDateString('tr-TR');
-  }
-
-  function movementText(islem: Movement['islem']) {
-    if (islem === 'giris') return 'Stoka eklendi';
-    if (islem === 'kullanildi') return 'Vakada kullanıldı';
-    return 'İptal edildi';
   }
 
   const load = async () => {
@@ -84,55 +67,34 @@ export default function Dashboard() {
 
       const activeCaseFilter = 'arsivlendi.eq.false,arsivlendi.is.null';
 
-      const [totalRes, monthRes, recentRes, stockRes, movementRes] =
-        await Promise.all([
-          timeout(
-            supabase
-              .from('kapaklar')
-              .select('*', { count: 'exact', head: true })
-              .or(activeCaseFilter),
-            10000
-          ),
-          timeout(
-            supabase
-              .from('kapaklar')
-              .select('merkez_hastane,doktor')
-              .or(activeCaseFilter)
-              .gte('vaka_tarihi', firstDay),
-            10000
-          ),
-          timeout(
-            supabase
-              .from('kapaklar')
-              .select('*')
-              .or(activeCaseFilter)
-              .order('created_at', { ascending: false })
-              .limit(5),
-            10000
-          ),
-          timeout(
-            supabase
-              .from('kapak_stok')
-              .select('id, urun_adi, lot_no, son_kullanma_tarihi')
-              .eq('durum', 'stokta'),
-            10000
-          ),
-          timeout(
-            supabase
-              .from('stok_hareketleri')
-              .select('id, islem, urun_adi, lot_no, created_at')
-              .or('arsivlendi.eq.false,arsivlendi.is.null')
-              .order('created_at', { ascending: false })
-              .limit(5),
-            10000
-          ),
-        ]);
+      const [totalRes, monthRes, stockRes] = await Promise.all([
+        timeout(
+          supabase
+            .from('kapaklar')
+            .select('*', { count: 'exact', head: true })
+            .or(activeCaseFilter),
+          10000
+        ),
+        timeout(
+          supabase
+            .from('kapaklar')
+            .select('merkez_hastane,doktor')
+            .or(activeCaseFilter)
+            .gte('vaka_tarihi', firstDay),
+          10000
+        ),
+        timeout(
+          supabase
+            .from('kapak_stok')
+            .select('id, urun_adi, lot_no, son_kullanma_tarihi')
+            .eq('durum', 'stokta'),
+          10000
+        ),
+      ]);
 
       if (totalRes.error) throw totalRes.error;
       if (monthRes.error) throw monthRes.error;
-      if (recentRes.error) throw recentRes.error;
       if (stockRes.error) throw stockRes.error;
-      if (movementRes.error) throw movementRes.error;
 
       const monthData = monthRes.data || [];
       const stockData = (stockRes.data as StockItem[]) || [];
@@ -155,8 +117,6 @@ export default function Dashboard() {
       });
 
       setCriticalItems(critical);
-      setRecent((recentRes.data as Kapak[]) || []);
-      setMovements((movementRes.data as Movement[]) || []);
     } catch (e: any) {
       setError(e.message || 'Dashboard yüklenemedi');
     } finally {
@@ -221,7 +181,7 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {nearestCritical && (
+      {nearestCritical ? (
         <Link
           to="/stock"
           className="block bg-red-500/10 border border-red-500/30 text-red-100 rounded-2xl p-4"
@@ -240,70 +200,14 @@ export default function Dashboard() {
             </div>
           </div>
         </Link>
+      ) : (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-100 rounded-2xl p-4">
+          <p className="font-bold">Kritik SKT Yok</p>
+          <p className="text-sm text-emerald-100">
+            30 gün içinde son kullanma tarihi dolacak stok görünmüyor.
+          </p>
+        </div>
       )}
-
-      <div className="grid lg:grid-cols-2 gap-4">
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
-          <div className="p-4 border-b border-slate-700 flex justify-between">
-            <b>Son Hareketler</b>
-            <Link className="text-cyan-300 text-sm" to="/stock-movements">
-              Tümü
-            </Link>
-          </div>
-
-          {movements.length === 0 ? (
-            <p className="p-5 text-slate-400 text-sm">Henüz hareket yok.</p>
-          ) : (
-            <div className="divide-y divide-slate-700">
-              {movements.map(item => (
-                <div key={item.id} className="p-4">
-                  <div className="flex items-center gap-2">
-                    <Shuffle className="w-4 h-4 text-cyan-300" />
-                    <b className="text-sm">{item.urun_adi}</b>
-                  </div>
-                  <p className="text-sm text-slate-400 mt-1">
-                    {movementText(item.islem)} — LOT: {item.lot_no}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {new Date(item.created_at).toLocaleString('tr-TR')}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
-          <div className="p-4 border-b border-slate-700 flex justify-between">
-            <b>Son Vakalar</b>
-            <Link className="text-cyan-300 text-sm" to="/list">
-              Tümü
-            </Link>
-          </div>
-
-          {recent.length === 0 ? (
-            <p className="p-5 text-slate-400 text-sm">Henüz vaka kaydı yok.</p>
-          ) : (
-            <div className="divide-y divide-slate-700">
-              {recent.map(k => (
-                <Link
-                  to={`/view/${k.id}`}
-                  key={k.id}
-                  className="block p-4 hover:bg-slate-700/40"
-                >
-                  <b className="text-sm">{k.hasta_adi}</b>
-                  <p className="text-sm text-slate-400 mt-1">
-                    {k.merkez_hastane} | {k.doktor}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {k.kapak_tipi} {k.kapak_size} / LOT: {k.lot_no}
-                  </p>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
