@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Archive } from 'lucide-react';
+import { Archive, Trash2 } from 'lucide-react';
 import { Kapak, supabase, timeout } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function List() {
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
+
   const [items, setItems] = useState<Kapak[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +41,9 @@ export default function List() {
   }, []);
 
   const archiveCase = async (id: string) => {
-    const ok = confirm('Bu vaka arşive taşınsın mı? Ana listeden kaldırılacak ama silinmeyecek.');
+    const ok = confirm(
+      'Bu vaka arşive taşınsın mı? Ana listeden kaldırılacak ama silinmeyecek.'
+    );
 
     if (!ok) return;
 
@@ -60,6 +66,34 @@ export default function List() {
     setItems(prev => prev.filter(x => x.id !== id));
   };
 
+  const deleteCase = async (id: string) => {
+    if (!isAdmin) {
+      alert('Bu işlemi sadece admin yapabilir.');
+      return;
+    }
+
+    const ok = confirm(
+      'Bu vaka kalıcı olarak silinsin mi? Bu işlem geri alınamaz.'
+    );
+
+    if (!ok) return;
+
+    const { error } = await timeout(
+      supabase
+        .from('kapaklar')
+        .delete()
+        .eq('id', id),
+      10000
+    );
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setItems(prev => prev.filter(x => x.id !== id));
+  };
+
   if (loading) {
     return <p className="text-slate-300">Yükleniyor...</p>;
   }
@@ -69,7 +103,7 @@ export default function List() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24">
       <div className="flex justify-between items-center gap-3">
         <div>
           <h1 className="text-2xl font-bold">Vakalar</h1>
@@ -107,7 +141,7 @@ export default function List() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className={`grid gap-2 ${isAdmin ? 'grid-cols-4' : 'grid-cols-3'}`}>
                 <Link
                   className="px-3 py-2 rounded-lg bg-slate-700 text-center text-sm"
                   to={`/view/${k.id}`}
@@ -129,6 +163,16 @@ export default function List() {
                   <Archive className="w-4 h-4" />
                   Arşiv
                 </button>
+
+                {isAdmin && (
+                  <button
+                    className="px-3 py-2 rounded-lg bg-red-700 text-sm flex items-center justify-center gap-1"
+                    onClick={() => deleteCase(k.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Sil
+                  </button>
+                )}
               </div>
             </div>
           ))}
