@@ -41,7 +41,7 @@ type StockItem = {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="block text-sm text-slate-300 mb-2">
+      <span className="block text-xs md:text-sm text-slate-300 mb-1.5 md:mb-2">
         {label} <b className="text-red-400">*</b>
       </span>
       {children}
@@ -50,7 +50,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const inputClass =
-  'w-full px-4 py-3 rounded-xl bg-slate-700 border border-slate-600 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500';
+  'w-full px-3 md:px-4 py-2.5 md:py-3 rounded-xl bg-slate-700 border border-slate-600 text-sm md:text-base text-white focus:outline-none focus:ring-2 focus:ring-cyan-500';
 
 export default function AddCase() {
   const { user, profile } = useAuth();
@@ -164,15 +164,11 @@ export default function AddCase() {
   function handleStockSelect(stockId: string) {
     setSelectedStockId(stockId);
 
-    if (!stockId) {
-      return;
-    }
+    if (!stockId) return;
 
     const selected = stockItems.find(item => item.id === stockId);
 
-    if (!selected) {
-      return;
-    }
+    if (!selected) return;
 
     setForm(prev => ({
       ...prev,
@@ -317,29 +313,29 @@ export default function AddCase() {
     <div className="max-w-3xl mx-auto">
       <button
         onClick={() => navigate(-1)}
-        className="mb-4 flex gap-2 text-slate-300"
+        className="mb-3 md:mb-4 flex gap-2 text-sm md:text-base text-slate-300"
       >
-        <ArrowLeft /> Geri
+        <ArrowLeft className="w-4 h-4 md:w-5 md:h-5" /> Geri
       </button>
 
       <form
         onSubmit={submit}
-        className="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-6"
+        className="bg-slate-800 border border-slate-700 rounded-2xl p-4 md:p-6 space-y-5 md:space-y-6"
       >
-        <h1 className="text-2xl font-bold">
+        <h1 className="text-xl md:text-2xl font-bold">
           {isEdit ? 'Vakayı Düzenle' : 'Yeni Vaka Ekle'}
         </h1>
 
         {error && (
-          <p className="bg-red-500/10 border border-red-500/30 text-red-300 p-3 rounded-xl">
+          <p className="bg-red-500/10 border border-red-500/30 text-red-300 p-3 rounded-xl text-xs md:text-sm">
             {error}
           </p>
         )}
 
         {!isEdit && (
-          <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-4 space-y-4">
+          <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-3 md:p-4 space-y-3 md:space-y-4">
             <div>
-              <span className="block text-sm text-cyan-200 mb-3">
+              <span className="block text-xs md:text-sm text-cyan-200 mb-2 md:mb-3">
                 Stoktan Kapak Seç
               </span>
 
@@ -352,14 +348,14 @@ export default function AddCase() {
                       setSelectedSize(selectedSize === size ? null : size);
                       setSelectedStockId('');
                     }}
-                    className={`rounded-xl p-3 text-left border transition ${
+                    className={`rounded-xl p-2.5 md:p-3 text-left border transition ${
                       selectedSize === size
                         ? 'bg-cyan-600 border-cyan-400 text-white'
                         : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-cyan-500/60'
                     }`}
                   >
-                    <div className="text-lg font-bold">{size} mm</div>
-                    <div className="text-xs opacity-80">
+                    <div className="text-base md:text-lg font-bold">{size} mm</div>
+                    <div className="text-[11px] md:text-xs opacity-80">
                       {stockCounts[size as 23 | 26 | 29 | 34]} adet stokta
                     </div>
                   </button>
@@ -368,29 +364,29 @@ export default function AddCase() {
             </div>
 
             {!selectedSize && !selectedStock && (
-              <div className="text-sm text-slate-300">
+              <div className="text-xs md:text-sm text-slate-300">
                 Kapak seçmeden devam etmek istersen aşağıdaki alanları manuel doldurabilirsin.
               </div>
             )}
 
             {selectedSize && (
-              <div className="space-y-3">
+              <div className="space-y-2 md:space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm text-cyan-100">
+                  <div className="text-xs md:text-sm text-cyan-100">
                     {selectedSize} mm stok listesi
                   </div>
 
                   <button
                     type="button"
                     onClick={clearStockSelection}
-                    className="text-xs text-slate-300 hover:text-white"
+                    className="text-[11px] md:text-xs text-slate-300 hover:text-white"
                   >
                     Seçimi temizle
                   </button>
                 </div>
 
                 {filteredStockItems.length === 0 ? (
-                  <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 text-sm text-slate-400">
+                  <div className="rounded-xl border border-slate-700 bg-slate-900 p-3 md:p-4 text-xs md:text-sm text-slate-400">
                     {selectedSize} mm stokta kapak bulunamadı.
                   </div>
                 ) : (
@@ -400,23 +396,23 @@ export default function AddCase() {
                         key={item.id}
                         type="button"
                         onClick={() => handleStockSelect(item.id)}
-                        className={`w-full text-left rounded-xl border p-4 transition ${
+                        className={`w-full text-left rounded-xl border p-3 md:p-4 transition ${
                           selectedStockId === item.id
                             ? 'border-cyan-400 bg-cyan-500/15'
                             : 'border-slate-700 bg-slate-900 hover:border-cyan-500/60'
                         }`}
                       >
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-1.5 md:gap-2">
                           <div>
-                            <div className="font-semibold text-white">
+                            <div className="font-semibold text-sm md:text-base text-white">
                               {item.urun_adi}
                             </div>
-                            <div className="text-sm text-slate-400">
+                            <div className="text-xs md:text-sm text-slate-400">
                               LOT: {item.lot_no}
                             </div>
                           </div>
 
-                          <div className="text-sm text-slate-300">
+                          <div className="text-xs md:text-sm text-slate-300">
                             SKT: {formatDate(item.son_kullanma_tarihi)}
                           </div>
                         </div>
@@ -428,22 +424,22 @@ export default function AddCase() {
             )}
 
             {selectedStock && (
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 md:p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="font-semibold text-emerald-200">
-                      Seçilen Kapak
+                    <div className="inline-flex items-center rounded-full border border-emerald-400/40 bg-emerald-500/20 px-2.5 py-1 text-[11px] md:text-xs font-bold text-emerald-100">
+                      ✓ STOKTAN SEÇİLDİ
                     </div>
 
-                    <div className="text-sm text-white mt-1">
+                    <div className="text-sm md:text-base text-white font-semibold mt-2">
                       {selectedStock.urun_adi}
                     </div>
 
-                    <div className="text-sm text-slate-300">
+                    <div className="text-xs md:text-sm text-slate-300 mt-1">
                       LOT: {selectedStock.lot_no}
                     </div>
 
-                    <div className="text-sm text-slate-300">
+                    <div className="text-xs md:text-sm text-slate-300">
                       SKT: {formatDate(selectedStock.son_kullanma_tarihi)}
                     </div>
                   </div>
@@ -451,13 +447,13 @@ export default function AddCase() {
                   <button
                     type="button"
                     onClick={clearStockSelection}
-                    className="text-xs text-emerald-100 hover:text-white"
+                    className="text-[11px] md:text-xs text-emerald-100 hover:text-white"
                   >
                     Değiştir
                   </button>
                 </div>
 
-                <p className="text-sm text-emerald-100 mt-3">
+                <p className="text-xs md:text-sm text-emerald-100 mt-3">
                   Vaka kaydedilince bu kapak otomatik stoktan düşecek ve hareket kaydı oluşturulacaktır.
                 </p>
               </div>
@@ -465,7 +461,7 @@ export default function AddCase() {
           </div>
         )}
 
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid md:grid-cols-2 gap-3 md:gap-4">
           <Field label="Vaka Tarihi">
             <input
               className={inputClass}
@@ -571,16 +567,33 @@ export default function AddCase() {
           </Field>
         </div>
 
-        <div className="bg-slate-700/40 p-4 rounded-xl flex justify-between">
+        {selectedStock && !isEdit && (
+          <div className="rounded-xl border border-emerald-500/30 bg-slate-900 p-3 md:p-4">
+            <div className="text-xs md:text-sm text-slate-400 mb-1">
+              Son Kontrol — Kullanılacak Kapak
+            </div>
+
+            <div className="text-sm md:text-base font-bold text-white">
+              {selectedStock.urun_adi} / LOT: {selectedStock.lot_no}
+            </div>
+
+            <div className="text-xs md:text-sm text-slate-300 mt-1">
+              SKT: {formatDate(selectedStock.son_kullanma_tarihi)} • Vaka kaydıyla stoktan düşülecek.
+            </div>
+          </div>
+        )}
+
+        <div className="bg-slate-700/40 p-3 md:p-4 rounded-xl flex justify-between text-sm md:text-base">
           <span>Crimp Yapan</span>
           <b>{crimpYapan}</b>
         </div>
 
         <button
           disabled={loading}
-          className="w-full py-4 rounded-xl bg-cyan-600 hover:bg-cyan-500 font-bold flex justify-center gap-2 disabled:opacity-60"
+          className="w-full py-3 md:py-4 rounded-xl bg-cyan-600 hover:bg-cyan-500 font-bold flex justify-center gap-2 disabled:opacity-60 text-sm md:text-base"
         >
-          <Save /> {loading ? 'Kaydediliyor...' : 'Kaydet'}
+          <Save className="w-4 h-4 md:w-5 md:h-5" />{' '}
+          {loading ? 'Kaydediliyor...' : 'Kaydet'}
         </button>
       </form>
     </div>
