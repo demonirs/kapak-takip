@@ -2,10 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root { min-height: 100%; }
-body { background: #0f172a; }
-* { box-sizing: border-box; }
-/* Mobil scroll düzeltmeleri */
+/* =========================
+   GENEL
+========================= */
+
 html,
 body,
 #root {
@@ -17,9 +17,20 @@ body,
 
 body {
   position: static;
+  background: #0f172a;
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease;
 }
 
-/* Mobilde tablo/listeler ekrana sığmazsa yatay kaydır */
+* {
+  box-sizing: border-box;
+}
+
+/* =========================
+   MOBİL SCROLL
+========================= */
+
 .mobile-scroll-x {
   width: 100%;
   max-width: 100%;
@@ -28,15 +39,166 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Mobilde uzun listeler dikey kayabilsin */
 .mobile-scroll-y {
   max-height: 75vh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Tablo içeriği ezilmesin, yatay kaydırılsın */
 .mobile-table {
   min-width: 720px;
   width: 100%;
+}
+
+/* =========================
+   LIGHT MODE
+========================= */
+
+html.light-mode body {
+  background: #f8fafc;
+}
+
+/* Ana arkaplanlar */
+
+html.light-mode .bg-slate-950 {
+  background-color: #f8fafc !important;
+}
+
+html.light-mode .bg-slate-900 {
+  background-color: #ffffff !important;
+}
+
+html.light-mode .bg-slate-800 {
+  background-color: #ffffff !important;
+}
+
+html.light-mode .bg-slate-700 {
+  background-color: #f1f5f9 !important;
+}
+
+html.light-mode .bg-slate-700\/40 {
+  background-color: rgba(241, 245, 249, 0.9) !important;
+}
+
+/* Borderlar */
+
+html.light-mode .border-slate-900 {
+  border-color: #e2e8f0 !important;
+}
+
+html.light-mode .border-slate-800 {
+  border-color: #e2e8f0 !important;
+}
+
+html.light-mode .border-slate-700 {
+  border-color: #e2e8f0 !important;
+}
+
+html.light-mode .border-slate-600 {
+  border-color: #cbd5e1 !important;
+}
+
+/* Yazılar */
+
+html.light-mode .text-white {
+  color: #0f172a !important;
+}
+
+html.light-mode .text-slate-200 {
+  color: #1e293b !important;
+}
+
+html.light-mode .text-slate-300 {
+  color: #334155 !important;
+}
+
+html.light-mode .text-slate-400 {
+  color: #64748b !important;
+}
+
+html.light-mode .text-slate-500 {
+  color: #64748b !important;
+}
+
+/* Inputlar */
+
+html.light-mode input,
+html.light-mode select,
+html.light-mode textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.light-mode input::placeholder,
+html.light-mode textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Header */
+
+html.light-mode header {
+  background-color: rgba(248, 250, 252, 0.95) !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Sidebar */
+
+html.light-mode aside {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Scrollbar */
+
+html.light-mode ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html.light-mode ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+html.light-mode ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+/* Gölgeler */
+
+html.light-mode .shadow-2xl {
+  box-shadow:
+    0 20px 50px rgba(15, 23, 42, 0.12) !important;
+}
+
+/* Kartlar */
+
+html.light-mode .bg-cyan-500\/10 {
+  background-color: rgba(6, 182, 212, 0.08) !important;
+}
+
+html.light-mode .bg-red-500\/10 {
+  background-color: rgba(239, 68, 68, 0.08) !important;
+}
+
+html.light-mode .bg-emerald-500\/10 {
+  background-color: rgba(16, 185, 129, 0.08) !important;
+}
+
+/* Geçiş */
+
+body,
+div,
+button,
+input,
+select,
+textarea,
+aside,
+header,
+main {
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease;
 }
