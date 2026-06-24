@@ -9,14 +9,17 @@ import {
   List,
   LogOut,
   Menu,
+  Moon,
   Package,
   PlusCircle,
   Search,
   Shuffle,
+  Sun,
   Users,
   X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 const menuSections = [
   {
@@ -78,7 +81,7 @@ function BackgroundWatermark() {
       {words.map(word => (
         <div
           key={word.id}
-          className="absolute select-none font-bold tracking-[0.35em] text-cyan-400/[0.035] text-[9px] md:text-[11px]"
+          className="absolute select-none font-bold tracking-[0.35em] text-cyan-400/[0.02] text-[9px] md:text-[11px]"
           style={{
             top: word.top,
             left: word.left,
@@ -94,6 +97,7 @@ function BackgroundWatermark() {
 
 export default function Layout() {
   const { profile, signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -217,6 +221,18 @@ export default function Layout() {
                 title="Menü"
               >
                 <Menu className="w-5 h-5" />
+              </button>
+
+              <button
+                onClick={toggleTheme}
+                className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-cyan-300 hover:bg-cyan-500/10"
+                title={theme === 'dark' ? 'Gündüz Modu' : 'Gece Modu'}
+              >
+                {theme === 'dark' ? (
+                  <Sun className="w-4 h-4" />
+                ) : (
+                  <Moon className="w-4 h-4" />
+                )}
               </button>
 
               <div className="hidden sm:block text-right">
