@@ -35,6 +35,7 @@ function StatCard({ title, value }: { title: string; value: number }) {
 export default function CompetitorCases() {
   const { profile } = useAuth();
   const currentProfile = profile as any;
+
   const isAdmin =
     currentProfile?.role === 'admin' ||
     currentProfile?.yetki === 'admin' ||
@@ -53,6 +54,11 @@ export default function CompetitorCases() {
   const [notlar, setNotlar] = useState('');
   const [digerAciklama, setDigerAciklama] = useState('');
 
+  const [filterBrand, setFilterBrand] = useState('Tümü');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [searchText, setSearchText] = useState('');
+
   useEffect(() => {
     loadCases();
   }, []);
@@ -62,7 +68,9 @@ export default function CompetitorCases() {
 
     const { data, error } = await supabase
       .from('rakip_vakalar')
-      .select('id, merkez, doktor, vaka_tarihi, marka, notlar, diger_aciklama, created_at')
+      .select(
+        'id, merkez, doktor, vaka_tarihi, marka, notlar, diger_aciklama, created_at'
+      )
       .order('vaka_tarihi', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(300);
@@ -143,12 +151,38 @@ export default function CompetitorCases() {
     await loadCases();
   }
 
+  function clearFilters() {
+    setFilterBrand('Tümü');
+    setStartDate('');
+    setEndDate('');
+    setSearchText('');
+  }
+
+  const filteredItems = useMemo(() => {
+    const search = searchText.trim().toLowerCase();
+
+    return items.filter(item => {
+      const brandMatch = filterBrand === 'Tümü' || item.marka === filterBrand;
+
+      const dateMatch =
+        (!startDate || item.vaka_tarihi >= startDate) &&
+        (!endDate || item.vaka_tarihi <= endDate);
+
+      const searchMatch =
+        !search ||
+        item.merkez.toLowerCase().includes(search) ||
+        (item.doktor || '').toLowerCase().includes(search);
+
+      return brandMatch && dateMatch && searchMatch;
+    });
+  }, [items, filterBrand, startDate, endDate, searchText]);
+
   const stats = useMemo(() => {
     const countByBrand = (brand: string) =>
-      items.filter(i => i.marka === brand).length;
+      filteredItems.filter(i => i.marka === brand).length;
 
     return {
-      total: items.length,
+      total: filteredItems.length,
       meril: countByBrand('Meril'),
       allegra: countByBrand('Allegra'),
       abbott: countByBrand('Abbott'),
@@ -156,7 +190,7 @@ export default function CompetitorCases() {
       microport: countByBrand('MicroPort'),
       diger: countByBrand('Diğer'),
     };
-  }, [items]);
+  }, [filteredItems]);
 
   function formatDate(date: string) {
     return new Date(date).toLocaleDateString('tr-TR');
@@ -266,6 +300,77 @@ export default function CompetitorCases() {
         {message && <div className="text-sm text-slate-300">{message}</div>}
       </div>
 
+      <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 space-y-4">
+        <h2 className="text-lg font-semibold text-white">Filtreler</h2>
+
+        <div className="grid md:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">Marka</label>
+            <select
+              value={filterBrand}
+              onChange={e => setFilterBrand(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
+            >
+              <option value="Tümü">Tümü</option>
+              {MARKALAR.map(item => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">
+              Başlangıç Tarihi
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={e => setStartDate(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">
+              Bitiş Tarihi
+            </label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={e => setEndDate(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">
+              Doktor / Merkez Ara
+            </label>
+            <input
+              value={searchText}
+              onChange={e => setSearchText(e.target.value)}
+              placeholder="Doktor veya merkez yaz"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-slate-400">
+            Gösterilen kayıt: <b className="text-white">{filteredItems.length}</b>
+          </div>
+
+          <button
+            onClick={clearFilters}
+            className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-slate-300 hover:border-cyan-500/60 hover:text-white"
+          >
+            Filtreleri Temizle
+          </button>
+        </div>
+      </div>
+
       {loading ? (
         <div className="text-slate-400">Yükleniyor...</div>
       ) : (
@@ -287,17 +392,17 @@ export default function CompetitorCases() {
               </thead>
 
               <tbody>
-                {items.length === 0 ? (
+                {filteredItems.length === 0 ? (
                   <tr>
                     <td
                       colSpan={isAdmin ? 7 : 6}
                       className="p-4 text-slate-400 text-center"
                     >
-                      Henüz rakip vaka yok.
+                      Filtrelere uygun rakip vaka bulunamadı.
                     </td>
                   </tr>
                 ) : (
-                  items.map(item => (
+                  filteredItems.map(item => (
                     <tr key={item.id} className="border-t border-slate-700">
                       <td className="p-3 whitespace-nowrap">
                         {formatDate(item.vaka_tarihi)}
