@@ -32,6 +32,7 @@ const FILTERS = ['Tümü', '23', '26', '29', '34'] as const;
 export default function Stock() {
   const { profile } = useAuth();
   const currentProfile = profile as any;
+
   const isAdmin =
     currentProfile?.role === 'admin' ||
     currentProfile?.yetki === 'admin' ||
@@ -85,33 +86,61 @@ export default function Stock() {
     setMessage('');
     setParsed(null);
 
-    const raw = barcode.trim();
+    const raw = barcode
+      .trim()
+      .replace(/\s/g, '')
+      .replace(/\u001D/g, '');
 
     if (!raw) {
       setMessage('Barkod alanı boş.');
       return;
     }
 
-    const gtinMatch = raw.match(/\(01\)(\d{14})/);
-    const sktMatch = raw.match(/\(17\)(\d{6})/);
-    const lotMatch = raw.match(/\(21\)([A-Za-z0-9]+)/);
+    let gtin = '';
+    let skt = '';
+    let lot = '';
 
-    if (!gtinMatch) {
-      setMessage('(01) GTIN / UBB bulunamadı.');
+    const gtinParen = raw.match(/\(01\)(\d{14})/);
+    const sktParen = raw.match(/\(17\)(\d{6})/);
+    const lot10Paren = raw.match(/\(10\)([A-Za-z0-9]+)/);
+    const lot21Paren = raw.match(/\(21\)([A-Za-z0-9]+)/);
+
+    if (gtinParen) gtin = gtinParen[1];
+    if (sktParen) skt = sktParen[1];
+
+    if (lot10Paren) {
+      lot = lot10Paren[1];
+    } else if (lot21Paren) {
+      lot = lot21Paren[1];
+    }
+
+    if (!gtin || !skt || !lot) {
+      const compactMatch = raw.match(
+        /01(\d{14})17(\d{6})(?:10|21)([A-Za-z0-9]+)/
+      );
+
+      if (compactMatch) {
+        gtin = compactMatch[1];
+        skt = compactMatch[2];
+        lot = compactMatch[3];
+      }
+    }
+
+    if (!gtin) {
+      setMessage('GTIN / UBB bulunamadı.');
       return;
     }
 
-    if (!sktMatch) {
-      setMessage('(17) son kullanma tarihi bulunamadı.');
+    if (!skt) {
+      setMessage('Son kullanma tarihi bulunamadı.');
       return;
     }
 
-    if (!lotMatch) {
-      setMessage('(21) lot no bulunamadı.');
+    if (!lot) {
+      setMessage('Lot numarası bulunamadı.');
       return;
     }
 
-    const gtin = gtinMatch[1];
     const kapakBoyutu = GTIN_MAP[gtin];
 
     if (!kapakBoyutu) {
@@ -119,15 +148,15 @@ export default function Stock() {
       return;
     }
 
-    const yy = sktMatch[1].slice(0, 2);
-    const mm = sktMatch[1].slice(2, 4);
-    const dd = sktMatch[1].slice(4, 6);
+    const yy = skt.slice(0, 2);
+    const mm = skt.slice(2, 4);
+    const dd = skt.slice(4, 6);
 
     setParsed({
       gtin,
       urun_adi: `EVPROPLUS-${kapakBoyutu}`,
       kapak_boyutu: kapakBoyutu,
-      lot_no: lotMatch[1],
+      lot_no: lot,
       son_kullanma_tarihi: `20${yy}-${mm}-${dd}`,
       barkod_raw: raw,
     });
@@ -200,7 +229,9 @@ export default function Stock() {
         });
 
       if (hareketError) {
-        setMessage(`Stok eklendi ama hareket kaydı yazılamadı: ${hareketError.message}`);
+        setMessage(
+          `Stok eklendi ama hareket kaydı yazılamadı: ${hareketError.message}`
+        );
         await loadStock();
         return;
       }
@@ -269,7 +300,10 @@ export default function Stock() {
         </div>
 
         {[23, 26, 29, 34].map(size => (
-          <div key={size} className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+          <div
+            key={size}
+            className="bg-slate-800 rounded-xl p-4 border border-slate-700"
+          >
             <div className="text-sm text-slate-400">{size} mm</div>
             <div className="text-2xl font-bold">
               {counts[size as 23 | 26 | 29 | 34]}
@@ -290,7 +324,7 @@ export default function Stock() {
             onKeyDown={e => {
               if (e.key === 'Enter') parseBarcode();
             }}
-            placeholder="(01)00763000655419(17)260625(21)J276941(20)01"
+            placeholder="(01)00763000655426(17)270702(10)R043497"
             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
           />
         </div>
@@ -400,7 +434,11 @@ export default function Stock() {
                           {formatDate(item.son_kullanma_tarihi)}
                         </td>
                         <td className="p-3 whitespace-nowrap">
-                          <span className={`px-3 py-1 rounded-full border text-sm ${badgeClass(days)}`}>
+                          <span
+                            className={`px-3 py-1 rounded-full border text-sm ${badgeClass(
+                              days
+                            )}`}
+                          >
                             {days}
                           </span>
                         </td>
