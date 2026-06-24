@@ -181,6 +181,8 @@ export default function AddCase() {
       lot_no: selected.lot_no,
       son_kul_tarihi: selected.son_kullanma_tarihi,
     }));
+
+    setSelectedSize(null);
   }
 
   function clearStockSelection() {
@@ -347,7 +349,7 @@ export default function AddCase() {
                     key={size}
                     type="button"
                     onClick={() => {
-                      setSelectedSize(size);
+                      setSelectedSize(selectedSize === size ? null : size);
                       setSelectedStockId('');
                     }}
                     className={`rounded-xl p-3 text-left border transition ${
@@ -365,7 +367,7 @@ export default function AddCase() {
               </div>
             </div>
 
-            {!selectedSize && (
+            {!selectedSize && !selectedStock && (
               <div className="text-sm text-slate-300">
                 Kapak seçmeden devam etmek istersen aşağıdaki alanları manuel doldurabilirsin.
               </div>
@@ -426,11 +428,39 @@ export default function AddCase() {
             )}
 
             {selectedStock && (
-              <p className="text-sm text-cyan-200">
-                Seçilen kapak: <b>{selectedStock.urun_adi}</b> / LOT:{' '}
-                <b>{selectedStock.lot_no}</b>. Vaka kaydedilince otomatik stoktan
-                düşecek ve hareket kaydı oluşturulacaktır.
-              </p>
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-semibold text-emerald-200">
+                      Seçilen Kapak
+                    </div>
+
+                    <div className="text-sm text-white mt-1">
+                      {selectedStock.urun_adi}
+                    </div>
+
+                    <div className="text-sm text-slate-300">
+                      LOT: {selectedStock.lot_no}
+                    </div>
+
+                    <div className="text-sm text-slate-300">
+                      SKT: {formatDate(selectedStock.son_kullanma_tarihi)}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={clearStockSelection}
+                    className="text-xs text-emerald-100 hover:text-white"
+                  >
+                    Değiştir
+                  </button>
+                </div>
+
+                <p className="text-sm text-emerald-100 mt-3">
+                  Vaka kaydedilince bu kapak otomatik stoktan düşecek ve hareket kaydı oluşturulacaktır.
+                </p>
+              </div>
             )}
           </div>
         )}
