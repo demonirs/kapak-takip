@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save } from 'lucide-react';
 import {
@@ -61,6 +61,7 @@ export default function AddCase() {
   const [form, setForm] = useState<FormState>(initial);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [selectedStockId, setSelectedStockId] = useState('');
+  const [selectedSize, setSelectedSize] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -134,8 +135,31 @@ export default function AddCase() {
     }
   }
 
+  const stockCounts = useMemo(() => {
+    return {
+      23: stockItems.filter(item => item.kapak_boyutu === 23).length,
+      26: stockItems.filter(item => item.kapak_boyutu === 26).length,
+      29: stockItems.filter(item => item.kapak_boyutu === 29).length,
+      34: stockItems.filter(item => item.kapak_boyutu === 34).length,
+    };
+  }, [stockItems]);
+
+  const filteredStockItems = useMemo(() => {
+    if (!selectedSize) return [];
+    return stockItems.filter(item => item.kapak_boyutu === selectedSize);
+  }, [stockItems, selectedSize]);
+
+  const selectedStock = useMemo(() => {
+    if (!selectedStockId) return null;
+    return stockItems.find(item => item.id === selectedStockId) || null;
+  }, [stockItems, selectedStockId]);
+
   const set = (name: keyof FormState, value: string | number) =>
     setForm(prev => ({ ...prev, [name]: value }));
+
+  function formatDate(date: string) {
+    return new Date(date).toLocaleDateString('tr-TR');
+  }
 
   function handleStockSelect(stockId: string) {
     setSelectedStockId(stockId);
@@ -156,6 +180,17 @@ export default function AddCase() {
       kapak_size: `${selected.kapak_boyutu} mm`,
       lot_no: selected.lot_no,
       son_kul_tarihi: selected.son_kullanma_tarihi,
+    }));
+  }
+
+  function clearStockSelection() {
+    setSelectedStockId('');
+    setSelectedSize(null);
+
+    setForm(prev => ({
+      ...prev,
+      lot_no: '',
+      son_kul_tarihi: '',
     }));
   }
 
@@ -263,7 +298,11 @@ export default function AddCase() {
     onChange: (v: string) => void;
     options: readonly (string | number)[];
   }) => (
-    <select className={inputClass} value={String(value)} onChange={e => onChange(e.target.value)}>
+    <select
+      className={inputClass}
+      value={String(value)}
+      onChange={e => onChange(e.target.value)}
+    >
       {options.map(o => (
         <option key={String(o)} value={String(o)}>
           {o}
@@ -274,11 +313,17 @@ export default function AddCase() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <button onClick={() => navigate(-1)} className="mb-4 flex gap-2 text-slate-300">
+      <button
+        onClick={() => navigate(-1)}
+        className="mb-4 flex gap-2 text-slate-300"
+      >
         <ArrowLeft /> Geri
       </button>
 
-      <form onSubmit={submit} className="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-6">
+      <form
+        onSubmit={submit}
+        className="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-6"
+      >
         <h1 className="text-2xl font-bold">
           {isEdit ? 'Vakayı Düzenle' : 'Yeni Vaka Ekle'}
         </h1>
@@ -290,31 +335,101 @@ export default function AddCase() {
         )}
 
         {!isEdit && (
-          <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-4">
-            <label className="block">
-              <span className="block text-sm text-cyan-200 mb-2">
+          <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-4 space-y-4">
+            <div>
+              <span className="block text-sm text-cyan-200 mb-3">
                 Stoktan Kapak Seç
               </span>
 
-              <select
-                className={inputClass}
-                value={selectedStockId}
-                onChange={e => handleStockSelect(e.target.value)}
-              >
-                <option value="">Stoktan kapak seçmeden devam et</option>
-
-                {stockItems.map(item => (
-                  <option key={item.id} value={item.id}>
-                    {item.urun_adi} | LOT: {item.lot_no} | SKT:{' '}
-                    {new Date(item.son_kullanma_tarihi).toLocaleDateString('tr-TR')}
-                  </option>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {[23, 26, 29, 34].map(size => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => {
+                      setSelectedSize(size);
+                      setSelectedStockId('');
+                    }}
+                    className={`rounded-xl p-3 text-left border transition ${
+                      selectedSize === size
+                        ? 'bg-cyan-600 border-cyan-400 text-white'
+                        : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-cyan-500/60'
+                    }`}
+                  >
+                    <div className="text-lg font-bold">{size} mm</div>
+                    <div className="text-xs opacity-80">
+                      {stockCounts[size as 23 | 26 | 29 | 34]} adet stokta
+                    </div>
+                  </button>
                 ))}
-              </select>
-            </label>
+              </div>
+            </div>
 
-            {selectedStockId && (
-              <p className="text-sm text-cyan-200 mt-3">
-                Seçilen kapak vaka kaydedilince otomatik stoktan düşecek ve hareket kaydı oluşturulacaktır.
+            {!selectedSize && (
+              <div className="text-sm text-slate-300">
+                Kapak seçmeden devam etmek istersen aşağıdaki alanları manuel doldurabilirsin.
+              </div>
+            )}
+
+            {selectedSize && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm text-cyan-100">
+                    {selectedSize} mm stok listesi
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={clearStockSelection}
+                    className="text-xs text-slate-300 hover:text-white"
+                  >
+                    Seçimi temizle
+                  </button>
+                </div>
+
+                {filteredStockItems.length === 0 ? (
+                  <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 text-sm text-slate-400">
+                    {selectedSize} mm stokta kapak bulunamadı.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredStockItems.map(item => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleStockSelect(item.id)}
+                        className={`w-full text-left rounded-xl border p-4 transition ${
+                          selectedStockId === item.id
+                            ? 'border-cyan-400 bg-cyan-500/15'
+                            : 'border-slate-700 bg-slate-900 hover:border-cyan-500/60'
+                        }`}
+                      >
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                          <div>
+                            <div className="font-semibold text-white">
+                              {item.urun_adi}
+                            </div>
+                            <div className="text-sm text-slate-400">
+                              LOT: {item.lot_no}
+                            </div>
+                          </div>
+
+                          <div className="text-sm text-slate-300">
+                            SKT: {formatDate(item.son_kullanma_tarihi)}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {selectedStock && (
+              <p className="text-sm text-cyan-200">
+                Seçilen kapak: <b>{selectedStock.urun_adi}</b> / LOT:{' '}
+                <b>{selectedStock.lot_no}</b>. Vaka kaydedilince otomatik stoktan
+                düşecek ve hareket kaydı oluşturulacaktır.
               </p>
             )}
           </div>
