@@ -64,33 +64,30 @@ function getPageTitle(pathname: string) {
 }
 
 function BackgroundWatermark() {
+  const words = Array.from({ length: 40 }, (_, i) => ({
+    id: i,
+    top: `${5 + ((i * 11) % 85)}%`,
+    left: `${(i * 17) % 95}%`,
+    rotate: i % 2 === 0 ? '-12deg' : '10deg',
+  }));
+
   return (
     <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(6,182,212,0.10),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.08),transparent_32%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(6,182,212,0.08),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(6,182,212,0.06),transparent_35%)]" />
 
-      <div className="absolute -top-10 -left-8 text-[120px] sm:text-[180px] md:text-[240px] font-black tracking-tight text-cyan-400/[0.025] select-none">
-        23
-      </div>
-
-      <div className="absolute top-[24%] -right-8 text-[120px] sm:text-[180px] md:text-[240px] font-black tracking-tight text-cyan-400/[0.025] select-none">
-        26
-      </div>
-
-      <div className="absolute top-[48%] -left-10 text-[120px] sm:text-[180px] md:text-[240px] font-black tracking-tight text-cyan-400/[0.025] select-none">
-        29
-      </div>
-
-      <div className="absolute bottom-0 right-4 text-[120px] sm:text-[180px] md:text-[240px] font-black tracking-tight text-cyan-400/[0.025] select-none">
-        34
-      </div>
-
-      <div className="hidden md:block absolute top-[18%] left-[16%] -rotate-12 text-xs font-mono tracking-[0.45em] text-slate-400/[0.055] select-none">
-        R039340 • R043497 • R223305 • R049080
-      </div>
-
-      <div className="hidden md:block absolute bottom-[22%] right-[10%] rotate-12 text-xs font-mono tracking-[0.45em] text-slate-400/[0.055] select-none">
-        GTIN • LOT • SKT • TAVI
-      </div>
+      {words.map(word => (
+        <div
+          key={word.id}
+          className="absolute select-none font-bold tracking-[0.35em] text-cyan-400/[0.035] text-[9px] md:text-[11px]"
+          style={{
+            top: word.top,
+            left: word.left,
+            transform: `rotate(${word.rotate})`,
+          }}
+        >
+          EVOLUT PRO+
+        </div>
+      ))}
     </div>
   );
 }
