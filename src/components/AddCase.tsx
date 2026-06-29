@@ -38,6 +38,10 @@ type StockItem = {
   son_kullanma_tarihi: string;
 };
 
+type CaseWithCrimp = Kapak & {
+  crimp_yapan?: string | null;
+};
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
@@ -51,15 +55,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const inputClass =
   'w-full px-3 md:px-4 py-2.5 md:py-3 rounded-xl bg-slate-700 border border-slate-600 text-sm md:text-base text-white focus:outline-none focus:ring-2 focus:ring-cyan-500';
-
-function normalizeLot(value: string) {
-  return value.trim().replace(/\s+/g, '').toUpperCase();
-}
-
-function getSizeNumber(size: string) {
-  const match = size.match(/\d+/);
-  return match ? Number(match[0]) : null;
-}
 
 export default function AddCase() {
   const { user, profile } = useAuth();
@@ -78,7 +73,9 @@ export default function AddCase() {
   const currentCrimpYapan =
     profile?.full_name || user?.email?.split('@')[0] || 'Kullanıcı';
 
-  const crimpYapan = isEdit ? originalCrimpYapan || currentCrimpYapan : currentCrimpYapan;
+  const crimpYapan = isEdit
+    ? originalCrimpYapan || currentCrimpYapan
+    : currentCrimpYapan;
 
   useEffect(() => {
     loadStockItems();
@@ -111,7 +108,7 @@ export default function AddCase() {
       if (error) throw error;
 
       if (data) {
-        const k = data as Kapak & { crimp_yapan?: string };
+        const k = data as CaseWithCrimp;
 
         setOriginalCrimpYapan(k.crimp_yapan || '');
 
@@ -169,23 +166,6 @@ export default function AddCase() {
     return stockItems.find(item => item.id === selectedStockId) || null;
   }, [stockItems, selectedStockId]);
 
-  const manualMatchedStock = useMemo(() => {
-    if (isEdit || selectedStockId) return null;
-
-    const lot = normalizeLot(form.lot_no);
-    const size = getSizeNumber(form.kapak_size);
-
-    if (!lot || !size) return null;
-
-    return (
-      stockItems.find(
-        item =>
-          normalizeLot(item.lot_no) === lot &&
-          Number(item.kapak_boyutu) === Number(size)
-      ) || null
-    );
-  }, [form.lot_no, form.kapak_size, stockItems, selectedStockId, isEdit]);
-
   const set = (name: keyof FormState, value: string | number) =>
     setForm(prev => ({ ...prev, [name]: value }));
 
@@ -206,7 +186,7 @@ export default function AddCase() {
       ...prev,
       kapak_tipi: 'Evolut Pro+',
       kapak_size: `${selected.kapak_boyutu} mm`,
-      lot_no: normalizeLot(selected.lot_no),
+      lot_no: selected.lot_no,
       son_kul_tarihi: selected.son_kullanma_tarihi,
     }));
 
@@ -224,59 +204,32 @@ export default function AddCase() {
     }));
   }
 
-  async function checkDuplicateCase(lotNo: string, kapakSize: string) {
-    let query = supabase
-      .from('kapaklar')
-      .select('id')
-      .eq('lot_no', lotNo)
-      .eq('kapak_size', kapakSize)
-      .limit(1);
-
-    if (isEdit && id) {
-      query = query.neq('id', id);
-    }
-
-    const { data, error } = await timeout(query, 10000);
-
-    if (error) throw error;
-
-    if (data && data.length > 0) {
-      throw new Error('Bu LOT ve kapak size ile daha önce vaka kaydı oluşturulmuş. Aynı kapak ikinci kez kullanılamaz.');
-    }
-  }
-
   async function markStockAsUsed(stockId: string, vakaId: string) {
     const selected = stockItems.find(item => item.id === stockId);
 
     if (!selected) {
-      throw new Error('Seçilen stok kaydı bulunamadı veya artık stokta değil.');
+      throw new Error('Seçilen stok kaydı bulunamadı.');
     }
 
-    const { data: updatedStock, error: stockError } = await timeout(
+    const { error: stockError } = await timeout(
       supabase
         .from('kapak_stok')
         .update({
           durum: 'kullanildi',
           kullanilan_vaka_id: vakaId,
         })
-        .eq('id', stockId)
-        .eq('durum', 'stokta')
-        .select('id'),
+        .eq('id', stockId),
       10000
     );
 
     if (stockError) throw stockError;
-
-    if (!updatedStock || updatedStock.length === 0) {
-      throw new Error('Bu kapak artık stokta değil. Başka bir vaka için kullanılmış olabilir.');
-    }
 
     const { error: movementError } = await timeout(
       supabase.from('stok_hareketleri').insert({
         kapak_stok_id: stockId,
         islem: 'kullanildi',
         urun_adi: selected.urun_adi,
-        lot_no: normalizeLot(selected.lot_no),
+        lot_no: selected.lot_no,
         kapak_boyutu: selected.kapak_boyutu,
         son_kullanma_tarihi: selected.son_kullanma_tarihi,
         vaka_id: vakaId,
@@ -299,20 +252,16 @@ export default function AddCase() {
     setLoading(true);
     setError(null);
 
-    const normalizedLot = normalizeLot(form.lot_no);
-
     const payload = {
       ...form,
       merkez_hastane: form.merkez_hastane.trim(),
       doktor: form.doktor.trim(),
       hasta_adi: form.hasta_adi.trim(),
-      lot_no: normalizedLot,
+      lot_no: form.lot_no.trim(),
       proglide_adedi: Number(form.proglide_adedi) || 1,
     };
 
     try {
-      await checkDuplicateCase(payload.lot_no, payload.kapak_size);
-
       localStorage.setItem('lastHospital', payload.merkez_hastane);
       localStorage.setItem('lastDoctor', payload.doktor);
 
@@ -324,8 +273,6 @@ export default function AddCase() {
 
         if (error) throw error;
       } else {
-        const stockIdToUse = selectedStockId || manualMatchedStock?.id || '';
-
         const { data, error } = await timeout(
           supabase
             .from('kapaklar')
@@ -341,8 +288,8 @@ export default function AddCase() {
 
         if (error) throw error;
 
-        if (stockIdToUse && data?.id) {
-          await markStockAsUsed(stockIdToUse, data.id);
+        if (selectedStockId && data?.id) {
+          await markStockAsUsed(selectedStockId, data.id);
         }
       }
 
@@ -431,7 +378,7 @@ export default function AddCase() {
               </div>
             </div>
 
-            {!selectedSize && !selectedStock && !manualMatchedStock && (
+            {!selectedSize && !selectedStock && (
               <div className="text-xs md:text-sm text-slate-300">
                 Kapak seçmeden devam etmek istersen aşağıdaki alanları manuel doldurabilirsin.
               </div>
@@ -476,7 +423,7 @@ export default function AddCase() {
                               {item.urun_adi}
                             </div>
                             <div className="text-xs md:text-sm text-slate-400">
-                              LOT: {normalizeLot(item.lot_no)}
+                              LOT: {item.lot_no}
                             </div>
                           </div>
 
@@ -491,24 +438,24 @@ export default function AddCase() {
               </div>
             )}
 
-            {(selectedStock || manualMatchedStock) && (
+            {selectedStock && (
               <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 md:p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="inline-flex items-center rounded-full border border-emerald-400/40 bg-emerald-500/20 px-2.5 py-1 text-[11px] md:text-xs font-bold text-emerald-100">
-                      ✓ STOK EŞLEŞTİ
+                      ✓ STOKTAN SEÇİLDİ
                     </div>
 
                     <div className="text-sm md:text-base text-white font-semibold mt-2">
-                      {(selectedStock || manualMatchedStock)?.urun_adi}
+                      {selectedStock.urun_adi}
                     </div>
 
                     <div className="text-xs md:text-sm text-slate-300 mt-1">
-                      LOT: {normalizeLot((selectedStock || manualMatchedStock)?.lot_no || '')}
+                      LOT: {selectedStock.lot_no}
                     </div>
 
                     <div className="text-xs md:text-sm text-slate-300">
-                      SKT: {formatDate((selectedStock || manualMatchedStock)?.son_kullanma_tarihi || '')}
+                      SKT: {formatDate(selectedStock.son_kullanma_tarihi)}
                     </div>
                   </div>
 
@@ -587,7 +534,7 @@ export default function AddCase() {
             <input
               className={inputClass}
               value={form.lot_no}
-              onChange={e => set('lot_no', normalizeLot(e.target.value))}
+              onChange={e => set('lot_no', e.target.value)}
               required
             />
           </Field>
@@ -635,19 +582,18 @@ export default function AddCase() {
           </Field>
         </div>
 
-        {(selectedStock || manualMatchedStock) && !isEdit && (
+        {selectedStock && !isEdit && (
           <div className="rounded-xl border border-emerald-500/30 bg-slate-900 p-3 md:p-4">
             <div className="text-xs md:text-sm text-slate-400 mb-1">
               Son Kontrol — Kullanılacak Kapak
             </div>
 
             <div className="text-sm md:text-base font-bold text-white">
-              {(selectedStock || manualMatchedStock)?.urun_adi} / LOT:{' '}
-              {normalizeLot((selectedStock || manualMatchedStock)?.lot_no || '')}
+              {selectedStock.urun_adi} / LOT: {selectedStock.lot_no}
             </div>
 
             <div className="text-xs md:text-sm text-slate-300 mt-1">
-              SKT: {formatDate((selectedStock || manualMatchedStock)?.son_kullanma_tarihi || '')} • Vaka kaydıyla stoktan düşülecek.
+              SKT: {formatDate(selectedStock.son_kullanma_tarihi)} • Vaka kaydıyla stoktan düşülecek.
             </div>
           </div>
         )}
