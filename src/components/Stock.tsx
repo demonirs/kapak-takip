@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { ExternalLink, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+
+type StockStatus = 'stokta' | 'kullanildi';
+type Tab = 'mevcut' | 'kullanilan';
 
 type StockItem = {
   id: string;
@@ -9,6 +13,17 @@ type StockItem = {
   kapak_boyutu: number;
   lot_no: string;
   son_kullanma_tarihi: string;
+  durum: StockStatus | string | null;
+  kullanilan_vaka_id: string | null;
+  created_at?: string | null;
+};
+
+type CaseInfo = {
+  id: string;
+  vaka_tarihi: string | null;
+  merkez_hastane: string | null;
+  doktor: string | null;
+  hasta_adi: string | null;
 };
 
 type ParsedBarcode = {
@@ -99,6 +114,7 @@ function extractGtinAndSkt(raw: string) {
 }
 
 export default function Stock() {
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const currentProfile = profile as any;
 
@@ -108,10 +124,12 @@ export default function Stock() {
     currentProfile?.is_admin === true;
 
   const [items, setItems] = useState<StockItem[]>([]);
+  const [caseMap, setCaseMap] = useState<Record<string, CaseInfo>>({});
   const [loading, setLoading] = useState(true);
   const [barcode, setBarcode] = useState('');
   const [parsed, setParsed] = useState<ParsedBarcode | null>(null);
   const [message, setMessage] = useState('');
+  const [activeTab, setActiveTab] = useState<Tab>('mevcut');
   const [activeFilter, setActiveFilter] =
     useState<(typeof FILTERS)[number]>('Tümü');
 
@@ -124,32 +142,77 @@ export default function Stock() {
 
     const { data, error } = await supabase
       .from('kapak_stok')
-      .select('id, urun_adi, kapak_boyutu, lot_no, son_kullanma_tarihi')
-      .eq('durum', 'stokta')
+      .select(
+        'id, urun_adi, kapak_boyutu, lot_no, son_kullanma_tarihi, durum, kullanilan_vaka_id, created_at'
+      )
+      .in('durum', ['stokta', 'kullanildi'])
       .order('kapak_boyutu')
       .order('son_kullanma_tarihi');
 
-    if (!error && data) {
-      setItems(data);
+    if (error) {
+      setMessage(error.message);
+      setLoading(false);
+      return;
+    }
+
+    const stockData = data || [];
+    setItems(stockData);
+
+    const vakaIds = Array.from(
+      new Set(
+        stockData
+          .map(item => item.kullanilan_vaka_id)
+          .filter((id): id is string => Boolean(id))
+      )
+    );
+
+    if (vakaIds.length > 0) {
+      const { data: cases } = await supabase
+        .from('kapaklar')
+        .select('id, vaka_tarihi, merkez_hastane, doktor, hasta_adi')
+        .in('id', vakaIds);
+
+      const nextCaseMap: Record<string, CaseInfo> = {};
+
+      (cases || []).forEach(item => {
+        nextCaseMap[item.id] = item;
+      });
+
+      setCaseMap(nextCaseMap);
+    } else {
+      setCaseMap({});
     }
 
     setLoading(false);
   }
 
+  const mevcutItems = useMemo(
+    () => items.filter(item => item.durum === 'stokta'),
+    [items]
+  );
+
+  const kullanilanItems = useMemo(
+    () => items.filter(item => item.durum === 'kullanildi'),
+    [items]
+  );
+
+  const visibleBaseItems = activeTab === 'mevcut' ? mevcutItems : kullanilanItems;
+
   const counts = useMemo(() => {
     return {
-      toplam: items.length,
-      23: items.filter(i => i.kapak_boyutu === 23).length,
-      26: items.filter(i => i.kapak_boyutu === 26).length,
-      29: items.filter(i => i.kapak_boyutu === 29).length,
-      34: items.filter(i => i.kapak_boyutu === 34).length,
+      mevcutToplam: mevcutItems.length,
+      kullanilanToplam: kullanilanItems.length,
+      23: visibleBaseItems.filter(i => i.kapak_boyutu === 23).length,
+      26: visibleBaseItems.filter(i => i.kapak_boyutu === 26).length,
+      29: visibleBaseItems.filter(i => i.kapak_boyutu === 29).length,
+      34: visibleBaseItems.filter(i => i.kapak_boyutu === 34).length,
     };
-  }, [items]);
+  }, [mevcutItems, kullanilanItems, visibleBaseItems]);
 
   const filteredItems = useMemo(() => {
-    if (activeFilter === 'Tümü') return items;
-    return items.filter(item => item.kapak_boyutu === Number(activeFilter));
-  }, [items, activeFilter]);
+    if (activeFilter === 'Tümü') return visibleBaseItems;
+    return visibleBaseItems.filter(item => item.kapak_boyutu === Number(activeFilter));
+  }, [visibleBaseItems, activeFilter]);
 
   function parseBarcode() {
     setMessage('');
@@ -280,6 +343,7 @@ export default function Stock() {
 
     setBarcode('');
     setParsed(null);
+    setActiveTab('mevcut');
     setMessage('Kapak stoka eklendi.');
     await loadStock();
   }
@@ -306,6 +370,15 @@ export default function Stock() {
     await loadStock();
   }
 
+  function openCase(vakaId: string | null) {
+    if (!vakaId) {
+      setMessage('Bu kapak için bağlı vaka kaydı bulunamadı.');
+      return;
+    }
+
+    navigate(`/view/${vakaId}`);
+  }
+
   function kalanGun(date: string) {
     const today = new Date();
     const expiry = new Date(date);
@@ -314,11 +387,13 @@ export default function Stock() {
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
   }
 
-  function formatDate(date: string) {
+  function formatDate(date: string | null | undefined) {
+    if (!date) return '-';
     return new Date(date).toLocaleDateString('tr-TR');
   }
 
   function rowClass(days: number) {
+    if (activeTab === 'kullanilan') return '';
     if (days <= 30) return 'bg-red-500/15 text-red-100';
     if (days <= 90) return 'bg-orange-500/15 text-orange-100';
     return '';
@@ -330,16 +405,45 @@ export default function Stock() {
     return 'bg-emerald-500/20 text-emerald-200 border-emerald-500/30';
   }
 
+  function tabClass(tab: Tab) {
+    return activeTab === tab
+      ? 'bg-cyan-600 text-white border-cyan-400'
+      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700';
+  }
+
   return (
     <div className="space-y-6 pb-24 overflow-y-auto">
       <h1 className="text-2xl font-bold text-white">Stok Takip</h1>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-          <div className="text-sm text-slate-400">Toplam Stok</div>
-          <div className="text-2xl font-bold">{counts.toplam}</div>
-        </div>
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('mevcut');
+            setActiveFilter('Tümü');
+            setMessage('');
+          }}
+          className={`rounded-xl p-4 border text-left transition ${tabClass('mevcut')}`}
+        >
+          <div className="text-sm opacity-80">Mevcut Kapaklar</div>
+          <div className="text-3xl font-bold">{counts.mevcutToplam}</div>
+        </button>
 
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('kullanilan');
+            setActiveFilter('Tümü');
+            setMessage('');
+          }}
+          className={`rounded-xl p-4 border text-left transition ${tabClass('kullanilan')}`}
+        >
+          <div className="text-sm opacity-80">Kullanılan Kapaklar</div>
+          <div className="text-3xl font-bold">{counts.kullanilanToplam}</div>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[23, 26, 29, 34].map(size => (
           <div
             key={size}
@@ -353,68 +457,70 @@ export default function Stock() {
         ))}
       </div>
 
-      <div className="bg-slate-800 rounded-xl p-4 space-y-4">
-        <div>
-          <label className="block text-sm text-slate-300 mb-2">
-            Barkod Yapıştır / Okut
-          </label>
+      {activeTab === 'mevcut' && (
+        <div className="bg-slate-800 rounded-xl p-4 space-y-4">
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">
+              Barkod Yapıştır / Okut
+            </label>
 
-          <input
-            value={barcode}
-            onChange={e => setBarcode(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') parseBarcode();
-            }}
-            placeholder="(01)00763000655426(17)270702(10)R043497"
-            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
-          />
-        </div>
+            <input
+              value={barcode}
+              onChange={e => setBarcode(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') parseBarcode();
+              }}
+              placeholder="(01)00763000655426(17)270702(10)R043497"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
+            />
+          </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={parseBarcode}
-            className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-medium"
-          >
-            Çözümle
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={parseBarcode}
+              className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-medium"
+            >
+              Çözümle
+            </button>
 
-          <button
-            onClick={addToStock}
-            disabled={!parsed}
-            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Stoka Ekle
-          </button>
-        </div>
+            <button
+              onClick={addToStock}
+              disabled={!parsed}
+              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Stoka Ekle
+            </button>
+          </div>
 
-        {message && <div className="text-sm text-slate-300">{message}</div>}
+          {parsed && (
+            <div className="grid md:grid-cols-4 gap-3 bg-slate-900 rounded-lg p-3 border border-slate-700">
+              <div>
+                <div className="text-xs text-slate-400">ÜRÜN ADI</div>
+                <div className="font-semibold break-words">{parsed.urun_adi}</div>
+              </div>
 
-        {parsed && (
-          <div className="grid md:grid-cols-4 gap-3 bg-slate-900 rounded-lg p-3 border border-slate-700">
-            <div>
-              <div className="text-xs text-slate-400">ÜRÜN ADI</div>
-              <div className="font-semibold break-words">{parsed.urun_adi}</div>
-            </div>
+              <div>
+                <div className="text-xs text-slate-400">LOT</div>
+                <div className="font-semibold break-words">{parsed.lot_no}</div>
+              </div>
 
-            <div>
-              <div className="text-xs text-slate-400">LOT</div>
-              <div className="font-semibold break-words">{parsed.lot_no}</div>
-            </div>
+              <div>
+                <div className="text-xs text-slate-400">SKT</div>
+                <div className="font-semibold">
+                  {formatDate(parsed.son_kullanma_tarihi)}
+                </div>
+              </div>
 
-            <div>
-              <div className="text-xs text-slate-400">SKT</div>
-              <div className="font-semibold">
-                {formatDate(parsed.son_kullanma_tarihi)}
+              <div>
+                <div className="text-xs text-slate-400">KAPAK BOYUTU</div>
+                <div className="font-semibold">{parsed.kapak_boyutu} mm</div>
               </div>
             </div>
+          )}
+        </div>
+      )}
 
-            <div>
-              <div className="text-xs text-slate-400">KAPAK BOYUTU</div>
-              <div className="font-semibold">{parsed.kapak_boyutu} mm</div>
-            </div>
-          </div>
-        )}
-      </div>
+      {message && <div className="text-sm text-slate-300">{message}</div>}
 
       <div className="flex flex-wrap gap-2">
         {FILTERS.map(filter => (
@@ -437,71 +543,152 @@ export default function Stock() {
       ) : (
         <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
           <div className="w-full max-w-full overflow-x-auto overflow-y-visible">
-            <table className="min-w-[820px] w-full">
-              <thead className="bg-slate-700">
-                <tr>
-                  <th className="text-left p-3 whitespace-nowrap">ÜRÜN ADI</th>
-                  <th className="text-left p-3 whitespace-nowrap">LOT</th>
-                  <th className="text-left p-3 whitespace-nowrap">SKT</th>
-                  <th className="text-left p-3 whitespace-nowrap">KALAN GÜN</th>
-                  {isAdmin && (
-                    <th className="text-left p-3 whitespace-nowrap">SİL</th>
-                  )}
-                </tr>
-              </thead>
-
-              <tbody>
-                {filteredItems.length === 0 ? (
+            {activeTab === 'mevcut' ? (
+              <table className="min-w-[820px] w-full">
+                <thead className="bg-slate-700">
                   <tr>
-                    <td
-                      colSpan={isAdmin ? 5 : 4}
-                      className="p-4 text-slate-400 text-center"
-                    >
-                      Bu filtrede stok yok.
-                    </td>
+                    <th className="text-left p-3 whitespace-nowrap">ÜRÜN ADI</th>
+                    <th className="text-left p-3 whitespace-nowrap">LOT</th>
+                    <th className="text-left p-3 whitespace-nowrap">SKT</th>
+                    <th className="text-left p-3 whitespace-nowrap">KALAN GÜN</th>
+                    {isAdmin && (
+                      <th className="text-left p-3 whitespace-nowrap">SİL</th>
+                    )}
                   </tr>
-                ) : (
-                  filteredItems.map(item => {
-                    const days = kalanGun(item.son_kullanma_tarihi);
+                </thead>
 
-                    return (
-                      <tr
-                        key={item.id}
-                        className={`border-t border-slate-700 ${rowClass(days)}`}
+                <tbody>
+                  {filteredItems.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={isAdmin ? 5 : 4}
+                        className="p-4 text-slate-400 text-center"
                       >
-                        <td className="p-3 whitespace-nowrap">{item.urun_adi}</td>
-                        <td className="p-3 whitespace-nowrap">{item.lot_no}</td>
-                        <td className="p-3 whitespace-nowrap">
-                          {formatDate(item.son_kullanma_tarihi)}
-                        </td>
-                        <td className="p-3 whitespace-nowrap">
-                          <span
-                            className={`px-3 py-1 rounded-full border text-sm ${badgeClass(
-                              days
-                            )}`}
-                          >
-                            {days}
-                          </span>
-                        </td>
+                        Bu filtrede mevcut stok yok.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredItems.map(item => {
+                      const days = kalanGun(item.son_kullanma_tarihi);
 
-                        {isAdmin && (
+                      return (
+                        <tr
+                          key={item.id}
+                          className={`border-t border-slate-700 ${rowClass(days)}`}
+                        >
+                          <td className="p-3 whitespace-nowrap">{item.urun_adi}</td>
+                          <td className="p-3 whitespace-nowrap">{item.lot_no}</td>
+                          <td className="p-3 whitespace-nowrap">
+                            {formatDate(item.son_kullanma_tarihi)}
+                          </td>
+                          <td className="p-3 whitespace-nowrap">
+                            <span
+                              className={`px-3 py-1 rounded-full border text-sm ${badgeClass(
+                                days
+                              )}`}
+                            >
+                              {days}
+                            </span>
+                          </td>
+
+                          {isAdmin && (
+                            <td className="p-3 whitespace-nowrap">
+                              <button
+                                onClick={() => deleteStockItem(item.id)}
+                                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-red-300 hover:bg-red-500/10"
+                                title="Stok Kaydını Sil"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Sil
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            ) : (
+              <table className="min-w-[1040px] w-full">
+                <thead className="bg-slate-700">
+                  <tr>
+                    <th className="text-left p-3 whitespace-nowrap">ÜRÜN ADI</th>
+                    <th className="text-left p-3 whitespace-nowrap">LOT</th>
+                    <th className="text-left p-3 whitespace-nowrap">SKT</th>
+                    <th className="text-left p-3 whitespace-nowrap">HASTA</th>
+                    <th className="text-left p-3 whitespace-nowrap">MERKEZ</th>
+                    <th className="text-left p-3 whitespace-nowrap">DOKTOR</th>
+                    <th className="text-left p-3 whitespace-nowrap">VAKA TARİHİ</th>
+                    <th className="text-left p-3 whitespace-nowrap">VAKA</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {filteredItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-4 text-slate-400 text-center">
+                        Bu filtrede kullanılan kapak yok.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredItems.map(item => {
+                      const vaka = item.kullanilan_vaka_id
+                        ? caseMap[item.kullanilan_vaka_id]
+                        : null;
+
+                      return (
+                        <tr key={item.id} className="border-t border-slate-700">
+                          <td className="p-3 whitespace-nowrap">{item.urun_adi}</td>
+
                           <td className="p-3 whitespace-nowrap">
                             <button
-                              onClick={() => deleteStockItem(item.id)}
-                              className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-red-300 hover:bg-red-500/10"
-                              title="Stok Kaydını Sil"
+                              type="button"
+                              onClick={() => openCase(item.kullanilan_vaka_id)}
+                              className="inline-flex items-center gap-1.5 text-cyan-300 hover:text-cyan-200 hover:underline font-semibold"
                             >
-                              <Trash2 className="w-4 h-4" />
-                              Sil
+                              {item.lot_no}
+                              <ExternalLink className="w-3.5 h-3.5" />
                             </button>
                           </td>
-                        )}
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+
+                          <td className="p-3 whitespace-nowrap">
+                            {formatDate(item.son_kullanma_tarihi)}
+                          </td>
+
+                          <td className="p-3 whitespace-nowrap">
+                            {vaka?.hasta_adi || '-'}
+                          </td>
+
+                          <td className="p-3 whitespace-nowrap">
+                            {vaka?.merkez_hastane || '-'}
+                          </td>
+
+                          <td className="p-3 whitespace-nowrap">
+                            {vaka?.doktor || '-'}
+                          </td>
+
+                          <td className="p-3 whitespace-nowrap">
+                            {formatDate(vaka?.vaka_tarihi)}
+                          </td>
+
+                          <td className="p-3 whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => openCase(item.kullanilan_vaka_id)}
+                              className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-cyan-300 hover:bg-cyan-500/10"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                              Aç
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}
