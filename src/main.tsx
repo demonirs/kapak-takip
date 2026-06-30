@@ -11,3 +11,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </ThemeProvider>
   </React.StrictMode>
 );
+
+import { registerSW } from 'virtual:pwa-register';
+
+registerSW({
+    immediate: true
+});
