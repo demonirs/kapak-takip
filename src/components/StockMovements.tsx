@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 type MovementType = 'giris' | 'kullanildi' | 'iptal';
 type ActiveTab = 'giris' | 'kullanildi';
 
-type Movement = {
+type StockMovement = {
   id: string;
   islem: MovementType;
   urun_adi: string;
@@ -17,10 +17,35 @@ type Movement = {
   vaka_id: string | null;
 };
 
+type UsedStockItem = {
+  id: string;
+  urun_adi: string | null;
+  kapak_adi: string | null;
+  lot_no: string;
+  kapak_boyutu: number | null;
+  son_kullanma_tarihi: string | null;
+  created_at: string;
+  kullanilan_vaka_id: string | null;
+  durum: string;
+};
+
+type DisplayItem = {
+  id: string;
+  islem: MovementType;
+  urun_adi: string;
+  lot_no: string;
+  kapak_boyutu: number | null;
+  son_kullanma_tarihi: string | null;
+  created_at: string;
+  vaka_id: string | null;
+  source: 'stok_hareketleri' | 'kapak_stok';
+};
+
 export default function StockMovements() {
   const navigate = useNavigate();
 
-  const [items, setItems] = useState<Movement[]>([]);
+  const [girisItems, setGirisItems] = useState<DisplayItem[]>([]);
+  const [kullanildiItems, setKullanildiItems] = useState<DisplayItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [activeTab, setActiveTab] = useState<ActiveTab>('giris');
@@ -31,40 +56,82 @@ export default function StockMovements() {
 
   async function loadMovements() {
     setLoading(true);
+    setMessage('');
 
-    const { data, error } = await supabase
+    const { data: girisData, error: girisError } = await supabase
       .from('stok_hareketleri')
       .select(
         'id, islem, urun_adi, lot_no, kapak_boyutu, son_kullanma_tarihi, created_at, vaka_id'
       )
+      .eq('islem', 'giris')
       .or('arsivlendi.eq.false,arsivlendi.is.null')
       .order('created_at', { ascending: false })
-      .limit(200);
+      .limit(300);
 
-    if (error) {
-      setMessage(error.message);
+    if (girisError) {
+      setMessage(girisError.message);
+      setLoading(false);
+      return;
     }
 
-    if (!error && data) {
-      setItems(data);
+    const { data: kullanildiData, error: kullanildiError } = await supabase
+      .from('kapak_stok')
+      .select(
+        'id, urun_adi, kapak_adi, lot_no, kapak_boyutu, son_kullanma_tarihi, created_at, kullanilan_vaka_id, durum'
+      )
+      .eq('durum', 'kullanildi')
+      .order('created_at', { ascending: false })
+      .limit(500);
+
+    if (kullanildiError) {
+      setMessage(kullanildiError.message);
+      setLoading(false);
+      return;
     }
 
+    const formattedGirisItems: DisplayItem[] = ((girisData || []) as StockMovement[]).map(
+      item => ({
+        id: item.id,
+        islem: item.islem,
+        urun_adi: item.urun_adi,
+        lot_no: item.lot_no,
+        kapak_boyutu: item.kapak_boyutu,
+        son_kullanma_tarihi: item.son_kullanma_tarihi,
+        created_at: item.created_at,
+        vaka_id: item.vaka_id,
+        source: 'stok_hareketleri',
+      })
+    );
+
+    const formattedKullanildiItems: DisplayItem[] = (
+      (kullanildiData || []) as UsedStockItem[]
+    ).map(item => ({
+      id: item.id,
+      islem: 'kullanildi',
+      urun_adi: item.urun_adi || item.kapak_adi || 'Kapak',
+      lot_no: item.lot_no,
+      kapak_boyutu: item.kapak_boyutu,
+      son_kullanma_tarihi: item.son_kullanma_tarihi,
+      created_at: item.created_at,
+      vaka_id: item.kullanilan_vaka_id,
+      source: 'kapak_stok',
+    }));
+
+    setGirisItems(formattedGirisItems);
+    setKullanildiItems(formattedKullanildiItems);
     setLoading(false);
   }
 
-  const girisItems = useMemo(
-    () => items.filter(item => item.islem === 'giris'),
-    [items]
-  );
+  const filteredItems = useMemo(() => {
+    return activeTab === 'giris' ? girisItems : kullanildiItems;
+  }, [activeTab, girisItems, kullanildiItems]);
 
-  const kullanildiItems = useMemo(
-    () => items.filter(item => item.islem === 'kullanildi'),
-    [items]
-  );
+  async function archiveMovement(item: DisplayItem) {
+    if (item.source !== 'stok_hareketleri') {
+      setMessage('Kullanılan kapak kayıtları kapak_stok tablosundan gelir; buradan arşivlenmez.');
+      return;
+    }
 
-  const filteredItems = activeTab === 'giris' ? girisItems : kullanildiItems;
-
-  async function archiveMovement(id: string) {
     const ok = window.confirm('Bu hareket kaydı arşivlensin mi?');
 
     if (!ok) return;
@@ -72,7 +139,7 @@ export default function StockMovements() {
     const { error } = await supabase
       .from('stok_hareketleri')
       .update({ arsivlendi: true })
-      .eq('id', id);
+      .eq('id', item.id);
 
     if (error) {
       alert(error.message);
@@ -82,9 +149,9 @@ export default function StockMovements() {
     loadMovements();
   }
 
-  function openRelatedCase(item: Movement) {
+  function openRelatedCase(item: DisplayItem) {
     if (!item.vaka_id) {
-      setMessage('Bu hareket bir vaka ile ilişkili değil.');
+      setMessage('Bu kayıt bir vaka ile ilişkili değil.');
       return;
     }
 
@@ -100,13 +167,13 @@ export default function StockMovements() {
     return new Date(date).toLocaleString('tr-TR');
   }
 
-  function islemText(islem: Movement['islem']) {
+  function islemText(islem: MovementType) {
     if (islem === 'giris') return 'Giriş';
     if (islem === 'kullanildi') return 'Kullanıldı';
     return 'İptal';
   }
 
-  function islemClass(islem: Movement['islem']) {
+  function islemClass(islem: MovementType) {
     if (islem === 'giris')
       return 'bg-emerald-500/20 text-emerald-200 border-emerald-500/30';
 
@@ -192,7 +259,7 @@ export default function StockMovements() {
                   </tr>
                 ) : (
                   filteredItems.map(item => (
-                    <tr key={item.id} className="border-t border-slate-700">
+                    <tr key={`${item.source}-${item.id}`} className="border-t border-slate-700">
                       <td className="p-3 whitespace-nowrap">
                         {formatDateTime(item.created_at)}
                       </td>
@@ -207,7 +274,10 @@ export default function StockMovements() {
                         </span>
                       </td>
 
-                      <td className="p-3 whitespace-nowrap">{item.urun_adi}</td>
+                      <td className="p-3 whitespace-nowrap">
+                        {item.urun_adi}
+                        {item.kapak_boyutu ? ` ${item.kapak_boyutu} mm` : ''}
+                      </td>
 
                       <td className="p-3 whitespace-nowrap">
                         <button
@@ -221,7 +291,7 @@ export default function StockMovements() {
                           title={
                             item.vaka_id
                               ? 'İlgili vakayı aç'
-                              : 'Bu hareket vaka ile ilişkili değil'
+                              : 'Bu kayıt vaka ile ilişkili değil'
                           }
                         >
                           {item.lot_no}
@@ -234,14 +304,19 @@ export default function StockMovements() {
                       </td>
 
                       <td className="p-3 whitespace-nowrap">
-                        <button
-                          onClick={() => archiveMovement(item.id)}
-                          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-orange-300 hover:bg-orange-500/10"
-                          title="Arşivle"
-                        >
-                          <Archive className="w-4 h-4" />
-                          Arşivle
-                        </button>
+                        {item.source === 'stok_hareketleri' ? (
+                          <button
+                            type="button"
+                            onClick={() => archiveMovement(item)}
+                            className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-orange-300 hover:bg-orange-500/10"
+                            title="Arşivle"
+                          >
+                            <Archive className="w-4 h-4" />
+                            Arşivle
+                          </button>
+                        ) : (
+                          <span className="text-slate-500 text-sm">-</span>
+                        )}
                       </td>
                     </tr>
                   ))
