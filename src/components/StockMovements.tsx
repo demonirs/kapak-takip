@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Archive } from 'lucide-react';
+import { Archive, ExternalLink } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
 type Movement = {
@@ -10,11 +11,15 @@ type Movement = {
   kapak_boyutu: number | null;
   son_kullanma_tarihi: string | null;
   created_at: string;
+  vaka_id: string | null;
 };
 
 export default function StockMovements() {
+  const navigate = useNavigate();
+
   const [items, setItems] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     loadMovements();
@@ -25,10 +30,16 @@ export default function StockMovements() {
 
     const { data, error } = await supabase
       .from('stok_hareketleri')
-      .select('*')
+      .select(
+        'id, islem, urun_adi, lot_no, kapak_boyutu, son_kullanma_tarihi, created_at, vaka_id'
+      )
       .or('arsivlendi.eq.false,arsivlendi.is.null')
       .order('created_at', { ascending: false })
       .limit(100);
+
+    if (error) {
+      setMessage(error.message);
+    }
 
     if (!error && data) {
       setItems(data);
@@ -53,6 +64,15 @@ export default function StockMovements() {
     }
 
     loadMovements();
+  }
+
+  function openRelatedCase(item: Movement) {
+    if (!item.vaka_id) {
+      setMessage('Bu hareket bir vaka ile ilişkili değil.');
+      return;
+    }
+
+    navigate(`/view/${item.vaka_id}`);
   }
 
   function formatDate(date: string | null) {
@@ -92,6 +112,12 @@ export default function StockMovements() {
         </p>
       </div>
 
+      {message && (
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm text-slate-300">
+          {message}
+        </div>
+      )}
+
       {loading ? (
         <div className="text-slate-400">
           Yükleniyor...
@@ -99,7 +125,7 @@ export default function StockMovements() {
       ) : (
         <div className="bg-slate-800 rounded-xl overflow-hidden border border-slate-700">
           <div className="w-full max-w-full overflow-x-auto overflow-y-visible">
-            <table className="min-w-[860px] w-full">
+            <table className="min-w-[900px] w-full">
               <thead className="bg-slate-700">
                 <tr>
                   <th className="text-left p-3 whitespace-nowrap">TARİH</th>
@@ -137,7 +163,25 @@ export default function StockMovements() {
 
                       <td className="p-3 whitespace-nowrap">{item.urun_adi}</td>
 
-                      <td className="p-3 whitespace-nowrap">{item.lot_no}</td>
+                      <td className="p-3 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => openRelatedCase(item)}
+                          className={`inline-flex items-center gap-1.5 font-semibold ${
+                            item.vaka_id
+                              ? 'text-cyan-300 hover:text-cyan-200 hover:underline'
+                              : 'text-slate-400 hover:text-slate-300'
+                          }`}
+                          title={
+                            item.vaka_id
+                              ? 'İlgili vakayı aç'
+                              : 'Bu hareket vaka ile ilişkili değil'
+                          }
+                        >
+                          {item.lot_no}
+                          {item.vaka_id && <ExternalLink className="w-3.5 h-3.5" />}
+                        </button>
+                      </td>
 
                       <td className="p-3 whitespace-nowrap">
                         {formatDate(item.son_kullanma_tarihi)}
