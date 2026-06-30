@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Archive, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
+type MovementType = 'giris' | 'kullanildi' | 'iptal';
+type ActiveTab = 'giris' | 'kullanildi';
+
 type Movement = {
   id: string;
-  islem: 'giris' | 'kullanildi' | 'iptal';
+  islem: MovementType;
   urun_adi: string;
   lot_no: string;
   kapak_boyutu: number | null;
@@ -20,6 +23,7 @@ export default function StockMovements() {
   const [items, setItems] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('giris');
 
   useEffect(() => {
     loadMovements();
@@ -35,7 +39,7 @@ export default function StockMovements() {
       )
       .or('arsivlendi.eq.false,arsivlendi.is.null')
       .order('created_at', { ascending: false })
-      .limit(100);
+      .limit(200);
 
     if (error) {
       setMessage(error.message);
@@ -47,6 +51,18 @@ export default function StockMovements() {
 
     setLoading(false);
   }
+
+  const girisItems = useMemo(
+    () => items.filter(item => item.islem === 'giris'),
+    [items]
+  );
+
+  const kullanildiItems = useMemo(
+    () => items.filter(item => item.islem === 'kullanildi'),
+    [items]
+  );
+
+  const filteredItems = activeTab === 'giris' ? girisItems : kullanildiItems;
 
   async function archiveMovement(id: string) {
     const ok = window.confirm('Bu hareket kaydı arşivlensin mi?');
@@ -100,16 +116,46 @@ export default function StockMovements() {
     return 'bg-red-500/20 text-red-200 border-red-500/30';
   }
 
+  function tabClass(tab: ActiveTab) {
+    return activeTab === tab
+      ? 'bg-cyan-600 text-white border-cyan-400'
+      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700';
+  }
+
   return (
     <div className="space-y-6 pb-24 overflow-y-auto">
       <div>
-        <h1 className="text-2xl font-bold text-white">
-          Stok Hareketleri
-        </h1>
+        <h1 className="text-2xl font-bold text-white">Stok Hareketleri</h1>
 
         <p className="text-slate-400">
-          Kapak girişleri ve kullanım geçmişi
+          Kapak girişleri ve kullanım hareketleri
         </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('giris');
+            setMessage('');
+          }}
+          className={`rounded-xl p-4 border text-left transition ${tabClass('giris')}`}
+        >
+          <div className="text-sm opacity-80">Giriş Hareketleri</div>
+          <div className="text-3xl font-bold">{girisItems.length}</div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('kullanildi');
+            setMessage('');
+          }}
+          className={`rounded-xl p-4 border text-left transition ${tabClass('kullanildi')}`}
+        >
+          <div className="text-sm opacity-80">Kullanım Hareketleri</div>
+          <div className="text-3xl font-bold">{kullanildiItems.length}</div>
+        </button>
       </div>
 
       {message && (
@@ -119,9 +165,7 @@ export default function StockMovements() {
       )}
 
       {loading ? (
-        <div className="text-slate-400">
-          Yükleniyor...
-        </div>
+        <div className="text-slate-400">Yükleniyor...</div>
       ) : (
         <div className="bg-slate-800 rounded-xl overflow-hidden border border-slate-700">
           <div className="w-full max-w-full overflow-x-auto overflow-y-visible">
@@ -138,14 +182,16 @@ export default function StockMovements() {
               </thead>
 
               <tbody>
-                {items.length === 0 ? (
+                {filteredItems.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="p-4 text-slate-400 text-center">
-                      Henüz hareket yok.
+                      {activeTab === 'giris'
+                        ? 'Henüz giriş hareketi yok.'
+                        : 'Henüz kullanım hareketi yok.'}
                     </td>
                   </tr>
                 ) : (
-                  items.map(item => (
+                  filteredItems.map(item => (
                     <tr key={item.id} className="border-t border-slate-700">
                       <td className="p-3 whitespace-nowrap">
                         {formatDateTime(item.created_at)}
