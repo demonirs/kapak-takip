@@ -5,50 +5,33 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig({
   plugins: [
     react(),
-
     VitePWA({
       registerType: 'autoUpdate',
-
-      includeAssets: [
-        'favicon.ico',
-        'apple-touch-icon.png',
-        'masked-icon.svg'
-      ],
-
       manifest: {
-        name: 'KapakTakip',
-        short_name: 'KapakTakip',
-
-        description:
-          'Fokus Sağlık TAVI Kapak Takip Sistemi',
-
-        theme_color: '#0f172a',
-        background_color: '#0f172a',
-
+        name: 'ValveFlow',
+        short_name: 'ValveFlow',
+        description: 'TAVI vaka, stok ve kapak kullanım takip sistemi',
+        theme_color: '#0D1B2A',
+        background_color: '#0D1B2A',
         display: 'standalone',
-
         orientation: 'portrait',
-
         start_url: '/',
-
+        scope: '/',
         icons: [
           {
-            src: 'pwa-192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512.png',
+            src: '/pwa-icon.svg',
             sizes: '512x512',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512.png',
-            sizes: '512x512',
-            purpose: 'maskable',
-            type: 'image/png'
+            type: 'image/svg+xml',
+            purpose: 'any maskable'
           }
         ]
+      },
+      workbox: {
+        navigateFallback: '/',
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+      },
+      devOptions: {
+        enabled: true
       }
     })
   ]
