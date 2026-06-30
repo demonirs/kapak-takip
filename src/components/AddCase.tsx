@@ -56,6 +56,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const inputClass =
   'w-full px-3 md:px-4 py-2.5 md:py-3 rounded-xl bg-slate-700 border border-slate-600 text-sm md:text-base text-white focus:outline-none focus:ring-2 focus:ring-cyan-500';
 
+function normalizeLot(value: string) {
+  return value.trim().replace(/\s+/g, '').toUpperCase();
+}
+
+function getSizeNumber(size: string) {
+  const match = size.match(/\d+/);
+  return match ? Number(match[0]) : null;
+}
+
 export default function AddCase() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
@@ -166,6 +175,23 @@ export default function AddCase() {
     return stockItems.find(item => item.id === selectedStockId) || null;
   }, [stockItems, selectedStockId]);
 
+  const manualMatchedStock = useMemo(() => {
+    if (isEdit || selectedStockId) return null;
+
+    const lot = normalizeLot(form.lot_no);
+    const size = getSizeNumber(form.kapak_size);
+
+    if (!lot || !size) return null;
+
+    return (
+      stockItems.find(
+        item =>
+          normalizeLot(item.lot_no) === lot &&
+          Number(item.kapak_boyutu) === Number(size)
+      ) || null
+    );
+  }, [form.lot_no, form.kapak_size, stockItems, selectedStockId, isEdit]);
+
   const set = (name: keyof FormState, value: string | number) =>
     setForm(prev => ({ ...prev, [name]: value }));
 
@@ -186,7 +212,7 @@ export default function AddCase() {
       ...prev,
       kapak_tipi: 'Evolut Pro+',
       kapak_size: `${selected.kapak_boyutu} mm`,
-      lot_no: selected.lot_no,
+      lot_no: normalizeLot(selected.lot_no),
       son_kul_tarihi: selected.son_kullanma_tarihi,
     }));
 
@@ -208,7 +234,7 @@ export default function AddCase() {
     const selected = stockItems.find(item => item.id === stockId);
 
     if (!selected) {
-      throw new Error('Seçilen stok kaydı bulunamadı.');
+      throw new Error('Seçilen stok kaydı bulunamadı veya artık stokta değil.');
     }
 
     const { error: stockError } = await timeout(
@@ -218,7 +244,8 @@ export default function AddCase() {
           durum: 'kullanildi',
           kullanilan_vaka_id: vakaId,
         })
-        .eq('id', stockId),
+        .eq('id', stockId)
+        .eq('durum', 'stokta'),
       10000
     );
 
@@ -229,7 +256,7 @@ export default function AddCase() {
         kapak_stok_id: stockId,
         islem: 'kullanildi',
         urun_adi: selected.urun_adi,
-        lot_no: selected.lot_no,
+        lot_no: normalizeLot(selected.lot_no),
         kapak_boyutu: selected.kapak_boyutu,
         son_kullanma_tarihi: selected.son_kullanma_tarihi,
         vaka_id: vakaId,
@@ -257,7 +284,7 @@ export default function AddCase() {
       merkez_hastane: form.merkez_hastane.trim(),
       doktor: form.doktor.trim(),
       hasta_adi: form.hasta_adi.trim(),
-      lot_no: form.lot_no.trim(),
+      lot_no: normalizeLot(form.lot_no),
       proglide_adedi: Number(form.proglide_adedi) || 1,
     };
 
@@ -273,6 +300,8 @@ export default function AddCase() {
 
         if (error) throw error;
       } else {
+        const stockIdToUse = selectedStockId || manualMatchedStock?.id || '';
+
         const { data, error } = await timeout(
           supabase
             .from('kapaklar')
@@ -288,8 +317,8 @@ export default function AddCase() {
 
         if (error) throw error;
 
-        if (selectedStockId && data?.id) {
-          await markStockAsUsed(selectedStockId, data.id);
+        if (stockIdToUse && data?.id) {
+          await markStockAsUsed(stockIdToUse, data.id);
         }
       }
 
@@ -378,7 +407,7 @@ export default function AddCase() {
               </div>
             </div>
 
-            {!selectedSize && !selectedStock && (
+            {!selectedSize && !selectedStock && !manualMatchedStock && (
               <div className="text-xs md:text-sm text-slate-300">
                 Kapak seçmeden devam etmek istersen aşağıdaki alanları manuel doldurabilirsin.
               </div>
@@ -423,7 +452,7 @@ export default function AddCase() {
                               {item.urun_adi}
                             </div>
                             <div className="text-xs md:text-sm text-slate-400">
-                              LOT: {item.lot_no}
+                              LOT: {normalizeLot(item.lot_no)}
                             </div>
                           </div>
 
@@ -438,24 +467,24 @@ export default function AddCase() {
               </div>
             )}
 
-            {selectedStock && (
+            {(selectedStock || manualMatchedStock) && (
               <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 md:p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="inline-flex items-center rounded-full border border-emerald-400/40 bg-emerald-500/20 px-2.5 py-1 text-[11px] md:text-xs font-bold text-emerald-100">
-                      ✓ STOKTAN SEÇİLDİ
+                      ✓ STOK EŞLEŞTİ
                     </div>
 
                     <div className="text-sm md:text-base text-white font-semibold mt-2">
-                      {selectedStock.urun_adi}
+                      {(selectedStock || manualMatchedStock)?.urun_adi}
                     </div>
 
                     <div className="text-xs md:text-sm text-slate-300 mt-1">
-                      LOT: {selectedStock.lot_no}
+                      LOT: {normalizeLot((selectedStock || manualMatchedStock)?.lot_no || '')}
                     </div>
 
                     <div className="text-xs md:text-sm text-slate-300">
-                      SKT: {formatDate(selectedStock.son_kullanma_tarihi)}
+                      SKT: {formatDate((selectedStock || manualMatchedStock)?.son_kullanma_tarihi || '')}
                     </div>
                   </div>
 
@@ -534,7 +563,7 @@ export default function AddCase() {
             <input
               className={inputClass}
               value={form.lot_no}
-              onChange={e => set('lot_no', e.target.value)}
+              onChange={e => set('lot_no', normalizeLot(e.target.value))}
               required
             />
           </Field>
@@ -582,18 +611,19 @@ export default function AddCase() {
           </Field>
         </div>
 
-        {selectedStock && !isEdit && (
+        {(selectedStock || manualMatchedStock) && !isEdit && (
           <div className="rounded-xl border border-emerald-500/30 bg-slate-900 p-3 md:p-4">
             <div className="text-xs md:text-sm text-slate-400 mb-1">
               Son Kontrol — Kullanılacak Kapak
             </div>
 
             <div className="text-sm md:text-base font-bold text-white">
-              {selectedStock.urun_adi} / LOT: {selectedStock.lot_no}
+              {(selectedStock || manualMatchedStock)?.urun_adi} / LOT:{' '}
+              {normalizeLot((selectedStock || manualMatchedStock)?.lot_no || '')}
             </div>
 
             <div className="text-xs md:text-sm text-slate-300 mt-1">
-              SKT: {formatDate(selectedStock.son_kullanma_tarihi)} • Vaka kaydıyla stoktan düşülecek.
+              SKT: {formatDate((selectedStock || manualMatchedStock)?.son_kullanma_tarihi || '')} • Vaka kaydıyla stoktan düşülecek.
             </div>
           </div>
         )}
