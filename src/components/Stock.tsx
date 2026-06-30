@@ -29,6 +29,75 @@ const GTIN_MAP: Record<string, number> = {
 
 const FILTERS = ['Tümü', '23', '26', '29', '34'] as const;
 
+function normalizeLot(value: string) {
+  return value
+    .trim()
+    .replace(/\s+/g, '')
+    .toUpperCase()
+    .replace(/\(.*?\)/g, '')
+    .replace(/(?:01|17|20|21)\d*$/g, '');
+}
+
+function cleanBarcode(value: string) {
+  return value.trim().replace(/\s/g, '').replace(/\u001D/g, '');
+}
+
+function extractLotFromRaw(raw: string) {
+  const lotAiMatch = raw.match(/\(10\)(.*?)(?=\(\d{2}\)|$)/);
+
+  if (lotAiMatch?.[1]) {
+    return normalizeLot(lotAiMatch[1]);
+  }
+
+  const serialAiMatch = raw.match(/\(21\)(.*?)(?=\(\d{2}\)|$)/);
+
+  if (serialAiMatch?.[1]) {
+    return normalizeLot(serialAiMatch[1]);
+  }
+
+  const compact10Index = raw.indexOf('10');
+  const compact21Index = raw.indexOf('21');
+
+  let startIndex = -1;
+
+  if (compact10Index !== -1) {
+    startIndex = compact10Index + 2;
+  } else if (compact21Index !== -1) {
+    startIndex = compact21Index + 2;
+  }
+
+  if (startIndex === -1) return '';
+
+  const afterLotAi = raw.slice(startIndex);
+  const lotMatch = afterLotAi.match(/[A-Za-z][A-Za-z0-9]*/);
+
+  if (!lotMatch?.[0]) return '';
+
+  return normalizeLot(lotMatch[0]);
+}
+
+function extractGtinAndSkt(raw: string) {
+  let gtin = '';
+  let skt = '';
+
+  const gtinParen = raw.match(/\(01\)(\d{14})/);
+  const sktParen = raw.match(/\(17\)(\d{6})/);
+
+  if (gtinParen?.[1]) gtin = gtinParen[1];
+  if (sktParen?.[1]) skt = sktParen[1];
+
+  if (!gtin || !skt) {
+    const compactMatch = raw.match(/01(\d{14})17(\d{6})/);
+
+    if (compactMatch) {
+      gtin = compactMatch[1];
+      skt = compactMatch[2];
+    }
+  }
+
+  return { gtin, skt };
+}
+
 export default function Stock() {
   const { profile } = useAuth();
   const currentProfile = profile as any;
@@ -86,45 +155,15 @@ export default function Stock() {
     setMessage('');
     setParsed(null);
 
-    const raw = barcode
-      .trim()
-      .replace(/\s/g, '')
-      .replace(/\u001D/g, '');
+    const raw = cleanBarcode(barcode);
 
     if (!raw) {
       setMessage('Barkod alanı boş.');
       return;
     }
 
-    let gtin = '';
-    let skt = '';
-    let lot = '';
-
-    const gtinParen = raw.match(/\(01\)(\d{14})/);
-    const sktParen = raw.match(/\(17\)(\d{6})/);
-    const lot10Paren = raw.match(/\(10\)([A-Za-z0-9]+)/);
-    const lot21Paren = raw.match(/\(21\)([A-Za-z0-9]+)/);
-
-    if (gtinParen) gtin = gtinParen[1];
-    if (sktParen) skt = sktParen[1];
-
-    if (lot10Paren) {
-      lot = lot10Paren[1];
-    } else if (lot21Paren) {
-      lot = lot21Paren[1];
-    }
-
-    if (!gtin || !skt || !lot) {
-      const compactMatch = raw.match(
-        /01(\d{14})17(\d{6})(?:10|21)([A-Za-z0-9]+)/
-      );
-
-      if (compactMatch) {
-        gtin = compactMatch[1];
-        skt = compactMatch[2];
-        lot = compactMatch[3];
-      }
-    }
+    const { gtin, skt } = extractGtinAndSkt(raw);
+    const lot = extractLotFromRaw(raw);
 
     if (!gtin) {
       setMessage('GTIN / UBB bulunamadı.');
@@ -170,6 +209,8 @@ export default function Stock() {
       return;
     }
 
+    const lotNo = normalizeLot(parsed.lot_no);
+
     const { data, error } = await supabase
       .from('kapak_stok')
       .insert({
@@ -177,7 +218,7 @@ export default function Stock() {
         gtin: parsed.gtin,
         kapak_adi: 'EVPROPLUS',
         kapak_boyutu: parsed.kapak_boyutu,
-        lot_no: parsed.lot_no,
+        lot_no: lotNo,
         son_kullanma_tarihi: parsed.son_kullanma_tarihi,
         barkod_raw: parsed.barkod_raw,
         durum: 'stokta',
@@ -190,7 +231,7 @@ export default function Stock() {
         const { data: existing } = await supabase
           .from('kapak_stok')
           .select('durum, urun_adi, lot_no')
-          .eq('lot_no', parsed.lot_no)
+          .eq('lot_no', lotNo)
           .maybeSingle();
 
         if (existing?.durum === 'stokta') {
@@ -222,7 +263,7 @@ export default function Stock() {
           kapak_stok_id: data.id,
           islem: 'giris',
           urun_adi: parsed.urun_adi,
-          lot_no: parsed.lot_no,
+          lot_no: lotNo,
           kapak_boyutu: parsed.kapak_boyutu,
           son_kullanma_tarihi: parsed.son_kullanma_tarihi,
           arsivlendi: false,
