@@ -66,7 +66,7 @@ export default function StockMovements() {
       .eq('islem', 'giris')
       .or('arsivlendi.eq.false,arsivlendi.is.null')
       .order('created_at', { ascending: false })
-      .limit(300);
+      .limit(5000);
 
     if (girisError) {
       setMessage(girisError.message);
@@ -74,17 +74,33 @@ export default function StockMovements() {
       return;
     }
 
-    const { data: kullanildiData, error: kullanildiError } = await supabase
+    const { data: usedMovementData, error: usedMovementError } = await supabase
+      .from('stok_hareketleri')
+      .select(
+        'id, islem, urun_adi, lot_no, kapak_boyutu, son_kullanma_tarihi, created_at, vaka_id'
+      )
+      .eq('islem', 'kullanildi')
+      .or('arsivlendi.eq.false,arsivlendi.is.null')
+      .order('created_at', { ascending: false })
+      .limit(5000);
+
+    if (usedMovementError) {
+      setMessage(usedMovementError.message);
+      setLoading(false);
+      return;
+    }
+
+    const { data: usedStockData, error: usedStockError } = await supabase
       .from('kapak_stok')
       .select(
         'id, urun_adi, kapak_adi, lot_no, kapak_boyutu, son_kullanma_tarihi, created_at, kullanilan_vaka_id, durum'
       )
       .eq('durum', 'kullanildi')
       .order('created_at', { ascending: false })
-      .limit(500);
+      .limit(5000);
 
-    if (kullanildiError) {
-      setMessage(kullanildiError.message);
+    if (usedStockError) {
+      setMessage(usedStockError.message);
       setLoading(false);
       return;
     }
@@ -103,8 +119,22 @@ export default function StockMovements() {
       })
     );
 
-    const formattedKullanildiItems: DisplayItem[] = (
-      (kullanildiData || []) as UsedStockItem[]
+    const formattedUsedMovementItems: DisplayItem[] = (
+      (usedMovementData || []) as StockMovement[]
+    ).map(item => ({
+      id: item.id,
+      islem: 'kullanildi',
+      urun_adi: item.urun_adi || 'Kapak',
+      lot_no: item.lot_no,
+      kapak_boyutu: item.kapak_boyutu,
+      son_kullanma_tarihi: item.son_kullanma_tarihi,
+      created_at: item.created_at,
+      vaka_id: item.vaka_id,
+      source: 'stok_hareketleri',
+    }));
+
+    const formattedUsedStockItems: DisplayItem[] = (
+      (usedStockData || []) as UsedStockItem[]
     ).map(item => ({
       id: item.id,
       islem: 'kullanildi',
@@ -117,8 +147,23 @@ export default function StockMovements() {
       source: 'kapak_stok',
     }));
 
+    const mergedUsedItemsMap = new Map<string, DisplayItem>();
+
+    [...formattedUsedMovementItems, ...formattedUsedStockItems].forEach(item => {
+      const key = `${item.vaka_id || 'no-case'}-${item.lot_no}`;
+
+      if (!mergedUsedItemsMap.has(key)) {
+        mergedUsedItemsMap.set(key, item);
+      }
+    });
+
+    const mergedUsedItems = Array.from(mergedUsedItemsMap.values()).sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
     setGirisItems(formattedGirisItems);
-    setKullanildiItems(formattedKullanildiItems);
+    setKullanildiItems(mergedUsedItems);
     setLoading(false);
   }
 
@@ -128,7 +173,7 @@ export default function StockMovements() {
 
   async function archiveMovement(item: DisplayItem) {
     if (item.source !== 'stok_hareketleri') {
-      setMessage('Kullanılan kapak kayıtları kapak_stok tablosundan gelir; buradan arşivlenmez.');
+      setMessage('Kullanılan stok kayıtları kapak_stok tablosundan gelir; buradan arşivlenmez.');
       return;
     }
 
