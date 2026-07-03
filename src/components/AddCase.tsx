@@ -12,6 +12,7 @@ import {
   timeout,
 } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { notifyAdmins } from '../lib/notifications';
 
 const initial = {
   vaka_tarihi: '',
@@ -319,6 +320,16 @@ export default function AddCase() {
 
         if (stockIdToUse && data?.id) {
           await markStockAsUsed(stockIdToUse, data.id);
+        }
+
+        if (data?.id) {
+          await notifyAdmins({
+            title: 'Yeni Vaka',
+            message: `${currentCrimpYapan} vaka ekledi`,
+            type: 'success',
+            related_table: 'kapaklar',
+            related_id: data.id,
+          });
         }
       }
 
