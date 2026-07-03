@@ -126,7 +126,42 @@ export default function Layout() {
   const unreadCount = notifications.filter(item => !item.is_read).length;
 
   useEffect(() => {
+    if (!profile?.id) {
+      setNotifications([]);
+      return;
+    }
+
     loadNotifications();
+
+    const channel = supabase
+      .channel(`notifications-${profile.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${profile.id}`,
+        },
+        payload => {
+          const newNotification = payload.new as NotificationItem;
+
+          setNotifications(current => {
+            const alreadyExists = current.some(
+              item => item.id === newNotification.id
+            );
+
+            if (alreadyExists) return current;
+
+            return [newNotification, ...current].slice(0, 20);
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [profile?.id]);
 
   useEffect(() => {
