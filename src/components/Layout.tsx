@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
   Archive,
+  Bell,
+  CheckCheck,
   FileSpreadsheet,
   HeartPulse,
   Home,
@@ -20,6 +22,19 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { supabase } from '../lib/supabase';
+
+type NotificationItem = {
+  id: string;
+  user_id: string | null;
+  title: string;
+  message: string;
+  type: string;
+  related_table: string | null;
+  related_id: string | null;
+  is_read: boolean;
+  created_at: string;
+};
 
 const menuSections = [
   {
@@ -100,7 +115,119 @@ export default function Layout() {
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
+
+  const notificationRef = useRef<HTMLDivElement | null>(null);
+
   const [menuOpen, setMenuOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notificationLoading, setNotificationLoading] = useState(false);
+
+  const unreadCount = notifications.filter(item => !item.is_read).length;
+
+  useEffect(() => {
+    loadNotifications();
+  }, [profile?.id]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        notificationRef.current &&
+        !notificationRef.current.contains(event.target as Node)
+      ) {
+        setNotificationOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  async function loadNotifications() {
+    if (!profile?.id) return;
+
+    setNotificationLoading(true);
+
+    const { data, error } = await supabase
+      .from('notifications')
+      .select(
+        'id, user_id, title, message, type, related_table, related_id, is_read, created_at'
+      )
+      .eq('user_id', profile.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (!error && data) {
+      setNotifications(data as NotificationItem[]);
+    }
+
+    setNotificationLoading(false);
+  }
+
+  async function markNotificationAsRead(notificationId: string) {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('id', notificationId);
+
+    if (error) return;
+
+    setNotifications(current =>
+      current.map(item =>
+        item.id === notificationId ? { ...item, is_read: true } : item
+      )
+    );
+  }
+
+  async function markAllNotificationsAsRead() {
+    if (!profile?.id) return;
+
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', profile.id)
+      .eq('is_read', false);
+
+    if (error) return;
+
+    setNotifications(current =>
+      current.map(item => ({
+        ...item,
+        is_read: true,
+      }))
+    );
+  }
+
+  function formatNotificationDate(date: string) {
+    const diffMs = Date.now() - new Date(date).getTime();
+    const diffMinutes = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMinutes < 1) return 'Şimdi';
+    if (diffMinutes < 60) return `${diffMinutes} dk önce`;
+    if (diffHours < 24) return `${diffHours} saat önce`;
+    if (diffDays < 7) return `${diffDays} gün önce`;
+
+    return new Date(date).toLocaleDateString('tr-TR');
+  }
+
+  function notificationTypeClass(type: string) {
+    if (type === 'success') return 'bg-emerald-500/15 text-emerald-300';
+    if (type === 'warning') return 'bg-orange-500/15 text-orange-300';
+    if (type === 'error') return 'bg-red-500/15 text-red-300';
+    return 'bg-cyan-500/15 text-cyan-300';
+  }
+
+  function notificationTypeIcon(type: string) {
+    if (type === 'success') return '✓';
+    if (type === 'warning') return '!';
+    if (type === 'error') return '×';
+    return 'i';
+  }
 
   function goHome() {
     setMenuOpen(false);
@@ -223,6 +350,115 @@ export default function Layout() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              <div ref={notificationRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNotificationOpen(current => !current);
+                    loadNotifications();
+                  }}
+                  className="relative w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-cyan-300 hover:bg-cyan-500/10"
+                  title="Bildirimler"
+                >
+                  <Bell className="w-4 h-4" />
+
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center border border-slate-950">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {notificationOpen && (
+                  <div className="absolute right-0 mt-3 w-[calc(100vw-24px)] max-w-[360px] rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden">
+                    <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-800">
+                      <div>
+                        <p className="text-sm font-bold text-white">Bildirimler</p>
+                        <p className="text-xs text-slate-400">
+                          {unreadCount > 0
+                            ? `${unreadCount} okunmamış bildirim`
+                            : 'Yeni bildirim yok'}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={markAllNotificationsAsRead}
+                        disabled={unreadCount === 0}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40"
+                        title="Tümünü okundu yap"
+                      >
+                        <CheckCheck className="w-4 h-4" />
+                        Okundu
+                      </button>
+                    </div>
+
+                    <div className="max-h-[360px] overflow-y-auto">
+                      {notificationLoading ? (
+                        <div className="px-4 py-6 text-sm text-slate-400 text-center">
+                          Bildirimler yükleniyor...
+                        </div>
+                      ) : notifications.length === 0 ? (
+                        <div className="px-4 py-8 text-center">
+                          <div className="mx-auto mb-3 w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400">
+                            <Bell className="w-5 h-5" />
+                          </div>
+
+                          <p className="text-sm font-semibold text-slate-200">
+                            Henüz bildirim yok
+                          </p>
+
+                          <p className="mt-1 text-xs text-slate-500">
+                            ValveFlow önemli gelişmeleri burada gösterecek.
+                          </p>
+                        </div>
+                      ) : (
+                        notifications.map(item => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => markNotificationAsRead(item.id)}
+                            className={`w-full text-left px-4 py-3 border-b border-slate-800 hover:bg-slate-800/80 ${
+                              item.is_read ? 'opacity-70' : ''
+                            }`}
+                          >
+                            <div className="flex gap-3">
+                              <div
+                                className={`mt-0.5 w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${notificationTypeClass(
+                                  item.type
+                                )}`}
+                              >
+                                {notificationTypeIcon(item.type)}
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="text-sm font-semibold text-slate-100 leading-snug">
+                                    {item.title}
+                                  </p>
+
+                                  {!item.is_read && (
+                                    <span className="mt-1 w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
+                                  )}
+                                </div>
+
+                                <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                                  {item.message}
+                                </p>
+
+                                <p className="mt-2 text-[11px] text-slate-500">
+                                  {formatNotificationDate(item.created_at)}
+                                </p>
+                              </div>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <button
                 onClick={toggleTheme}
                 className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-cyan-300 hover:bg-cyan-500/10"
