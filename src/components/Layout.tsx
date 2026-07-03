@@ -63,7 +63,7 @@ function getPageTitle(pathname: string) {
   if (pathname.startsWith('/users')) return 'Kullanıcı Yönetimi';
   if (pathname.startsWith('/export')) return 'Excel Aktar';
   if (pathname.startsWith('/competitor-cases')) return 'Rakip Vakalar';
-  return 'Kapak Takip';
+  return 'ValveFlow';
 }
 
 function BackgroundWatermark() {
@@ -124,7 +124,7 @@ export default function Layout() {
       )}
 
       <aside
-        className={`fixed top-0 left-0 z-50 h-dvh w-[82%] max-w-[320px] bg-slate-950 border-r border-slate-800 shadow-2xl transition-transform duration-300 ${
+        className={`fixed top-0 left-0 z-50 h-dvh w-[82%] max-w-[320px] bg-slate-950 border-r border-slate-800 shadow-2xl transition-transform duration-300 pt-[env(safe-area-inset-top)] ${
           menuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -148,7 +148,7 @@ export default function Layout() {
           </button>
         </div>
 
-        <div className="h-[calc(100dvh-73px)] overflow-y-auto px-3 py-4 pb-8">
+        <div className="h-[calc(100dvh-73px-env(safe-area-inset-top))] overflow-y-auto px-3 py-4 pb-8">
           {menuSections.map(section => (
             <div key={section.title} className="mb-6">
               <p className="px-3 mb-2 text-xs font-bold text-slate-500">
@@ -191,10 +191,18 @@ export default function Layout() {
         </div>
       </aside>
 
-      <header className="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800">
+      <header className="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800 pt-[env(safe-area-inset-top)]">
         <div className="px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
+              <button
+                onClick={() => setMenuOpen(true)}
+                className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-cyan-300 shrink-0"
+                title="Menü"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+
               <button
                 onClick={goHome}
                 className="w-9 h-9 rounded-xl bg-cyan-500 flex items-center justify-center shadow-md shadow-cyan-500/20 shrink-0"
@@ -215,14 +223,6 @@ export default function Layout() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => setMenuOpen(true)}
-                className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-cyan-300"
-                title="Menü"
-              >
-                <Menu className="w-5 h-5" />
-              </button>
-
               <button
                 onClick={toggleTheme}
                 className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-cyan-300 hover:bg-cyan-500/10"
