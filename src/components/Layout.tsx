@@ -319,9 +319,9 @@ export default function Layout() {
       </aside>
 
       <header className="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800 pt-[env(safe-area-inset-top)]">
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
+        <div className="px-3 sm:px-4 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <button
                 onClick={() => setMenuOpen(true)}
                 className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-cyan-300 shrink-0"
@@ -349,7 +349,7 @@ export default function Layout() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
               <div ref={notificationRef} className="relative">
                 <button
                   type="button"
@@ -370,7 +370,7 @@ export default function Layout() {
                 </button>
 
                 {notificationOpen && (
-                  <div className="absolute right-0 mt-3 w-[calc(100vw-24px)] max-w-[360px] rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden">
+                  <div className="fixed z-[80] left-3 right-3 top-[calc(env(safe-area-inset-top)+82px)] sm:left-auto sm:right-4 sm:w-[380px] rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden">
                     <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-800">
                       <div>
                         <p className="text-sm font-bold text-white">Bildirimler</p>
@@ -393,7 +393,7 @@ export default function Layout() {
                       </button>
                     </div>
 
-                    <div className="max-h-[360px] overflow-y-auto">
+                    <div className="max-h-[min(420px,calc(100dvh-150px-env(safe-area-inset-top)))] overflow-y-auto">
                       {notificationLoading ? (
                         <div className="px-4 py-6 text-sm text-slate-400 text-center">
                           Bildirimler yükleniyor...
