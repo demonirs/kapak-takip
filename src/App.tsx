@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import AddCase from './components/AddCase';
+import FocCase from './components/FocCase';
 import List from './components/List';
 import ViewCase from './components/ViewCase';
 import Export from './components/Export';
@@ -48,8 +49,12 @@ function AppRoutes() {
         }
       >
         <Route index element={<Dashboard />} />
+
         <Route path="add" element={<AddCase />} />
         <Route path="edit/:id" element={<AddCase />} />
+
+        <Route path="foc/:vakaId" element={<FocCase />} />
+
         <Route path="list" element={<List />} />
         <Route path="view/:id" element={<ViewCase />} />
         <Route path="search" element={<Search />} />
