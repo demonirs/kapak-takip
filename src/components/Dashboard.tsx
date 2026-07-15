@@ -456,7 +456,7 @@ export default function Dashboard() {
       iconContainerClassName:
         'border-blue-500/20 bg-blue-500/10',
       valueClassName: 'text-blue-300',
-      to: '/list',
+      to: '/list?filter=eksik-bilgi',
     },
     {
       label: 'Kritik SKT',
