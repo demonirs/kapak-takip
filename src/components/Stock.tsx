@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { ExternalLink, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -129,6 +130,7 @@ export default function Stock() {
   const [barcode, setBarcode] = useState('');
   const [parsed, setParsed] = useState<ParsedBarcode | null>(null);
   const [message, setMessage] = useState('');
+  const [exporting, setExporting] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('mevcut');
   const [activeFilter, setActiveFilter] =
     useState<(typeof FILTERS)[number]>('Tümü');
@@ -411,9 +413,171 @@ export default function Stock() {
       : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700';
   }
 
+  function sktDurumu(days: number) {
+    if (days < 0) return 'SKT Geçmiş';
+    if (days <= 30) return 'Kritik';
+    if (days <= 90) return 'Yaklaşan';
+    return 'Normal';
+  }
+
+  function safeFileNamePart(value: string) {
+    return value.replace(/[\\/:*?"<>|]/g, '-').trim();
+  }
+
+  function exportStockToExcel() {
+    if (filteredItems.length === 0 || exporting) return;
+
+    setExporting(true);
+
+    try {
+      const rows =
+        activeTab === 'mevcut'
+          ? filteredItems.map((item, index) => {
+              const days = kalanGun(item.son_kullanma_tarihi);
+
+              return {
+                No: index + 1,
+                'Ürün Adı': item.urun_adi || '',
+                'Kapak Boyutu': `${item.kapak_boyutu} mm`,
+                'LOT No': item.lot_no || '',
+                'Son Kullanma Tarihi': formatDate(
+                  item.son_kullanma_tarihi
+                ),
+                'Kalan Gün': days,
+                'SKT Durumu': sktDurumu(days),
+                'Stok Durumu': 'Stokta',
+                'Kayıt Tarihi': formatDate(item.created_at),
+              };
+            })
+          : filteredItems.map((item, index) => {
+              const vaka = item.kullanilan_vaka_id
+                ? caseMap[item.kullanilan_vaka_id]
+                : null;
+
+              return {
+                No: index + 1,
+                'Ürün Adı': item.urun_adi || '',
+                'Kapak Boyutu': `${item.kapak_boyutu} mm`,
+                'LOT No': item.lot_no || '',
+                'Son Kullanma Tarihi': formatDate(
+                  item.son_kullanma_tarihi
+                ),
+                Hasta: vaka?.hasta_adi || '',
+                Merkez: vaka?.merkez_hastane || '',
+                Doktor: vaka?.doktor || '',
+                'Vaka Tarihi': formatDate(vaka?.vaka_tarihi),
+                'Stok Durumu': 'Kullanıldı',
+              };
+            });
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+
+      worksheet['!cols'] =
+        activeTab === 'mevcut'
+          ? [
+              { wch: 7 },
+              { wch: 22 },
+              { wch: 16 },
+              { wch: 18 },
+              { wch: 20 },
+              { wch: 12 },
+              { wch: 14 },
+              { wch: 14 },
+              { wch: 16 },
+            ]
+          : [
+              { wch: 7 },
+              { wch: 22 },
+              { wch: 16 },
+              { wch: 18 },
+              { wch: 20 },
+              { wch: 24 },
+              { wch: 28 },
+              { wch: 24 },
+              { wch: 16 },
+              { wch: 14 },
+            ];
+
+      if (worksheet['!ref']) {
+        worksheet['!autofilter'] = {
+          ref: worksheet['!ref'],
+        };
+      }
+
+      const workbook = XLSX.utils.book_new();
+
+      workbook.Props = {
+        Title:
+          activeTab === 'mevcut'
+            ? 'ValveFlow Mevcut Stok Raporu'
+            : 'ValveFlow Kullanılan Kapaklar Raporu',
+        Subject: 'TAVI kapak stok kayıtları',
+        Author: 'ValveFlow',
+        Company: 'Fokus Sağlık',
+        Comments: 'ValveFlow tarafından oluşturulmuştur.',
+        CreatedDate: new Date(),
+      };
+
+      const sheetName =
+        activeTab === 'mevcut'
+          ? 'Mevcut Stok'
+          : 'Kullanılan Kapaklar';
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        worksheet,
+        sheetName
+      );
+
+      const today = new Date().toISOString().slice(0, 10);
+      const tabName =
+        activeTab === 'mevcut'
+          ? 'Mevcut_Stok'
+          : 'Kullanilan_Kapaklar';
+      const filterName =
+        activeFilter === 'Tümü'
+          ? 'Tum_Boyutlar'
+          : `${activeFilter}mm`;
+
+      const fileName = safeFileNamePart(
+        `ValveFlow_${tabName}_${filterName}_${today}.xlsx`
+      );
+
+      XLSX.writeFile(workbook, fileName, {
+        compression: true,
+      });
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : 'Excel dosyası oluşturulurken hata oluştu.'
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="space-y-6 pb-24 overflow-y-auto">
-      <h1 className="text-2xl font-bold text-white">Stok Takip</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Stok Takip</h1>
+          <p className="mt-1 text-sm text-slate-400">
+            Kapak stoklarını ve kullanılan kapakları yönetin.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={exportStockToExcel}
+          disabled={loading || exporting || filteredItems.length === 0}
+          className="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+        >
+          {exporting
+            ? 'Excel Hazırlanıyor...'
+            : `${filteredItems.length} Kaydı Excel'e Aktar`}
+        </button>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <button
