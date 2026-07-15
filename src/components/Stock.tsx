@@ -25,6 +25,10 @@ type CaseInfo = {
   merkez_hastane: string | null;
   doktor: string | null;
   hasta_adi: string | null;
+  kapak_tipi: string | null;
+  kapak_size: string | null;
+  lot_no: string | null;
+  son_kul_tarihi: string | null;
 };
 
 type HistoricalItem = {
@@ -49,7 +53,7 @@ type ParsedBarcode = {
   barkod_raw: string;
 };
 
-type HistoryRow = {
+type UsageRow = {
   key: string;
   source: 'valveflow' | 'eski_excel';
   caseId?: string | null;
@@ -87,21 +91,36 @@ function cleanBarcode(value: string) {
 
 function extractLotFromRaw(raw: string) {
   const lotAiMatch = raw.match(/\(10\)(.*?)(?=\(\d{2}\)|$)/);
-  if (lotAiMatch?.[1]) return normalizeLot(lotAiMatch[1]);
+
+  if (lotAiMatch?.[1]) {
+    return normalizeLot(lotAiMatch[1]);
+  }
 
   const serialAiMatch = raw.match(/\(21\)(.*?)(?=\(\d{2}\)|$)/);
-  if (serialAiMatch?.[1]) return normalizeLot(serialAiMatch[1]);
+
+  if (serialAiMatch?.[1]) {
+    return normalizeLot(serialAiMatch[1]);
+  }
 
   const compact10Index = raw.indexOf('10');
   const compact21Index = raw.indexOf('21');
+
   let startIndex = -1;
 
-  if (compact10Index !== -1) startIndex = compact10Index + 2;
-  else if (compact21Index !== -1) startIndex = compact21Index + 2;
+  if (compact10Index !== -1) {
+    startIndex = compact10Index + 2;
+  } else if (compact21Index !== -1) {
+    startIndex = compact21Index + 2;
+  }
 
-  if (startIndex === -1) return '';
+  if (startIndex === -1) {
+    return '';
+  }
 
-  const lotMatch = raw.slice(startIndex).match(/[A-Za-z][A-Za-z0-9]*/);
+  const lotMatch = raw
+    .slice(startIndex)
+    .match(/[A-Za-z][A-Za-z0-9]*/);
+
   return lotMatch?.[0] ? normalizeLot(lotMatch[0]) : '';
 }
 
@@ -112,11 +131,17 @@ function extractGtinAndSkt(raw: string) {
   const gtinParen = raw.match(/\(01\)(\d{14})/);
   const sktParen = raw.match(/\(17\)(\d{6})/);
 
-  if (gtinParen?.[1]) gtin = gtinParen[1];
-  if (sktParen?.[1]) skt = sktParen[1];
+  if (gtinParen?.[1]) {
+    gtin = gtinParen[1];
+  }
+
+  if (sktParen?.[1]) {
+    skt = sktParen[1];
+  }
 
   if (!gtin || !skt) {
     const compactMatch = raw.match(/01(\d{14})17(\d{6})/);
+
     if (compactMatch) {
       gtin = compactMatch[1];
       skt = compactMatch[2];
@@ -127,21 +152,32 @@ function extractGtinAndSkt(raw: string) {
 }
 
 function parseDateOnly(value: string | null | undefined) {
-  if (!value) return null;
+  if (!value) {
+    return null;
+  }
 
-  const [year, month, day] = value.split('T')[0].split('-').map(Number);
-  if (!year || !month || !day) return null;
+  const datePart = value.split('T')[0];
+  const [year, month, day] = datePart.split('-').map(Number);
+
+  if (!year || !month || !day) {
+    return null;
+  }
 
   const date = new Date(year, month - 1, day);
   date.setHours(0, 0, 0, 0);
+
   return date;
 }
 
 function isCurrentMonth(value: string | null | undefined) {
   const date = parseDateOnly(value);
-  if (!date) return false;
+
+  if (!date) {
+    return false;
+  }
 
   const now = new Date();
+
   return (
     date.getFullYear() === now.getFullYear() &&
     date.getMonth() === now.getMonth()
@@ -150,21 +186,63 @@ function isCurrentMonth(value: string | null | undefined) {
 
 function isBeforeCurrentMonth(value: string | null | undefined) {
   const date = parseDateOnly(value);
-  if (!date) return false;
 
-  const firstDay = new Date(
-    new Date().getFullYear(),
-    new Date().getMonth(),
+  if (!date) {
+    return false;
+  }
+
+  const now = new Date();
+
+  const firstDayOfCurrentMonth = new Date(
+    now.getFullYear(),
+    now.getMonth(),
     1
   );
-  firstDay.setHours(0, 0, 0, 0);
 
-  return date.getTime() < firstDay.getTime();
+  firstDayOfCurrentMonth.setHours(0, 0, 0, 0);
+
+  return date.getTime() < firstDayOfCurrentMonth.getTime();
+}
+
+function parseValveSize(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const match = value.match(/\d+/);
+
+  if (!match?.[0]) {
+    return null;
+  }
+
+  const size = Number(match[0]);
+
+  if (![23, 26, 29, 34].includes(size)) {
+    return null;
+  }
+
+  return size;
+}
+
+function buildValveProductName(
+  valveType: string | null | undefined,
+  valveSize: number | null
+) {
+  if (valveSize) {
+    return `EVPROPLUS-${valveSize}`;
+  }
+
+  if (valveType?.trim()) {
+    return valveType.trim();
+  }
+
+  return 'Evolut Pro+';
 }
 
 export default function Stock() {
   const navigate = useNavigate();
   const { profile } = useAuth();
+
   const currentProfile = profile as any;
 
   const isAdmin =
@@ -173,14 +251,19 @@ export default function Stock() {
     currentProfile?.is_admin === true;
 
   const [items, setItems] = useState<StockItem[]>([]);
-  const [historicalItems, setHistoricalItems] = useState<HistoricalItem[]>([]);
-  const [caseMap, setCaseMap] = useState<Record<string, CaseInfo>>({});
+  const [cases, setCases] = useState<CaseInfo[]>([]);
+  const [historicalItems, setHistoricalItems] = useState<
+    HistoricalItem[]
+  >([]);
+
   const [loading, setLoading] = useState(true);
   const [barcode, setBarcode] = useState('');
   const [parsed, setParsed] = useState<ParsedBarcode | null>(null);
   const [message, setMessage] = useState('');
   const [exporting, setExporting] = useState(false);
+
   const [activeTab, setActiveTab] = useState<Tab>('mevcut');
+
   const [activeFilter, setActiveFilter] =
     useState<(typeof FILTERS)[number]>('Tümü');
 
@@ -192,70 +275,95 @@ export default function Stock() {
     setLoading(true);
     setMessage('');
 
-    const [stockResponse, historicalResponse] = await Promise.all([
+    const [
+      stockResponse,
+      casesResponse,
+      historicalResponse,
+    ] = await Promise.all([
       supabase
         .from('kapak_stok')
         .select(
-          'id, urun_adi, kapak_boyutu, lot_no, son_kullanma_tarihi, durum, kullanilan_vaka_id, created_at'
+          `
+            id,
+            urun_adi,
+            kapak_boyutu,
+            lot_no,
+            son_kullanma_tarihi,
+            durum,
+            kullanilan_vaka_id,
+            created_at
+          `
         )
         .in('durum', ['stokta', 'kullanildi'])
         .order('kapak_boyutu')
         .order('son_kullanma_tarihi'),
 
       supabase
+        .from('kapaklar')
+        .select(
+          `
+            id,
+            vaka_tarihi,
+            merkez_hastane,
+            doktor,
+            hasta_adi,
+            kapak_tipi,
+            kapak_size,
+            lot_no,
+            son_kul_tarihi
+          `
+        )
+        .order('vaka_tarihi', { ascending: false }),
+
+      supabase
         .from('gecmis_kullanilan_kapaklar')
         .select(
-          'id, urun_adi, kapak_boyutu, lot_no, son_kullanma_tarihi, kullanim_tarihi, merkez_hastane, doktor, hasta_adi, kaynak'
+          `
+            id,
+            urun_adi,
+            kapak_boyutu,
+            lot_no,
+            son_kullanma_tarihi,
+            kullanim_tarihi,
+            merkez_hastane,
+            doktor,
+            hasta_adi,
+            kaynak
+          `
         )
         .order('kullanim_tarihi', { ascending: false }),
     ]);
 
     if (stockResponse.error) {
-      setMessage(stockResponse.error.message);
+      setMessage(
+        `Stok kayıtları alınamadı: ${stockResponse.error.message}`
+      );
+      setLoading(false);
+      return;
+    }
+
+    if (casesResponse.error) {
+      setMessage(
+        `Vaka kayıtları alınamadı: ${casesResponse.error.message}`
+      );
       setLoading(false);
       return;
     }
 
     if (historicalResponse.error) {
-      setMessage(historicalResponse.error.message);
+      setMessage(
+        `Geçmiş kayıtlar alınamadı: ${historicalResponse.error.message}`
+      );
       setLoading(false);
       return;
     }
 
-    const stockData = (stockResponse.data as StockItem[]) || [];
-    setItems(stockData);
+    setItems((stockResponse.data as StockItem[]) || []);
+    setCases((casesResponse.data as CaseInfo[]) || []);
+
     setHistoricalItems(
       (historicalResponse.data as HistoricalItem[]) || []
     );
-
-    const vakaIds = Array.from(
-      new Set(
-        stockData
-          .map(item => item.kullanilan_vaka_id)
-          .filter((id): id is string => Boolean(id))
-      )
-    );
-
-    if (vakaIds.length > 0) {
-      const { data: cases, error: casesError } = await supabase
-        .from('kapaklar')
-        .select('id, vaka_tarihi, merkez_hastane, doktor, hasta_adi')
-        .in('id', vakaIds);
-
-      if (casesError) {
-        setMessage(casesError.message);
-        setLoading(false);
-        return;
-      }
-
-      const nextCaseMap: Record<string, CaseInfo> = {};
-      ((cases as CaseInfo[]) || []).forEach(item => {
-        nextCaseMap[item.id] = item;
-      });
-      setCaseMap(nextCaseMap);
-    } else {
-      setCaseMap({});
-    }
 
     setLoading(false);
   }
@@ -265,58 +373,61 @@ export default function Stock() {
     [items]
   );
 
-  const kullanilanItems = useMemo(
-    () => items.filter(item => item.durum === 'kullanildi'),
-    [items]
+  const valveFlowUsageRows = useMemo<UsageRow[]>(
+    () =>
+      cases.map(item => {
+        const valveSize = parseValveSize(item.kapak_size);
+
+        return {
+          key: `valveflow-${item.id}`,
+          source: 'valveflow',
+          caseId: item.id,
+          urun_adi: buildValveProductName(
+            item.kapak_tipi,
+            valveSize
+          ),
+          kapak_boyutu: valveSize,
+          lot_no: item.lot_no || '',
+          son_kullanma_tarihi: item.son_kul_tarihi,
+          kullanim_tarihi: item.vaka_tarihi,
+          hasta_adi: item.hasta_adi,
+          merkez_hastane: item.merkez_hastane,
+          doktor: item.doktor,
+        };
+      }),
+    [cases]
   );
 
   const currentMonthItems = useMemo(
     () =>
-      kullanilanItems.filter(item => {
-        const vaka = item.kullanilan_vaka_id
-          ? caseMap[item.kullanilan_vaka_id]
-          : null;
-        return isCurrentMonth(vaka?.vaka_tarihi);
-      }),
-    [kullanilanItems, caseMap]
-  );
+      valveFlowUsageRows
+        .filter(item => isCurrentMonth(item.kullanim_tarihi))
+        .sort((a, b) => {
+          const first =
+            parseDateOnly(a.kullanim_tarihi)?.getTime() || 0;
 
-  const previousValveFlowHistory = useMemo<HistoryRow[]>(
-    () =>
-      kullanilanItems
-        .filter(item => {
-          const vaka = item.kullanilan_vaka_id
-            ? caseMap[item.kullanilan_vaka_id]
-            : null;
-          return isBeforeCurrentMonth(vaka?.vaka_tarihi);
-        })
-        .map(item => {
-          const vaka = item.kullanilan_vaka_id
-            ? caseMap[item.kullanilan_vaka_id]
-            : null;
+          const second =
+            parseDateOnly(b.kullanim_tarihi)?.getTime() || 0;
 
-          return {
-            key: `valveflow-${item.id}`,
-            source: 'valveflow',
-            caseId: item.kullanilan_vaka_id,
-            urun_adi: item.urun_adi,
-            kapak_boyutu: item.kapak_boyutu,
-            lot_no: item.lot_no,
-            son_kullanma_tarihi: item.son_kullanma_tarihi,
-            kullanim_tarihi: vaka?.vaka_tarihi || null,
-            hasta_adi: vaka?.hasta_adi || null,
-            merkez_hastane: vaka?.merkez_hastane || null,
-            doktor: vaka?.doktor || null,
-          };
+          return second - first;
         }),
-    [kullanilanItems, caseMap]
+    [valveFlowUsageRows]
   );
 
-  const importedHistory = useMemo<HistoryRow[]>(
+  const previousValveFlowHistory = useMemo(
+    () =>
+      valveFlowUsageRows.filter(item =>
+        isBeforeCurrentMonth(item.kullanim_tarihi)
+      ),
+    [valveFlowUsageRows]
+  );
+
+  const importedHistory = useMemo<UsageRow[]>(
     () =>
       historicalItems.map(item => ({
         key: `eski-excel-${item.id}`,
         source: 'eski_excel',
+        caseId: null,
         urun_adi: item.urun_adi,
         kapak_boyutu: item.kapak_boyutu,
         lot_no: item.lot_no,
@@ -331,38 +442,59 @@ export default function Stock() {
 
   const allHistoryItems = useMemo(
     () =>
-      [...previousValveFlowHistory, ...importedHistory].sort((a, b) => {
-        const first = parseDateOnly(a.kullanim_tarihi)?.getTime() || 0;
-        const second = parseDateOnly(b.kullanim_tarihi)?.getTime() || 0;
-        return second - first;
-      }),
+      [...previousValveFlowHistory, ...importedHistory].sort(
+        (a, b) => {
+          const first =
+            parseDateOnly(a.kullanim_tarihi)?.getTime() || 0;
+
+          const second =
+            parseDateOnly(b.kullanim_tarihi)?.getTime() || 0;
+
+          return second - first;
+        }
+      ),
     [previousValveFlowHistory, importedHistory]
   );
 
-  const visibleStockItems =
-    activeTab === 'mevcut' ? mevcutItems : currentMonthItems;
-
   const filteredStockItems = useMemo(() => {
-    if (activeFilter === 'Tümü') return visibleStockItems;
-    return visibleStockItems.filter(
-      item => item.kapak_boyutu === Number(activeFilter)
-    );
-  }, [visibleStockItems, activeFilter]);
+    if (activeFilter === 'Tümü') {
+      return mevcutItems;
+    }
 
-  const filteredHistoryItems = useMemo(() => {
-    if (activeFilter === 'Tümü') return allHistoryItems;
-    return allHistoryItems.filter(
+    return mevcutItems.filter(
       item => item.kapak_boyutu === Number(activeFilter)
     );
-  }, [allHistoryItems, activeFilter]);
+  }, [mevcutItems, activeFilter]);
+
+  const activeUsageItems = useMemo(() => {
+    if (activeTab === 'bu-ay') {
+      return currentMonthItems;
+    }
+
+    if (activeTab === 'gecmis') {
+      return allHistoryItems;
+    }
+
+    return [];
+  }, [activeTab, currentMonthItems, allHistoryItems]);
+
+  const filteredUsageItems = useMemo(() => {
+    if (activeFilter === 'Tümü') {
+      return activeUsageItems;
+    }
+
+    return activeUsageItems.filter(
+      item => item.kapak_boyutu === Number(activeFilter)
+    );
+  }, [activeUsageItems, activeFilter]);
 
   const visibleCount =
-    activeTab === 'gecmis'
-      ? filteredHistoryItems.length
-      : filteredStockItems.length;
+    activeTab === 'mevcut'
+      ? filteredStockItems.length
+      : filteredUsageItems.length;
 
   const sizeSource =
-    activeTab === 'gecmis' ? allHistoryItems : visibleStockItems;
+    activeTab === 'mevcut' ? mevcutItems : activeUsageItems;
 
   const sizeCounts = {
     23: sizeSource.filter(item => item.kapak_boyutu === 23).length,
@@ -382,6 +514,7 @@ export default function Stock() {
     setParsed(null);
 
     const raw = cleanBarcode(barcode);
+
     if (!raw) {
       setMessage('Barkod alanı boş.');
       return;
@@ -390,11 +523,23 @@ export default function Stock() {
     const { gtin, skt } = extractGtinAndSkt(raw);
     const lot = extractLotFromRaw(raw);
 
-    if (!gtin) return setMessage('GTIN / UBB bulunamadı.');
-    if (!skt) return setMessage('Son kullanma tarihi bulunamadı.');
-    if (!lot) return setMessage('Lot numarası bulunamadı.');
+    if (!gtin) {
+      setMessage('GTIN / UBB bulunamadı.');
+      return;
+    }
+
+    if (!skt) {
+      setMessage('Son kullanma tarihi bulunamadı.');
+      return;
+    }
+
+    if (!lot) {
+      setMessage('Lot numarası bulunamadı.');
+      return;
+    }
 
     const kapakBoyutu = GTIN_MAP[gtin];
+
     if (!kapakBoyutu) {
       setMessage(`Tanımsız GTIN: ${gtin}`);
       return;
@@ -405,10 +550,10 @@ export default function Stock() {
       urun_adi: `EVPROPLUS-${kapakBoyutu}`,
       kapak_boyutu: kapakBoyutu,
       lot_no: lot,
-      son_kullanma_tarihi: `20${skt.slice(0, 2)}-${skt.slice(
-        2,
-        4
-      )}-${skt.slice(4, 6)}`,
+      son_kullanma_tarihi: `20${skt.slice(
+        0,
+        2
+      )}-${skt.slice(2, 4)}-${skt.slice(4, 6)}`,
       barkod_raw: raw,
     });
 
@@ -458,8 +603,9 @@ export default function Stock() {
 
       if (movementError) {
         setMessage(
-          `Stok eklendi ama hareket kaydı yazılamadı: ${movementError.message}`
+          `Stok eklendi ancak hareket kaydı yazılamadı: ${movementError.message}`
         );
+
         await loadStock();
         return;
       }
@@ -468,7 +614,9 @@ export default function Stock() {
     setBarcode('');
     setParsed(null);
     setActiveTab('mevcut');
+    setActiveFilter('Tümü');
     setMessage('Kapak stoka eklendi.');
+
     await loadStock();
   }
 
@@ -478,7 +626,13 @@ export default function Stock() {
       return;
     }
 
-    if (!window.confirm('Bu stok kaydı silinsin mi?')) return;
+    const confirmed = window.confirm(
+      'Bu stok kaydı silinsin mi?'
+    );
+
+    if (!confirmed) {
+      return;
+    }
 
     const { error } = await supabase
       .from('kapak_stok')
@@ -498,25 +652,38 @@ export default function Stock() {
       setMessage('Bu kapak için bağlı vaka kaydı bulunamadı.');
       return;
     }
+
     navigate(`/view/${vakaId}`);
   }
 
   function kalanGun(date: string) {
+    const expirationDate = parseDateOnly(date);
+
+    if (!expirationDate) {
+      return 0;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     return Math.ceil(
-      (new Date(date).getTime() - new Date().getTime()) /
+      (expirationDate.getTime() - today.getTime()) /
         (1000 * 60 * 60 * 24)
     );
   }
 
   function formatDate(date: string | null | undefined) {
     const parsedDate = parseDateOnly(date);
-    return parsedDate ? parsedDate.toLocaleDateString('tr-TR') : '-';
+
+    return parsedDate
+      ? parsedDate.toLocaleDateString('tr-TR')
+      : '-';
   }
 
   function tabClass(tab: Tab) {
     return activeTab === tab
-      ? 'bg-cyan-600 text-white border-cyan-400'
-      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700';
+      ? 'border-cyan-400 bg-cyan-600 text-white'
+      : 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700';
   }
 
   function safeFileNamePart(value: string) {
@@ -524,14 +691,27 @@ export default function Stock() {
   }
 
   function exportStockToExcel() {
-    if (visibleCount === 0 || exporting) return;
+    if (visibleCount === 0 || exporting) {
+      return;
+    }
 
     setExporting(true);
 
     try {
       const rows =
-        activeTab === 'gecmis'
-          ? filteredHistoryItems.map((item, index) => ({
+        activeTab === 'mevcut'
+          ? filteredStockItems.map((item, index) => ({
+              No: index + 1,
+              'Ürün Adı': item.urun_adi,
+              'Kapak Boyutu': `${item.kapak_boyutu} mm`,
+              'LOT No': item.lot_no,
+              SKT: formatDate(item.son_kullanma_tarihi),
+              'Kalan Gün': kalanGun(
+                item.son_kullanma_tarihi
+              ),
+              Durum: 'Stokta',
+            }))
+          : filteredUsageItems.map((item, index) => ({
               No: index + 1,
               'Ürün Adı': item.urun_adi,
               'Kapak Boyutu': item.kapak_boyutu
@@ -539,7 +719,9 @@ export default function Stock() {
                 : '',
               'LOT No': item.lot_no,
               SKT: formatDate(item.son_kullanma_tarihi),
-              'Kullanım Tarihi': formatDate(item.kullanim_tarihi),
+              'Kullanım Tarihi': formatDate(
+                item.kullanim_tarihi
+              ),
               Hasta: item.hasta_adi || '',
               Merkez: item.merkez_hastane || '',
               Doktor: item.doktor || '',
@@ -547,48 +729,54 @@ export default function Stock() {
                 item.source === 'valveflow'
                   ? 'ValveFlow'
                   : 'Eski Excel',
-            }))
-          : filteredStockItems.map((item, index) => {
-              const vaka = item.kullanilan_vaka_id
-                ? caseMap[item.kullanilan_vaka_id]
-                : null;
-
-              return {
-                No: index + 1,
-                'Ürün Adı': item.urun_adi,
-                'Kapak Boyutu': `${item.kapak_boyutu} mm`,
-                'LOT No': item.lot_no,
-                SKT: formatDate(item.son_kullanma_tarihi),
-                ...(activeTab === 'mevcut'
-                  ? {
-                      'Kalan Gün': kalanGun(
-                        item.son_kullanma_tarihi
-                      ),
-                      Durum: 'Stokta',
-                    }
-                  : {
-                      Hasta: vaka?.hasta_adi || '',
-                      Merkez: vaka?.merkez_hastane || '',
-                      Doktor: vaka?.doktor || '',
-                      'Vaka Tarihi': formatDate(vaka?.vaka_tarihi),
-                    }),
-              };
-            });
+            }));
 
       const worksheet = XLSX.utils.json_to_sheet(rows);
+
       if (worksheet['!ref']) {
-        worksheet['!autofilter'] = { ref: worksheet['!ref'] };
+        worksheet['!autofilter'] = {
+          ref: worksheet['!ref'],
+        };
       }
 
+      worksheet['!cols'] =
+        activeTab === 'mevcut'
+          ? [
+              { wch: 8 },
+              { wch: 22 },
+              { wch: 16 },
+              { wch: 18 },
+              { wch: 14 },
+              { wch: 14 },
+              { wch: 14 },
+            ]
+          : [
+              { wch: 8 },
+              { wch: 22 },
+              { wch: 16 },
+              { wch: 18 },
+              { wch: 14 },
+              { wch: 18 },
+              { wch: 24 },
+              { wch: 34 },
+              { wch: 28 },
+              { wch: 16 },
+            ];
+
       const workbook = XLSX.utils.book_new();
+
       const sheetName =
         activeTab === 'mevcut'
           ? 'Mevcut Stok'
           : activeTab === 'bu-ay'
-          ? 'Bu Ay Kullanılanlar'
-          : 'Geçmiş Kullanımlar';
+            ? 'Bu Ay Kullanılanlar'
+            : 'Geçmiş Kullanımlar';
 
-      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+      XLSX.utils.book_append_sheet(
+        workbook,
+        worksheet,
+        sheetName
+      );
 
       XLSX.writeFile(
         workbook,
@@ -605,22 +793,26 @@ export default function Stock() {
   }
 
   return (
-    <div className="space-y-5 pb-24 overflow-y-auto">
+    <div className="space-y-5 overflow-y-auto pb-24">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-white sm:text-2xl">
             Stok Takip
           </h1>
+
           <p className="mt-1 text-xs text-slate-400 sm:text-sm">
-            Mevcut stokları, bu ay kullanılanları ve geçmiş kayıtları yönetin.
+            Mevcut stokları, bu ay kullanılan kapakları ve
+            geçmiş kayıtları yönetin.
           </p>
         </div>
 
         <button
           type="button"
           onClick={exportStockToExcel}
-          disabled={loading || exporting || visibleCount === 0}
-          className="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 sm:w-auto"
+          disabled={
+            loading || exporting || visibleCount === 0
+          }
+          className="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
         >
           {exporting
             ? 'Excel Hazırlanıyor...'
@@ -629,77 +821,169 @@ export default function Stock() {
       </div>
 
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        {[
-          ['mevcut', 'Mevcut', mevcutItems.length],
-          ['bu-ay', 'Bu Ay', currentMonthItems.length],
-          ['gecmis', 'Geçmiş', allHistoryItems.length],
-        ].map(([tab, label, count]) => (
+        <button
+          type="button"
+          onClick={() => selectTab('mevcut')}
+          className={`rounded-xl border p-3 text-left transition sm:p-4 ${tabClass(
+            'mevcut'
+          )}`}
+        >
+          <div className="text-[11px] opacity-80 sm:text-sm">
+            Mevcut
+          </div>
+
+          <div className="mt-1 text-2xl font-bold sm:text-3xl">
+            {mevcutItems.length}
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => selectTab('bu-ay')}
+          className={`rounded-xl border p-3 text-left transition sm:p-4 ${tabClass(
+            'bu-ay'
+          )}`}
+        >
+          <div className="text-[11px] opacity-80 sm:text-sm">
+            Bu Ay
+          </div>
+
+          <div className="mt-1 text-2xl font-bold sm:text-3xl">
+            {currentMonthItems.length}
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => selectTab('gecmis')}
+          className={`rounded-xl border p-3 text-left transition sm:p-4 ${tabClass(
+            'gecmis'
+          )}`}
+        >
+          <div className="text-[11px] opacity-80 sm:text-sm">
+            Geçmiş
+          </div>
+
+          <div className="mt-1 text-2xl font-bold sm:text-3xl">
+            {allHistoryItems.length}
+          </div>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        {[23, 26, 29, 34].map(size => (
           <button
-            key={tab}
+            key={size}
             type="button"
-            onClick={() => selectTab(tab as Tab)}
-            className={`rounded-xl border p-3 text-left transition sm:p-4 ${tabClass(
-              tab as Tab
-            )}`}
+            onClick={() =>
+              setActiveFilter(String(size) as typeof activeFilter)
+            }
+            className={`rounded-xl border p-3 text-left transition ${
+              activeFilter === String(size)
+                ? 'border-cyan-400 bg-cyan-600/20'
+                : 'border-slate-700 bg-slate-800 hover:bg-slate-700'
+            }`}
           >
-            <div className="text-[11px] opacity-80 sm:text-sm">
-              {label}
+            <div className="text-xs text-slate-400">
+              {size} mm
             </div>
-            <div className="mt-1 text-2xl font-bold sm:text-3xl">
-              {count}
+
+            <div className="mt-1 text-xl font-bold text-white">
+              {sizeCounts[size as 23 | 26 | 29 | 34]}
             </div>
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        {[23, 26, 29, 34].map(size => (
-          <div
-            key={size}
-            className="rounded-xl border border-slate-700 bg-slate-800 p-3"
-          >
-            <div className="text-xs text-slate-400">{size} mm</div>
-            <div className="mt-1 text-xl font-bold">
-              {sizeCounts[size as 23 | 26 | 29 | 34]}
-            </div>
-          </div>
-        ))}
-      </div>
-
       {activeTab === 'mevcut' && (
-        <div className="space-y-4 rounded-xl bg-slate-800 p-4">
-          <input
-            value={barcode}
-            onChange={event => setBarcode(event.target.value)}
-            onKeyDown={event => {
-              if (event.key === 'Enter') parseBarcode();
-            }}
-            placeholder="Barkod okut veya yapıştır"
-            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
-          />
+        <div className="space-y-4 rounded-xl border border-slate-700 bg-slate-800 p-4">
+          <div>
+            <label
+              htmlFor="stock-barcode"
+              className="mb-2 block text-sm font-medium text-slate-300"
+            >
+              Kapak barkodu
+            </label>
 
-          <div className="flex gap-2">
+            <input
+              id="stock-barcode"
+              value={barcode}
+              onChange={event =>
+                setBarcode(event.target.value)
+              }
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  parseBarcode();
+                }
+              }}
+              placeholder="Barkod okut veya yapıştır"
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-500"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
               onClick={parseBarcode}
-              className="rounded-lg bg-cyan-600 px-4 py-2"
+              className="rounded-lg bg-cyan-600 px-4 py-2.5 font-medium text-white transition hover:bg-cyan-500"
             >
               Çözümle
             </button>
+
             <button
               type="button"
               onClick={() => void addToStock()}
               disabled={!parsed}
-              className="rounded-lg bg-emerald-600 px-4 py-2 disabled:opacity-40"
+              className="rounded-lg bg-emerald-600 px-4 py-2.5 font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Stoka Ekle
             </button>
           </div>
+
+          {parsed && (
+            <div className="grid gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <div className="text-xs text-slate-400">
+                  Ürün
+                </div>
+                <div className="mt-1 font-semibold text-white">
+                  {parsed.urun_adi}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs text-slate-400">
+                  Boyut
+                </div>
+                <div className="mt-1 font-semibold text-white">
+                  {parsed.kapak_boyutu} mm
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs text-slate-400">
+                  LOT
+                </div>
+                <div className="mt-1 font-semibold text-white">
+                  {parsed.lot_no}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs text-slate-400">
+                  SKT
+                </div>
+                <div className="mt-1 font-semibold text-white">
+                  {formatDate(parsed.son_kullanma_tarihi)}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {message && (
-        <div className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200">
           {message}
         </div>
       )}
@@ -710,166 +994,247 @@ export default function Stock() {
             key={filter}
             type="button"
             onClick={() => setActiveFilter(filter)}
-            className={`rounded-lg px-4 py-2 text-sm ${
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
               activeFilter === filter
-                ? 'bg-cyan-600'
-                : 'bg-slate-800 text-slate-300'
+                ? 'bg-cyan-600 text-white'
+                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
             }`}
           >
-            {filter === 'Tümü' ? 'Tümü' : `${filter} mm`}
+            {filter === 'Tümü'
+              ? 'Tümü'
+              : `${filter} mm`}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <div className="text-slate-400">Yükleniyor...</div>
-      ) : activeTab === 'gecmis' ? (
+        <div className="rounded-xl border border-slate-700 bg-slate-800 p-5 text-slate-400">
+          Yükleniyor...
+        </div>
+      ) : activeTab === 'mevcut' ? (
         <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-800">
-          <table className="w-full min-w-[1080px]">
+          <table className="w-full min-w-[900px]">
             <thead className="bg-slate-700">
               <tr>
-                {[
-                  'ÜRÜN',
-                  'LOT',
-                  'SKT',
-                  'KULLANIM TARİHİ',
-                  'HASTA',
-                  'MERKEZ',
-                  'DOKTOR',
-                  'KAYNAK',
-                  'VAKA',
-                ].map(title => (
-                  <th key={title} className="p-3 text-left">
-                    {title}
+                <th className="p-3 text-left text-sm font-semibold text-slate-200">
+                  ÜRÜN
+                </th>
+
+                <th className="p-3 text-left text-sm font-semibold text-slate-200">
+                  BOYUT
+                </th>
+
+                <th className="p-3 text-left text-sm font-semibold text-slate-200">
+                  LOT
+                </th>
+
+                <th className="p-3 text-left text-sm font-semibold text-slate-200">
+                  SKT
+                </th>
+
+                <th className="p-3 text-left text-sm font-semibold text-slate-200">
+                  KALAN GÜN
+                </th>
+
+                {isAdmin && (
+                  <th className="p-3 text-left text-sm font-semibold text-slate-200">
+                    İŞLEM
                   </th>
-                ))}
+                )}
               </tr>
             </thead>
+
             <tbody>
-              {filteredHistoryItems.map(item => (
-                <tr key={item.key} className="border-t border-slate-700">
-                  <td className="p-3">{item.urun_adi}</td>
-                  <td className="p-3 font-semibold text-cyan-300">
-                    {item.lot_no}
-                  </td>
-                  <td className="p-3">
-                    {formatDate(item.son_kullanma_tarihi)}
-                  </td>
-                  <td className="p-3">
-                    {formatDate(item.kullanim_tarihi)}
-                  </td>
-                  <td className="p-3">{item.hasta_adi || '-'}</td>
-                  <td className="p-3">{item.merkez_hastane || '-'}</td>
-                  <td className="p-3">{item.doktor || '-'}</td>
-                  <td className="p-3">
-                    {item.source === 'valveflow'
-                      ? 'ValveFlow'
-                      : 'Eski Excel'}
-                  </td>
-                  <td className="p-3">
-                    {item.caseId ? (
-                      <button
-                        type="button"
-                        onClick={() => openCase(item.caseId)}
-                        className="inline-flex items-center gap-2 text-cyan-300"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                        Aç
-                      </button>
-                    ) : (
-                      <span className="text-slate-500">Eski kayıt</span>
-                    )}
+              {filteredStockItems.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={isAdmin ? 6 : 5}
+                    className="p-8 text-center text-slate-400"
+                  >
+                    Bu filtreye uygun stok kaydı bulunamadı.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredStockItems.map(item => (
+                  <tr
+                    key={item.id}
+                    className="border-t border-slate-700 transition hover:bg-slate-700/40"
+                  >
+                    <td className="p-3 text-slate-200">
+                      {item.urun_adi}
+                    </td>
+
+                    <td className="p-3 font-semibold text-white">
+                      {item.kapak_boyutu} mm
+                    </td>
+
+                    <td className="p-3 font-semibold text-cyan-300">
+                      {item.lot_no}
+                    </td>
+
+                    <td className="p-3 text-slate-200">
+                      {formatDate(
+                        item.son_kullanma_tarihi
+                      )}
+                    </td>
+
+                    <td className="p-3 text-slate-200">
+                      {kalanGun(item.son_kullanma_tarihi)}
+                    </td>
+
+                    {isAdmin && (
+                      <td className="p-3">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void deleteStockItem(item.id)
+                          }
+                          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-300 transition hover:bg-red-500/10 hover:text-red-200"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Sil
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-800">
-          <table className="w-full min-w-[900px]">
+          <table className="w-full min-w-[1100px]">
             <thead className="bg-slate-700">
               <tr>
-                <th className="p-3 text-left">ÜRÜN</th>
-                <th className="p-3 text-left">LOT</th>
-                <th className="p-3 text-left">SKT</th>
-                {activeTab === 'mevcut' ? (
-                  <>
-                    <th className="p-3 text-left">KALAN GÜN</th>
-                    {isAdmin && <th className="p-3 text-left">SİL</th>}
-                  </>
-                ) : (
-                  <>
-                    <th className="p-3 text-left">HASTA</th>
-                    <th className="p-3 text-left">MERKEZ</th>
-                    <th className="p-3 text-left">DOKTOR</th>
-                    <th className="p-3 text-left">VAKA TARİHİ</th>
-                    <th className="p-3 text-left">VAKA</th>
-                  </>
-                )}
+                <th className="p-3 text-left text-sm font-semibold text-slate-200">
+                  ÜRÜN
+                </th>
+
+                <th className="p-3 text-left text-sm font-semibold text-slate-200">
+                  BOYUT
+                </th>
+
+                <th className="p-3 text-left text-sm font-semibold text-slate-200">
+                  LOT
+                </th>
+
+                <th className="p-3 text-left text-sm font-semibold text-slate-200">
+                  SKT
+                </th>
+
+                <th className="p-3 text-left text-sm font-semibold text-slate-200">
+                  KULLANIM TARİHİ
+                </th>
+
+                <th className="p-3 text-left text-sm font-semibold text-slate-200">
+                  HASTA
+                </th>
+
+                <th className="p-3 text-left text-sm font-semibold text-slate-200">
+                  MERKEZ
+                </th>
+
+                <th className="p-3 text-left text-sm font-semibold text-slate-200">
+                  DOKTOR
+                </th>
+
+                <th className="p-3 text-left text-sm font-semibold text-slate-200">
+                  KAYNAK
+                </th>
+
+                <th className="p-3 text-left text-sm font-semibold text-slate-200">
+                  VAKA
+                </th>
               </tr>
             </thead>
-            <tbody>
-              {filteredStockItems.map(item => {
-                const vaka = item.kullanilan_vaka_id
-                  ? caseMap[item.kullanilan_vaka_id]
-                  : null;
 
-                return (
-                  <tr key={item.id} className="border-t border-slate-700">
-                    <td className="p-3">{item.urun_adi}</td>
-                    <td className="p-3">{item.lot_no}</td>
-                    <td className="p-3">
-                      {formatDate(item.son_kullanma_tarihi)}
+            <tbody>
+              {filteredUsageItems.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={10}
+                    className="p-8 text-center text-slate-400"
+                  >
+                    Bu filtreye uygun kullanım kaydı
+                    bulunamadı.
+                  </td>
+                </tr>
+              ) : (
+                filteredUsageItems.map(item => (
+                  <tr
+                    key={item.key}
+                    className="border-t border-slate-700 transition hover:bg-slate-700/40"
+                  >
+                    <td className="p-3 text-slate-200">
+                      {item.urun_adi}
                     </td>
 
-                    {activeTab === 'mevcut' ? (
-                      <>
-                        <td className="p-3">
-                          {kalanGun(item.son_kullanma_tarihi)}
-                        </td>
-                        {isAdmin && (
-                          <td className="p-3">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void deleteStockItem(item.id)
-                              }
-                              className="inline-flex items-center gap-2 text-red-300"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              Sil
-                            </button>
-                          </td>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <td className="p-3">{vaka?.hasta_adi || '-'}</td>
-                        <td className="p-3">
-                          {vaka?.merkez_hastane || '-'}
-                        </td>
-                        <td className="p-3">{vaka?.doktor || '-'}</td>
-                        <td className="p-3">
-                          {formatDate(vaka?.vaka_tarihi)}
-                        </td>
-                        <td className="p-3">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openCase(item.kullanilan_vaka_id)
-                            }
-                            className="inline-flex items-center gap-2 text-cyan-300"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                            Aç
-                          </button>
-                        </td>
-                      </>
-                    )}
+                    <td className="p-3 font-semibold text-white">
+                      {item.kapak_boyutu
+                        ? `${item.kapak_boyutu} mm`
+                        : '-'}
+                    </td>
+
+                    <td className="p-3 font-semibold text-cyan-300">
+                      {item.lot_no || '-'}
+                    </td>
+
+                    <td className="p-3 text-slate-200">
+                      {formatDate(
+                        item.son_kullanma_tarihi
+                      )}
+                    </td>
+
+                    <td className="p-3 text-slate-200">
+                      {formatDate(item.kullanim_tarihi)}
+                    </td>
+
+                    <td className="p-3 text-slate-200">
+                      {item.hasta_adi || '-'}
+                    </td>
+
+                    <td className="p-3 text-slate-200">
+                      {item.merkez_hastane || '-'}
+                    </td>
+
+                    <td className="p-3 text-slate-200">
+                      {item.doktor || '-'}
+                    </td>
+
+                    <td className="p-3">
+                      {item.source === 'valveflow' ? (
+                        <span className="inline-flex rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-xs font-semibold text-cyan-300">
+                          ValveFlow
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300">
+                          Eski Kayıt
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="p-3">
+                      {item.caseId ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openCase(item.caseId)
+                          }
+                          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/10 hover:text-cyan-200"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          Vakayı Aç
+                        </button>
+                      ) : (
+                        <span className="text-sm text-slate-500">
+                          Eski kayıt
+                        </span>
+                      )}
+                    </td>
                   </tr>
-                );
-              })}
+                ))
+              )}
             </tbody>
           </table>
         </div>
