@@ -183,7 +183,11 @@ export default function Export() {
         CreatedDate: new Date(),
       };
 
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Vaka Kayıtları');
+      XLSX.utils.book_append_sheet(
+        workbook,
+        worksheet,
+        'Vaka Kayıtları'
+      );
 
       const today = new Date().toISOString().slice(0, 10);
 
@@ -218,29 +222,30 @@ export default function Export() {
 
   return (
     <div className="mx-auto w-full max-w-5xl">
-      <div className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800 shadow-xl">
-        <div className="border-b border-slate-700 bg-slate-900/50 px-5 py-5 sm:px-6">
-          <h1 className="text-2xl font-bold text-white">
+      <div className="overflow-hidden rounded-xl border border-slate-700 bg-slate-800 shadow-lg">
+        <div className="border-b border-slate-700 bg-slate-900/40 px-4 py-3.5 sm:px-5">
+          <h1 className="text-lg font-semibold text-white">
             Excel Raporu
           </h1>
 
-          <p className="mt-1 text-sm text-slate-400">
-            Vaka kayıtlarını filtreleyerek Excel formatında indirebilirsiniz.
+          <p className="mt-1 text-xs text-slate-400 sm:text-sm">
+            Vaka kayıtlarını filtreleyerek Excel formatında
+            indirebilirsiniz.
           </p>
         </div>
 
-        <div className="space-y-6 p-5 sm:p-6">
+        <div className="space-y-4 p-4 sm:p-5">
           {errorMessage && (
-            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-xs text-red-300 sm:text-sm">
               {errorMessage}
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div className="md:col-span-3">
               <label
                 htmlFor="export-search"
-                className="mb-2 block text-sm font-medium text-slate-300"
+                className="mb-1.5 block text-xs font-medium text-slate-300 sm:text-sm"
               >
                 Arama
               </label>
@@ -251,14 +256,14 @@ export default function Export() {
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Merkez, doktor, hasta, kapak veya LOT ara..."
-                className="w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
 
             <div>
               <label
                 htmlFor="export-start-date"
-                className="mb-2 block text-sm font-medium text-slate-300"
+                className="mb-1.5 block text-xs font-medium text-slate-300 sm:text-sm"
               >
                 Başlangıç tarihi
               </label>
@@ -269,14 +274,14 @@ export default function Export() {
                 value={startDate}
                 max={endDate || undefined}
                 onChange={(event) => setStartDate(event.target.value)}
-                className="w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-white outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
 
             <div>
               <label
                 htmlFor="export-end-date"
-                className="mb-2 block text-sm font-medium text-slate-300"
+                className="mb-1.5 block text-xs font-medium text-slate-300 sm:text-sm"
               >
                 Bitiş tarihi
               </label>
@@ -287,7 +292,7 @@ export default function Export() {
                 value={endDate}
                 min={startDate || undefined}
                 onChange={(event) => setEndDate(event.target.value)}
-                className="w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-white outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
 
@@ -296,50 +301,57 @@ export default function Export() {
                 type="button"
                 onClick={clearFilters}
                 disabled={!searchTerm && !startDate && !endDate}
-                className="w-full rounded-xl border border-slate-600 bg-slate-700 px-4 py-3 font-medium text-slate-200 transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2.5 text-sm font-medium text-slate-200 transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Filtreleri Temizle
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
-              <p className="text-sm text-slate-400">Toplam kayıt</p>
-              <p className="mt-1 text-2xl font-bold text-white">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3">
+              <p className="text-xs text-slate-400">
+                Toplam kayıt
+              </p>
+
+              <p className="mt-0.5 text-lg font-semibold text-white">
                 {loading ? '...' : items.length}
               </p>
             </div>
 
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-              <p className="text-sm text-emerald-300">
+            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3">
+              <p className="text-xs text-emerald-300">
                 Excel'e aktarılacak
               </p>
-              <p className="mt-1 text-2xl font-bold text-emerald-200">
+
+              <p className="mt-0.5 text-lg font-semibold text-emerald-200">
                 {loading ? '...' : filteredItems.length}
               </p>
             </div>
 
-            <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
-              <p className="text-sm text-slate-400">Dosya formatı</p>
-              <p className="mt-1 text-2xl font-bold text-white">
+            <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3">
+              <p className="text-xs text-slate-400">
+                Dosya formatı
+              </p>
+
+              <p className="mt-0.5 text-lg font-semibold text-white">
                 XLSX
               </p>
             </div>
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-8 text-slate-400">
+            <div className="flex items-center justify-center rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-5 text-sm text-slate-400">
               Kayıtlar yükleniyor...
             </div>
           ) : filteredItems.length === 0 ? (
-            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-5 text-center text-amber-200">
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-center text-sm text-amber-200">
               Seçilen filtrelere uygun kayıt bulunamadı.
             </div>
           ) : (
-            <div className="rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-4 text-sm text-slate-300">
-              Excel dosyasında yalnızca ekranda filtrelenen{' '}
-              <strong className="text-white">
+            <div className="rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-3 text-xs text-slate-300 sm:text-sm">
+              Excel dosyasında yalnızca filtrelenen{' '}
+              <strong className="font-semibold text-white">
                 {filteredItems.length}
               </strong>{' '}
               kayıt yer alacaktır.
@@ -355,10 +367,10 @@ export default function Export() {
               filteredItems.length === 0 ||
               Boolean(errorMessage)
             }
-            className="w-full rounded-xl bg-emerald-600 px-5 py-3.5 font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
             {exporting
-              ? 'Excel Hazırlanıyor...'
+              ? 'Excel hazırlanıyor...'
               : `${filteredItems.length} Kaydı Excel Olarak İndir`}
           </button>
         </div>
