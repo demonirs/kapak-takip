@@ -8,7 +8,6 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronRight,
-  CircleAlert,
   Clock3,
   FileWarning,
   Layers,
@@ -509,7 +508,7 @@ export default function Dashboard() {
     return (
       <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
         <div className="flex items-start gap-3">
-          <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-300" />
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-300" />
 
           <div>
             <p className="text-sm font-semibold text-red-200">
