@@ -1191,8 +1191,8 @@ export default function Stock() {
 
   function tabClass(tab: Tab) {
     return activeTab === tab
-      ? 'border-cyan-400 bg-cyan-600 text-white'
-      : 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700';
+      ? 'border-white/10 bg-white/[0.08] text-white shadow-sm'
+      : 'border-transparent bg-transparent text-slate-400 hover:bg-white/[0.04] hover:text-slate-200';
   }
 
   function safeFileNamePart(
@@ -1335,7 +1335,7 @@ export default function Stock() {
   }
 
   return (
-    <div className="space-y-5 overflow-y-auto pb-24">
+    <div className="mx-auto max-w-[1600px] space-y-6 overflow-y-auto pb-24">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-white sm:text-2xl">
@@ -1357,7 +1357,7 @@ export default function Stock() {
             exporting ||
             visibleCount === 0
           }
-          className="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
         >
           {exporting
             ? 'Excel Hazırlanıyor...'
@@ -1365,13 +1365,13 @@ export default function Stock() {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+      <div className="grid grid-cols-3 gap-1 rounded-xl border border-white/[0.08] bg-slate-900/50 p-1.5">
         <button
           type="button"
           onClick={() =>
             selectTab('mevcut')
           }
-          className={`rounded-xl border p-3 text-left transition sm:p-4 ${tabClass(
+          className={`rounded-lg border px-3 py-2.5 text-left transition sm:px-4 ${tabClass(
             'mevcut'
           )}`}
         >
@@ -1379,7 +1379,7 @@ export default function Stock() {
             Mevcut
           </div>
 
-          <div className="mt-1 text-2xl font-bold sm:text-3xl">
+          <div className="mt-0.5 text-xl font-semibold sm:text-2xl">
             {mevcutItems.length}
           </div>
         </button>
@@ -1389,7 +1389,7 @@ export default function Stock() {
           onClick={() =>
             selectTab('bu-ay')
           }
-          className={`rounded-xl border p-3 text-left transition sm:p-4 ${tabClass(
+          className={`rounded-lg border px-3 py-2.5 text-left transition sm:px-4 ${tabClass(
             'bu-ay'
           )}`}
         >
@@ -1397,7 +1397,7 @@ export default function Stock() {
             Bu Ay
           </div>
 
-          <div className="mt-1 text-2xl font-bold sm:text-3xl">
+          <div className="mt-0.5 text-xl font-semibold sm:text-2xl">
             {currentMonthItems.length}
           </div>
         </button>
@@ -1407,7 +1407,7 @@ export default function Stock() {
           onClick={() =>
             selectTab('gecmis')
           }
-          className={`rounded-xl border p-3 text-left transition sm:p-4 ${tabClass(
+          className={`rounded-lg border px-3 py-2.5 text-left transition sm:px-4 ${tabClass(
             'gecmis'
           )}`}
         >
@@ -1415,13 +1415,13 @@ export default function Stock() {
             Geçmiş
           </div>
 
-          <div className="mt-1 text-2xl font-bold sm:text-3xl">
+          <div className="mt-0.5 text-xl font-semibold sm:text-2xl">
             {allHistoryItems.length}
           </div>
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      <div className="hidden">
         {[23, 26, 29, 34].map(
           size => (
             <button
@@ -1462,11 +1462,11 @@ export default function Stock() {
       </div>
 
       {activeTab === 'mevcut' && (
-        <div className="space-y-4 rounded-xl border border-slate-700 bg-slate-800 p-4">
+        <div className="space-y-5 rounded-2xl border border-white/[0.08] bg-slate-900/50 p-4 shadow-2xl shadow-black/10 sm:p-6">
           <div>
             <label
               htmlFor="stock-barcode"
-              className="mb-2 block text-sm font-medium text-slate-300"
+              className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-400"
             >
               Kapak barkodu
             </label>
@@ -1489,15 +1489,21 @@ export default function Stock() {
                 }
               }}
               placeholder="Barkod okut veya yapıştır"
-              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-500"
+              autoFocus
+              autoComplete="off"
+              className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-4 text-lg font-medium text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400/70 focus:ring-4 focus:ring-cyan-500/10 sm:px-5 sm:py-5 sm:text-xl"
             />
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-emerald-400/80">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Otomatik okuma aktif
+            </p>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
               onClick={parseBarcode}
-              className="rounded-lg bg-cyan-600 px-4 py-2.5 font-medium text-white transition hover:bg-cyan-500"
+              className="rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-cyan-500"
             >
               Çözümle ve Denetle
             </button>
@@ -1512,7 +1518,7 @@ export default function Stock() {
                 auditResult?.status ===
                   'found'
               }
-              className="rounded-lg bg-emerald-600 px-4 py-2.5 font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-lg border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-40"
             >
               Stoka Ekle
             </button>
@@ -1626,14 +1632,14 @@ export default function Stock() {
             </div>
           )}
 
-          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-4">
+          <div className="border-t border-white/[0.08] pt-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex items-center gap-2">
                   <ClipboardCheck className="h-5 w-5 text-cyan-300" />
 
                   <h3 className="font-bold text-white">
-                    Kapak Denetim Listesi
+                    Kapak Denetimi
                   </h3>
                 </div>
 
@@ -1653,36 +1659,10 @@ export default function Stock() {
               </button>
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <div className="rounded-xl border border-slate-700 bg-slate-800 p-3">
-                <p className="text-[11px] text-slate-400">
-                  Okutulan
-                </p>
-
-                <p className="mt-1 text-xl font-bold text-white">
-                  {auditEntries.length}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
-                <p className="text-[11px] text-emerald-200/80">
-                  Bulunan
-                </p>
-
-                <p className="mt-1 text-xl font-bold text-emerald-200">
-                  {auditFoundCount}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
-                <p className="text-[11px] text-amber-200/80">
-                  Eksik
-                </p>
-
-                <p className="mt-1 text-xl font-bold text-amber-200">
-                  {auditMissingCount}
-                </p>
-              </div>
+            <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg bg-black/20 px-4 py-3 text-sm">
+              <p className="text-slate-400">Okutulan <strong className="ml-1 text-white">{auditEntries.length}</strong></p>
+              <p className="text-slate-400">Bulunan <strong className="ml-1 text-emerald-400">{auditFoundCount}</strong></p>
+              <p className="text-slate-400">Eksik <strong className="ml-1 text-amber-400">{auditMissingCount}</strong></p>
             </div>
 
             {auditEntries.length === 0 ? (
@@ -1690,32 +1670,32 @@ export default function Stock() {
                 Henüz kapak okutulmadı.
               </div>
             ) : (
-              <div className="mt-4 max-h-[360px] space-y-2 overflow-y-auto pr-1">
-                {auditEntries.map((entry, index) => (
+              <div className="mt-3 max-h-[360px] divide-y divide-white/[0.06] overflow-y-auto">
+                {auditEntries.map(entry => (
                   <div
                     key={entry.key}
-                    className={`rounded-xl border p-3 ${
+                    className={`px-1 py-3 transition ${
                       entry.status === 'found'
-                        ? 'border-emerald-500/30 bg-emerald-500/10'
-                        : 'border-amber-500/30 bg-amber-500/10'
+                        ? 'hover:bg-emerald-500/[0.04]'
+                        : 'hover:bg-amber-500/[0.04]'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-start gap-3">
                         <div
-                          className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                          className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                             entry.status === 'found'
-                              ? 'bg-emerald-500/20 text-emerald-200'
-                              : 'bg-amber-500/20 text-amber-200'
+                              ? 'bg-emerald-500/15 text-emerald-300'
+                              : 'bg-amber-500/15 text-amber-300'
                           }`}
                         >
-                          {index + 1}
+                          {entry.status === 'found' ? '✓' : '×'}
                         </div>
 
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="font-bold text-white">
-                              LOT: {entry.lotNo}
+                              {entry.lotNo}
                             </p>
 
                             <span
@@ -1737,9 +1717,8 @@ export default function Stock() {
                             )}
                           </div>
 
-                          <p className="mt-1 text-xs text-slate-300">
-                            {entry.productName} • {entry.size} mm • SKT:{' '}
-                            {formatDate(entry.expirationDate)}
+                          <p className="mt-1 text-xs text-slate-400">
+                            {entry.size} mm • SKT {formatDate(entry.expirationDate)}
                           </p>
 
                           <p className="mt-1 text-[11px] text-slate-500">
@@ -1789,7 +1768,7 @@ export default function Stock() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-1.5">
         {FILTERS.map(filter => (
           <button
             key={filter}
@@ -1798,10 +1777,10 @@ export default function Stock() {
               setActiveFilter(filter);
               setAuditResult(null);
             }}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+            className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
               activeFilter === filter
-                ? 'bg-cyan-600 text-white'
-                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                ? 'border-cyan-400/50 bg-cyan-500/15 text-cyan-200'
+                : 'border-white/[0.08] bg-white/[0.03] text-slate-400 hover:bg-white/[0.07] hover:text-slate-200'
             }`}
           >
             {filter === 'Tümü'
