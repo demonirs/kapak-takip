@@ -149,26 +149,26 @@ function StatCard({
   iconContainerClassName,
 }: StatCardProps) {
   return (
-    <div className="min-w-[158px] rounded-xl border border-slate-700/90 bg-slate-800/80 p-3.5 shadow-sm sm:min-w-0 sm:p-4">
+    <div className="min-w-[150px] px-4 py-3 sm:min-w-0 sm:border-r sm:border-slate-700/70 sm:last:border-r-0">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 sm:text-xs">
             {label}
           </p>
 
-          <p className="mt-2 text-2xl font-bold leading-none text-white">
+          <p className="mt-1.5 text-2xl font-semibold leading-none text-white">
             {value}
           </p>
         </div>
 
         <div
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${iconContainerClassName}`}
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${iconContainerClassName}`}
         >
           <Icon className={`h-4 w-4 ${iconClassName}`} />
         </div>
       </div>
 
-      <p className="mt-3 truncate text-[11px] text-slate-500 sm:text-xs">
+      <p className="mt-2 truncate text-[11px] text-slate-500">
         {description}
       </p>
     </div>
@@ -560,7 +560,7 @@ export default function Dashboard() {
       </section>
 
       <section className="-mx-1 overflow-x-auto px-1 pb-1 sm:mx-0 sm:overflow-visible sm:px-0">
-        <div className="flex gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="flex divide-x divide-slate-700/70 rounded-xl border border-slate-700/80 bg-slate-800/45 sm:grid sm:grid-cols-2 sm:divide-x-0 lg:grid-cols-3 xl:grid-cols-6 xl:divide-x">
           <StatCard
             label="Toplam Vaka"
             value={stats.totalCases}
@@ -625,8 +625,8 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(310px,0.88fr)_minmax(280px,0.72fr)]">
-        <div className="overflow-hidden rounded-xl border border-slate-700/90 bg-slate-800/70">
+      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.8fr)]">
+        <div className="overflow-hidden border-t border-slate-700/80">
           <div className="flex items-center justify-between border-b border-slate-700/80 px-4 py-3">
             <div>
               <h2 className="text-sm font-semibold text-white">
@@ -705,8 +705,8 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="space-y-4">
-          <div className="overflow-hidden rounded-xl border border-slate-700/90 bg-slate-800/70">
+        <div className="space-y-6">
+          <div className="overflow-hidden border-t border-slate-700/80">
             <div className="flex items-center justify-between border-b border-slate-700/80 px-4 py-3">
               <div>
                 <h2 className="text-sm font-semibold text-white">
@@ -808,7 +808,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-slate-700/90 bg-slate-800/70">
+          <div className="overflow-hidden border-t border-slate-700/80">
             <div className="flex items-center justify-between border-b border-slate-700/80 px-4 py-3">
               <div>
                 <h2 className="text-sm font-semibold text-white">
@@ -863,8 +863,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="overflow-hidden rounded-xl border border-slate-700/90 bg-slate-800/70">
+        <div className="space-y-6 xl:col-span-2 xl:grid xl:grid-cols-2 xl:gap-6 xl:space-y-0">
+          <div className="overflow-hidden border-t border-slate-700/80">
             <div className="flex items-center justify-between border-b border-slate-700/80 px-4 py-3">
               <div>
                 <h2 className="text-sm font-semibold text-white">
@@ -887,7 +887,7 @@ export default function Dashboard() {
                   <Link
                     key={item.label}
                     to={item.to}
-                    className="group flex items-center gap-3 rounded-lg border border-slate-700/80 bg-slate-900/35 p-3 transition hover:border-slate-600 hover:bg-slate-700/25"
+                    className="group flex items-center gap-3 border-b border-slate-700/60 px-1 py-3 transition last:border-b-0 hover:bg-slate-700/15"
                   >
                     <div
                       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${item.iconContainerClassName}`}
@@ -920,7 +920,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-slate-700/90 bg-slate-800/70">
+          <div className="overflow-hidden border-t border-slate-700/80">
             <div className="flex items-center justify-between border-b border-slate-700/80 px-4 py-3">
               <div>
                 <h2 className="text-sm font-semibold text-white">
