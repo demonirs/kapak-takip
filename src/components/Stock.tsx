@@ -7,9 +7,12 @@ import {
 import * as XLSX from 'xlsx';
 import {
   CheckCircle2,
+  ClipboardCheck,
   ExternalLink,
+  RotateCcw,
   SearchX,
   Trash2,
+  X,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -82,6 +85,18 @@ type AuditResult = {
   lotNo: string;
   size: number;
   stockItemId?: string;
+};
+
+type AuditEntry = {
+  key: string;
+  status: 'found' | 'not-found';
+  lotNo: string;
+  size: number;
+  productName: string;
+  expirationDate: string;
+  stockItemId?: string;
+  scannedAt: string;
+  scanCount: number;
 };
 
 const GTIN_MAP: Record<string, number> = {
@@ -329,6 +344,9 @@ export default function Stock() {
   const highlightedRowRef =
     useRef<HTMLTableRowElement | null>(null);
 
+  const barcodeInputRef =
+    useRef<HTMLInputElement | null>(null);
+
   const [items, setItems] = useState<StockItem[]>(
     []
   );
@@ -360,9 +378,36 @@ export default function Stock() {
   const [auditResult, setAuditResult] =
     useState<AuditResult | null>(null);
 
+  const [auditEntries, setAuditEntries] =
+    useState<AuditEntry[]>(() => {
+      try {
+        const stored = window.sessionStorage.getItem(
+          'valveflow-stock-audit'
+        );
+
+        return stored
+          ? (JSON.parse(stored) as AuditEntry[])
+          : [];
+      } catch {
+        return [];
+      }
+    });
+
   useEffect(() => {
     void loadStock();
   }, []);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(
+        'valveflow-stock-audit',
+        JSON.stringify(auditEntries)
+      );
+    } catch {
+      // Tarayıcı depolaması kapalıysa denetim listesi
+      // yalnızca mevcut sayfa oturumu boyunca tutulur.
+    }
+  }, [auditEntries]);
 
   useEffect(() => {
     if (
@@ -688,6 +733,106 @@ export default function Stock() {
     ).length,
   };
 
+  const auditFoundCount = useMemo(
+    () =>
+      auditEntries.filter(
+        entry => entry.status === 'found'
+      ).length,
+    [auditEntries]
+  );
+
+  const auditMissingCount = useMemo(
+    () =>
+      auditEntries.filter(
+        entry => entry.status === 'not-found'
+      ).length,
+    [auditEntries]
+  );
+
+  const auditedFoundStockIds = useMemo(
+    () =>
+      new Set(
+        auditEntries
+          .filter(
+            entry =>
+              entry.status === 'found' &&
+              entry.stockItemId
+          )
+          .map(entry => entry.stockItemId as string)
+      ),
+    [auditEntries]
+  );
+
+  function addOrUpdateAuditEntry(
+    parsedBarcode: ParsedBarcode,
+    result: AuditResult
+  ) {
+    const key = `${normalizeLot(
+      parsedBarcode.lot_no
+    )}-${parsedBarcode.kapak_boyutu}`;
+
+    const nextEntry: AuditEntry = {
+      key,
+      status: result.status,
+      lotNo: normalizeLot(parsedBarcode.lot_no),
+      size: parsedBarcode.kapak_boyutu,
+      productName: parsedBarcode.urun_adi,
+      expirationDate:
+        parsedBarcode.son_kullanma_tarihi,
+      stockItemId: result.stockItemId,
+      scannedAt: new Date().toISOString(),
+      scanCount: 1,
+    };
+
+    setAuditEntries(previous => {
+      const existing = previous.find(
+        entry => entry.key === key
+      );
+
+      if (!existing) {
+        return [nextEntry, ...previous];
+      }
+
+      return [
+        {
+          ...existing,
+          ...nextEntry,
+          scanCount: existing.scanCount + 1,
+        },
+        ...previous.filter(
+          entry => entry.key !== key
+        ),
+      ];
+    });
+  }
+
+  function clearAuditList() {
+    if (auditEntries.length === 0) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Kapak denetim listesi temizlensin mi?'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setAuditEntries([]);
+    setAuditResult(null);
+    setMessage('');
+    window.sessionStorage.removeItem(
+      'valveflow-stock-audit'
+    );
+  }
+
+  function removeAuditEntry(key: string) {
+    setAuditEntries(previous =>
+      previous.filter(entry => entry.key !== key)
+    );
+  }
+
   function selectTab(tab: Tab) {
     setActiveTab(tab);
     setActiveFilter('Tümü');
@@ -722,13 +867,16 @@ export default function Stock() {
     );
 
     if (matchingStock) {
-      setAuditResult({
+      const result: AuditResult = {
         status: 'found',
         lotNo: targetLot,
         size:
           parsedBarcode.kapak_boyutu,
         stockItemId: matchingStock.id,
-      });
+      };
+
+      setAuditResult(result);
+      addOrUpdateAuditEntry(parsedBarcode, result);
 
       setMessage(
         `${targetLot} LOT numaralı ${parsedBarcode.kapak_boyutu} mm kapak mevcut stokta bulundu.`
@@ -737,12 +885,15 @@ export default function Stock() {
       return;
     }
 
-    setAuditResult({
+    const result: AuditResult = {
       status: 'not-found',
       lotNo: targetLot,
       size:
         parsedBarcode.kapak_boyutu,
-    });
+    };
+
+    setAuditResult(result);
+    addOrUpdateAuditEntry(parsedBarcode, result);
 
     setMessage(
       `${targetLot} LOT numaralı ${parsedBarcode.kapak_boyutu} mm kapak mevcut stokta bulunamadı.`
@@ -752,7 +903,6 @@ export default function Stock() {
   function parseBarcode() {
     setMessage('');
     setParsed(null);
-    setAuditResult(null);
 
     const raw = cleanBarcode(barcode);
 
@@ -814,6 +964,11 @@ export default function Stock() {
 
     setParsed(parsedBarcode);
     runStockAudit(parsedBarcode);
+    setBarcode('');
+
+    window.setTimeout(() => {
+      barcodeInputRef.current?.focus();
+    }, 0);
   }
 
   async function addToStock() {
@@ -840,13 +995,16 @@ export default function Stock() {
       );
 
     if (existingStock) {
-      setAuditResult({
+      const result: AuditResult = {
         status: 'found',
         lotNo,
         size:
           parsed.kapak_boyutu,
         stockItemId: existingStock.id,
-      });
+      };
+
+      setAuditResult(result);
+      addOrUpdateAuditEntry(parsed, result);
 
       setMessage(
         `${lotNo} LOT numaralı kapak zaten mevcut stokta. Tekrar eklenmedi.`
@@ -919,17 +1077,33 @@ export default function Stock() {
       }
     }
 
+    const insertedResult: AuditResult = {
+      status: 'found',
+      lotNo,
+      size: parsed.kapak_boyutu,
+      stockItemId: data?.id,
+    };
+
     setBarcode('');
+    setAuditResult(insertedResult);
+    addOrUpdateAuditEntry(parsed, insertedResult);
     setParsed(null);
-    setAuditResult(null);
     setActiveTab('mevcut');
-    setActiveFilter('Tümü');
+    setActiveFilter(
+      String(
+        parsed.kapak_boyutu
+      ) as (typeof FILTERS)[number]
+    );
 
     setMessage(
-      `${lotNo} LOT numaralı kapak stoka eklendi.`
+      `${lotNo} LOT numaralı kapak stoka eklendi ve denetim listesinde bulundu olarak işaretlendi.`
     );
 
     await loadStock();
+
+    window.setTimeout(() => {
+      barcodeInputRef.current?.focus();
+    }, 0);
   }
 
   async function deleteStockItem(
@@ -1298,13 +1472,13 @@ export default function Stock() {
             </label>
 
             <input
+              ref={barcodeInputRef}
               id="stock-barcode"
               value={barcode}
               onChange={event => {
                 setBarcode(
                   event.target.value
                 );
-                setAuditResult(null);
               }}
               onKeyDown={event => {
                 if (
@@ -1451,6 +1625,151 @@ export default function Stock() {
               </div>
             </div>
           )}
+
+          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <ClipboardCheck className="h-5 w-5 text-cyan-300" />
+
+                  <h3 className="font-bold text-white">
+                    Kapak Denetim Listesi
+                  </h3>
+                </div>
+
+                <p className="mt-1 text-xs text-slate-400">
+                  Yeni barkod okutulduğunda önceki sonuçlar kaybolmaz.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={clearAuditList}
+                disabled={auditEntries.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-red-500/50 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Denetimi Temizle
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <div className="rounded-xl border border-slate-700 bg-slate-800 p-3">
+                <p className="text-[11px] text-slate-400">
+                  Okutulan
+                </p>
+
+                <p className="mt-1 text-xl font-bold text-white">
+                  {auditEntries.length}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
+                <p className="text-[11px] text-emerald-200/80">
+                  Bulunan
+                </p>
+
+                <p className="mt-1 text-xl font-bold text-emerald-200">
+                  {auditFoundCount}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                <p className="text-[11px] text-amber-200/80">
+                  Eksik
+                </p>
+
+                <p className="mt-1 text-xl font-bold text-amber-200">
+                  {auditMissingCount}
+                </p>
+              </div>
+            </div>
+
+            {auditEntries.length === 0 ? (
+              <div className="mt-4 rounded-xl border border-dashed border-slate-700 p-5 text-center text-sm text-slate-500">
+                Henüz kapak okutulmadı.
+              </div>
+            ) : (
+              <div className="mt-4 max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                {auditEntries.map((entry, index) => (
+                  <div
+                    key={entry.key}
+                    className={`rounded-xl border p-3 ${
+                      entry.status === 'found'
+                        ? 'border-emerald-500/30 bg-emerald-500/10'
+                        : 'border-amber-500/30 bg-amber-500/10'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div
+                          className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                            entry.status === 'found'
+                              ? 'bg-emerald-500/20 text-emerald-200'
+                              : 'bg-amber-500/20 text-amber-200'
+                          }`}
+                        >
+                          {index + 1}
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-bold text-white">
+                              LOT: {entry.lotNo}
+                            </p>
+
+                            <span
+                              className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                                entry.status === 'found'
+                                  ? 'border-emerald-400/40 bg-emerald-500/20 text-emerald-200'
+                                  : 'border-amber-400/40 bg-amber-500/20 text-amber-200'
+                              }`}
+                            >
+                              {entry.status === 'found'
+                                ? 'BULUNDU'
+                                : 'BULUNAMADI'}
+                            </span>
+
+                            {entry.scanCount > 1 && (
+                              <span className="rounded-full border border-slate-600 bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
+                                {entry.scanCount} kez okutuldu
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="mt-1 text-xs text-slate-300">
+                            {entry.productName} • {entry.size} mm • SKT:{' '}
+                            {formatDate(entry.expirationDate)}
+                          </p>
+
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            Son okutma:{' '}
+                            {new Date(entry.scannedAt).toLocaleTimeString(
+                              'tr-TR',
+                              {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                              }
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeAuditEntry(entry.key)}
+                        className="shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-800 hover:text-red-300"
+                        aria-label={`${entry.lotNo} denetim kaydını kaldır`}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1552,6 +1871,9 @@ export default function Stock() {
                       auditResult.stockItemId ===
                         item.id;
 
+                    const isAuditedFound =
+                      auditedFoundStockIds.has(item.id);
+
                     return (
                       <tr
                         key={item.id}
@@ -1563,7 +1885,9 @@ export default function Stock() {
                         className={`border-t transition ${
                           isHighlighted
                             ? 'border-emerald-400 bg-emerald-500/20 ring-2 ring-inset ring-emerald-400/70'
-                            : 'border-slate-700 hover:bg-slate-700/40'
+                            : isAuditedFound
+                              ? 'border-emerald-500/40 bg-emerald-500/10'
+                              : 'border-slate-700 hover:bg-slate-700/40'
                         }`}
                       >
                         <td className="p-3 text-slate-200">
@@ -1572,9 +1896,11 @@ export default function Stock() {
                               item.urun_adi
                             }
 
-                            {isHighlighted && (
+                            {isAuditedFound && (
                               <span className="rounded-full border border-emerald-400/40 bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-200">
-                                BULUNDU
+                                {isHighlighted
+                                  ? 'SON BULUNAN'
+                                  : 'DENETLENDİ'}
                               </span>
                             )}
                           </div>
