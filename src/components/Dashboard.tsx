@@ -379,30 +379,6 @@ export default function Dashboard() {
     [cases]
   );
 
-  const sortedCriticalItems = useMemo(() => {
-    return stockItems
-      .filter((item) => {
-        const remainingDays = getRemainingDays(
-          item.son_kullanma_tarihi
-        );
-
-        return remainingDays !== null && remainingDays <= 30;
-      })
-      .sort((firstItem, secondItem) => {
-        const firstDays =
-          getRemainingDays(firstItem.son_kullanma_tarihi) ??
-          Number.MAX_SAFE_INTEGER;
-
-        const secondDays =
-          getRemainingDays(secondItem.son_kullanma_tarihi) ??
-          Number.MAX_SAFE_INTEGER;
-
-        return firstDays - secondDays;
-      });
-  }, [stockItems]);
-
-  const nearestCriticalItem = sortedCriticalItems[0];
-
   const maximumTrendValue = Math.max(
     ...monthlyTrend.map((item) => item.value),
     1
@@ -452,10 +428,10 @@ export default function Dashboard() {
       description: 'Tamamlanması gereken vaka kayıtları',
       value: incompleteCases.length,
       icon: FileWarning,
-      iconClassName: 'text-blue-300',
+      iconClassName: 'text-cyan-300',
       iconContainerClassName:
-        'border-blue-500/20 bg-blue-500/10',
-      valueClassName: 'text-blue-300',
+        'border-cyan-500/20 bg-cyan-500/10',
+      valueClassName: 'text-cyan-300',
       to: '/list?filter=eksik-bilgi',
     },
     {
@@ -480,18 +456,11 @@ export default function Dashboard() {
       valueClassName: 'text-red-300',
       to: '/stock',
     },
-    {
-      label: 'Bu Ayki Vakalar',
-      description: 'İçinde bulunduğumuz ay',
-      value: stats.monthCases,
-      icon: Activity,
-      iconClassName: 'text-cyan-300',
-      iconContainerClassName:
-        'border-cyan-500/20 bg-cyan-500/10',
-      valueClassName: 'text-cyan-300',
-      to: '/list',
-    },
   ];
+
+  const attentionItems = operationalItems.filter(
+    (item) => item.value > 0
+  );
 
   if (loading) {
     return (
@@ -722,14 +691,14 @@ export default function Dashboard() {
             </div>
 
             <div className="p-3.5">
-              <div className="flex min-w-0 flex-col items-center gap-4 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                 <div
-                  className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full"
+                  className="relative flex h-24 w-24 shrink-0 items-center justify-center rounded-full sm:h-28 sm:w-28"
                   style={{
                     background: stockChartBackground,
                   }}
                 >
-                  <div className="flex h-[76px] w-[76px] flex-col items-center justify-center rounded-full border border-slate-700 bg-slate-900">
+                  <div className="flex h-16 w-16 flex-col items-center justify-center rounded-full border border-slate-700 bg-slate-900 sm:h-[76px] sm:w-[76px]">
                     <p className="text-xl font-semibold text-white">
                       {stockItems.length}
                     </p>
@@ -740,7 +709,7 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <div className="w-full space-y-2">
+                <div className="min-w-0 flex-1 space-y-1.5">
                   {[
                     {
                       label: 'Normal',
@@ -775,7 +744,7 @@ export default function Dashboard() {
                   ].map((item) => (
                     <div
                       key={item.label}
-                      className="flex items-center justify-between gap-3 text-xs"
+                      className="flex min-w-0 items-center justify-between gap-2 text-[11px] sm:text-xs"
                     >
                       <div className="flex min-w-0 items-center gap-2">
                         <span
@@ -863,31 +832,51 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="min-w-0 space-y-4 xl:col-span-2 xl:grid xl:grid-cols-2 xl:gap-4 xl:space-y-0">
-          <div className="surface min-w-0 overflow-hidden">
+        <div className="surface min-w-0 overflow-hidden xl:col-span-2">
             <div className="flex items-center justify-between border-b border-slate-700/80 px-4 py-3">
               <div>
                 <h2 className="text-sm font-semibold text-white">
-                  Operasyon Özeti
+                  Dikkat Gerektirenler
                 </h2>
 
                 <p className="mt-0.5 text-[11px] text-slate-500">
-                  Aksiyon gerektiren kayıtlar
+                  Kontrol veya işlem bekleyen kayıtlar
                 </p>
               </div>
 
-              <Clock3 className="h-4 w-4 text-cyan-300" />
+              {attentionItems.length > 0 ? (
+                <AlertTriangle className="h-4 w-4 text-amber-300" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+              )}
             </div>
 
-            <div className="p-3">
-              {operationalItems.map((item) => {
+            {attentionItems.length === 0 ? (
+              <div className="flex items-center gap-3 px-4 py-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                </div>
+
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-emerald-200">
+                    Her şey yolunda
+                  </p>
+
+                  <p className="mt-0.5 text-[11px] leading-4 text-slate-400">
+                    Eksik bilgili vaka veya kritik stok kaydı bulunmuyor.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid min-w-0 grid-cols-1 px-3 sm:grid-cols-2 xl:grid-cols-3">
+                {attentionItems.map((item) => {
                 const Icon = item.icon;
 
                 return (
                   <Link
                     key={item.label}
                     to={item.to}
-                    className="group flex min-w-0 items-center gap-3 border-b border-slate-700/60 px-1 py-2.5 transition last:border-b-0 hover:bg-slate-700/15"
+                    className="group flex min-w-0 items-center gap-3 border-b border-slate-700/60 px-1 py-3 transition last:border-b-0 hover:bg-slate-700/15 sm:border-b-0 sm:border-r sm:px-3 sm:last:border-r-0"
                   >
                     <div
                       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${item.iconContainerClassName}`}
@@ -916,108 +905,9 @@ export default function Dashboard() {
                     <ChevronRight className="h-4 w-4 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-slate-300" />
                   </Link>
                 );
-              })}
-            </div>
-          </div>
-
-          <div className="surface min-w-0 overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-700/80 px-4 py-3">
-              <div>
-                <h2 className="text-sm font-semibold text-white">
-                  Kritik Uyarılar
-                </h2>
-
-                <p className="mt-0.5 text-[11px] text-slate-500">
-                  Öncelikli kontrol alanı
-                </p>
+                })}
               </div>
-
-              <AlertTriangle className="h-4 w-4 text-red-300" />
-            </div>
-
-            <div className="p-3">
-              {nearestCriticalItem ? (
-                <Link
-                  to="/stock"
-                  className="block rounded-lg border border-red-500/20 bg-red-500/[0.07] p-3 transition hover:bg-red-500/10"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10">
-                      <AlertTriangle className="h-4 w-4 text-red-300" />
-                    </div>
-
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-red-200">
-                        {(() => {
-                          const days = getRemainingDays(
-                            nearestCriticalItem.son_kullanma_tarihi
-                          );
-
-                          if (days === null) {
-                            return 'SKT bilgisi eksik';
-                          }
-
-                          if (days < 0) {
-                            return `${Math.abs(days)} gün önce süresi doldu`;
-                          }
-
-                          if (days === 0) {
-                            return 'Son kullanım tarihi bugün';
-                          }
-
-                          return `${days} gün kaldı`;
-                        })()}
-                      </p>
-
-                      <p className="mt-1 truncate text-xs text-slate-300">
-                        {nearestCriticalItem.urun_adi ||
-                          'Ürün bilgisi yok'}
-                      </p>
-
-                      <p className="mt-1 text-[11px] text-slate-500">
-                        LOT:{' '}
-                        {nearestCriticalItem.lot_no || '-'}
-                      </p>
-
-                      <p className="mt-0.5 text-[11px] text-slate-500">
-                        SKT:{' '}
-                        {formatDate(
-                          nearestCriticalItem.son_kullanma_tarihi
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </Link>
-              ) : (
-                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.07] p-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-300" />
-                    </div>
-
-                    <div>
-                      <p className="text-sm font-semibold text-emerald-200">
-                        Kritik uyarı yok
-                      </p>
-
-                      <p className="mt-1 text-[11px] leading-4 text-slate-400">
-                        Süresi geçmiş veya 30 gün içinde dolacak
-                        stok bulunmuyor.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <Link
-                to="/stock"
-                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-600 px-3 py-2.5 text-xs font-semibold text-slate-300 transition hover:border-cyan-500/40 hover:text-cyan-300"
-              >
-                Tüm Stok Uyarılarını Gör
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-          </div>
+            )}
         </div>
       </section>
     </div>
