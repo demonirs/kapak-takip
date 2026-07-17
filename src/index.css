@@ -2,9 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-/* =========================
-   GENEL
-========================= */
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
 
 html,
 body,
@@ -12,95 +17,158 @@ body,
   width: 100%;
   min-height: 100%;
   overflow-x: hidden;
-  overflow-y: auto;
+}
+
+html {
+  background: #020617;
+  scroll-behavior: smooth;
 }
 
 body {
-  position: static;
-  background: #0f172a;
-  transition:
-    background-color 0.25s ease,
-    color 0.25s ease;
+  min-width: 320px;
+  margin: 0;
+  background:
+    radial-gradient(circle at 50% -20%, rgba(8, 145, 178, 0.08), transparent 34rem),
+    #020617;
+  color: #f8fafc;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
-/* =========================
-   MOBİL SCROLL
-========================= */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(34, 211, 238, 0.8);
+  outline-offset: 2px;
+}
 
 .mobile-scroll-x {
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
   overflow-y: visible;
+  overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
 }
 
 .mobile-scroll-y {
   max-height: 75vh;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
 }
 
 .mobile-table {
-  min-width: 720px;
   width: 100%;
+  min-width: 720px;
 }
 
-/* =========================
-   LIGHT MODE
-========================= */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
 
-html.light-mode body {
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #334155;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+  background-clip: padding-box;
+}
+
+html.light-mode {
+  color-scheme: light;
   background: #f8fafc;
 }
 
-/* Ana arkaplanlar */
+html.light-mode body {
+  background:
+    radial-gradient(circle at 50% -20%, rgba(8, 145, 178, 0.06), transparent 34rem),
+    #f8fafc;
+  color: #0f172a;
+}
 
-html.light-mode .bg-slate-950 {
-  background-color: #f8fafc !important;
+html.light-mode .bg-slate-950,
+html.light-mode .bg-slate-950\/90,
+html.light-mode .bg-slate-950\/95 {
+  background-color: rgba(248, 250, 252, 0.94) !important;
 }
 
 html.light-mode .bg-slate-900 {
   background-color: #ffffff !important;
 }
 
-html.light-mode .bg-slate-800 {
+html.light-mode .bg-slate-900\/35,
+html.light-mode .bg-slate-900\/50,
+html.light-mode .bg-slate-900\/60,
+html.light-mode .bg-slate-900\/70,
+html.light-mode .bg-slate-900\/80 {
+  background-color: rgba(248, 250, 252, 0.86) !important;
+}
+
+html.light-mode .bg-slate-800,
+html.light-mode .bg-slate-800\/45,
+html.light-mode .bg-slate-800\/70,
+html.light-mode .bg-slate-800\/80 {
   background-color: #ffffff !important;
 }
 
-html.light-mode .bg-slate-700 {
+html.light-mode .bg-slate-700,
+html.light-mode .bg-slate-700\/40 {
   background-color: #f1f5f9 !important;
 }
 
-html.light-mode .bg-slate-700\/40 {
-  background-color: rgba(241, 245, 249, 0.9) !important;
-}
-
-/* Borderlar */
-
-html.light-mode .border-slate-900 {
+html.light-mode .border-slate-900,
+html.light-mode .border-slate-800,
+html.light-mode .border-slate-800\/70,
+html.light-mode .border-slate-800\/80,
+html.light-mode .border-slate-700,
+html.light-mode .border-slate-700\/60,
+html.light-mode .border-slate-700\/70,
+html.light-mode .border-slate-700\/80,
+html.light-mode .border-slate-700\/90 {
   border-color: #e2e8f0 !important;
 }
 
-html.light-mode .border-slate-800 {
-  border-color: #e2e8f0 !important;
-}
-
-html.light-mode .border-slate-700 {
-  border-color: #e2e8f0 !important;
-}
-
-html.light-mode .border-slate-600 {
+html.light-mode .border-slate-600,
+html.light-mode .border-slate-600\/80 {
   border-color: #cbd5e1 !important;
 }
 
-/* Yazılar */
+html.light-mode .divide-slate-700\/60 > :not([hidden]) ~ :not([hidden]),
+html.light-mode .divide-slate-700\/70 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e2e8f0 !important;
+}
 
-html.light-mode .text-white {
+html.light-mode .text-white,
+html.light-mode .text-slate-100 {
   color: #0f172a !important;
 }
 
@@ -112,22 +180,17 @@ html.light-mode .text-slate-300 {
   color: #334155 !important;
 }
 
-html.light-mode .text-slate-400 {
-  color: #64748b !important;
-}
-
+html.light-mode .text-slate-400,
 html.light-mode .text-slate-500 {
   color: #64748b !important;
 }
 
-/* Inputlar */
-
 html.light-mode input,
 html.light-mode select,
 html.light-mode textarea {
+  border-color: #cbd5e1 !important;
   background-color: #ffffff !important;
   color: #0f172a !important;
-  border-color: #cbd5e1 !important;
 }
 
 html.light-mode input::placeholder,
@@ -135,44 +198,11 @@ html.light-mode textarea::placeholder {
   color: #94a3b8 !important;
 }
 
-/* Header */
-
-html.light-mode header {
-  background-color: rgba(248, 250, 252, 0.95) !important;
-  border-color: #e2e8f0 !important;
-}
-
-/* Sidebar */
-
+html.light-mode header,
 html.light-mode aside {
-  background-color: #ffffff !important;
   border-color: #e2e8f0 !important;
+  background-color: rgba(255, 255, 255, 0.94) !important;
 }
-
-/* Scrollbar */
-
-html.light-mode ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-html.light-mode ::-webkit-scrollbar-track {
-  background: #f1f5f9;
-}
-
-html.light-mode ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 999px;
-}
-
-/* Gölgeler */
-
-html.light-mode .shadow-2xl {
-  box-shadow:
-    0 20px 50px rgba(15, 23, 42, 0.12) !important;
-}
-
-/* Kartlar */
 
 html.light-mode .bg-cyan-500\/10 {
   background-color: rgba(6, 182, 212, 0.08) !important;
@@ -186,19 +216,22 @@ html.light-mode .bg-emerald-500\/10 {
   background-color: rgba(16, 185, 129, 0.08) !important;
 }
 
-/* Geçiş */
+html.light-mode .shadow-2xl {
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.1) !important;
+}
 
-body,
-div,
-button,
-input,
-select,
-textarea,
-aside,
-header,
-main {
-  transition:
-    background-color 0.25s ease,
-    border-color 0.25s ease,
-    color 0.25s ease;
+html.light-mode ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  background-clip: padding-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
