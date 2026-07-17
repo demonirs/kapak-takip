@@ -2,6 +2,84 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .app-shell {
+    @apply relative min-h-dvh overflow-x-hidden bg-slate-950 text-white;
+  }
+
+  .app-container {
+    @apply mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-8;
+  }
+
+  .page-header {
+    @apply flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between;
+  }
+
+  .page-title {
+    @apply text-xl font-semibold tracking-tight text-white sm:text-2xl;
+  }
+
+  .page-description {
+    @apply mt-1 text-sm leading-5 text-slate-400;
+  }
+
+  .surface {
+    @apply rounded-xl border border-slate-800 bg-slate-900/70;
+  }
+
+  .surface-muted {
+    @apply rounded-lg border border-slate-800/80 bg-slate-900/40;
+  }
+
+  .button-base {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .button-primary {
+    @apply button-base bg-cyan-500 text-slate-950 hover:bg-cyan-400;
+  }
+
+  .button-secondary {
+    @apply button-base border border-slate-700 bg-slate-800 text-slate-200 hover:border-slate-600 hover:bg-slate-700;
+  }
+
+  .button-ghost {
+    @apply button-base bg-transparent text-slate-300 hover:bg-slate-800 hover:text-white;
+  }
+
+  .button-danger {
+    @apply button-base bg-red-600 text-white hover:bg-red-500;
+  }
+
+  .button-warning {
+    @apply button-base border border-amber-500/40 bg-amber-500/5 text-amber-300 hover:bg-amber-500/10;
+  }
+
+  .icon-button {
+    @apply inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-slate-300 transition-colors hover:border-slate-700 hover:bg-slate-800 hover:text-white;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-sm font-medium text-slate-300;
+  }
+
+  .field-control {
+    @apply min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .field-help {
+    @apply mt-1.5 text-xs leading-4 text-slate-500;
+  }
+
+  .field-error {
+    @apply mt-1.5 text-xs leading-4 text-red-300;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium;
+  }
+}
+
 :root {
   color-scheme: dark;
   font-family:
@@ -218,6 +296,28 @@ html.light-mode .bg-emerald-500\/10 {
 
 html.light-mode .shadow-2xl {
   box-shadow: 0 20px 50px rgba(15, 23, 42, 0.1) !important;
+}
+
+html.light-mode .app-shell {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html.light-mode .surface,
+html.light-mode .surface-muted {
+  border-color: #e2e8f0 !important;
+  background-color: rgba(255, 255, 255, 0.94) !important;
+}
+
+html.light-mode .icon-button {
+  border-color: #e2e8f0 !important;
+  background-color: #ffffff !important;
+  color: #475569 !important;
+}
+
+html.light-mode .icon-button:hover {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
 }
 
 html.light-mode ::-webkit-scrollbar-thumb {
