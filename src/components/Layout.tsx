@@ -372,11 +372,7 @@ export default function Layout() {
               </button>
 
               <div className="min-w-0">
-                <p className="text-sm font-semibold leading-tight truncate">
-                  Fokus Sağlık
-                </p>
-
-                <p className="text-xs text-slate-400 leading-tight truncate">
+                <p className="truncate text-sm font-semibold text-slate-200">
                   {getPageTitle(location.pathname)}
                 </p>
               </div>
