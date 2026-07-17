@@ -1,6 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, Save } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  Save,
+} from 'lucide-react';
 import {
   BALON_SIZES,
   KAPAK_SIZES,
@@ -63,6 +69,64 @@ function Field({
 
 const inputClass =
   'field-control';
+
+function CompactSelect({
+  value,
+  onChange,
+  options,
+}: {
+  value: string | number;
+  onChange: (value: string) => void;
+  options: readonly (string | number)[];
+}) {
+  const detailsRef = useRef<HTMLDetailsElement | null>(null);
+  const selectedValue = String(value);
+
+  function selectOption(option: string | number) {
+    onChange(String(option));
+    detailsRef.current?.removeAttribute('open');
+  }
+
+  return (
+    <details ref={detailsRef} className="group relative">
+      <summary className="field-control flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0 truncate">
+          {selectedValue}
+        </span>
+
+        <ChevronDown className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+      </summary>
+
+      <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-56 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-1.5 shadow-2xl">
+        {options.map(option => {
+          const optionValue = String(option);
+          const isSelected = optionValue === selectedValue;
+
+          return (
+            <button
+              key={optionValue}
+              type="button"
+              onClick={() => selectOption(option)}
+              className={`flex min-h-10 w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition ${
+                isSelected
+                  ? 'bg-cyan-500/10 text-cyan-200'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <span className="min-w-0 truncate">
+                {optionValue}
+              </span>
+
+              {isSelected && (
+                <Check className="h-4 w-4 shrink-0 text-cyan-300" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </details>
+  );
+}
 
 function normalizeLot(value: string) {
   return value
@@ -485,28 +549,6 @@ export default function AddCase() {
     }
   };
 
-  const Select = ({
-    value,
-    onChange,
-    options,
-  }: {
-    value: string | number;
-    onChange: (value: string) => void;
-    options: readonly (string | number)[];
-  }) => (
-    <select
-      className={inputClass}
-      value={String(value)}
-      onChange={event => onChange(event.target.value)}
-    >
-      {options.map(option => (
-        <option key={String(option)} value={String(option)}>
-          {option}
-        </option>
-      ))}
-    </select>
-  );
-
   return (
     <div className="mx-auto w-full max-w-4xl">
       <button
@@ -774,7 +816,7 @@ export default function AddCase() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 
           <Field label="Kapak Tipi">
-            <Select
+            <CompactSelect
               value={form.kapak_tipi}
               onChange={value => set('kapak_tipi', value)}
               options={KAPAK_TIPLERI}
@@ -782,7 +824,7 @@ export default function AddCase() {
           </Field>
 
           <Field label="Kapak Size">
-            <Select
+            <CompactSelect
               value={form.kapak_size}
               onChange={value => set('kapak_size', value)}
               options={KAPAK_SIZES}
@@ -831,7 +873,7 @@ export default function AddCase() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 
           <Field label="Pre Balon">
-            <Select
+            <CompactSelect
               value={form.pre_balon}
               onChange={value => set('pre_balon', value)}
               options={BALON_SIZES}
@@ -839,7 +881,7 @@ export default function AddCase() {
           </Field>
 
           <Field label="Post Balon">
-            <Select
+            <CompactSelect
               value={form.post_balon}
               onChange={value => set('post_balon', value)}
               options={BALON_SIZES}
@@ -847,7 +889,7 @@ export default function AddCase() {
           </Field>
 
           <Field label="Paravalvüler AY">
-            <Select
+            <CompactSelect
               value={form.paravalvuler_ay}
               onChange={value =>
                 set('paravalvuler_ay', value)
@@ -857,7 +899,7 @@ export default function AddCase() {
           </Field>
 
           <Field label="Proglide Adedi">
-            <Select
+            <CompactSelect
               value={form.proglide_adedi}
               onChange={value =>
                 set('proglide_adedi', Number(value))
