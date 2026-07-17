@@ -4,7 +4,10 @@ import {
   AlertTriangle,
   Archive,
   CheckCircle2,
+  Eye,
   FileWarning,
+  Mail,
+  Pencil,
   Plus,
   Search,
   Trash2,
@@ -293,16 +296,16 @@ export default function List() {
   }
 
   return (
-    <div className="space-y-4 pb-24">
-      <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="min-w-0 space-y-4 pb-16">
+      <section className="page-header">
         <div>
-          <h1 className="text-xl font-bold text-white sm:text-2xl">
+          <h1 className="page-title">
             {showMissingOnly
               ? 'Eksik Bilgili Vakalar'
               : 'Vakalar'}
           </h1>
 
-          <p className="mt-1 text-xs text-slate-400 sm:text-sm">
+          <p className="page-description">
             {showMissingOnly
               ? 'Hasta ve kullanılan kapak izlenebilirliği için tamamlanması gereken kayıtlar'
               : 'Aktif vaka kayıtları'}
@@ -311,18 +314,18 @@ export default function List() {
 
         <Link
           to="/add"
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cyan-500 sm:w-auto"
+          className="button-primary w-full sm:w-auto"
         >
           <Plus className="h-4 w-4" />
           Yeni Vaka
         </Link>
       </section>
 
-      <section className="grid grid-cols-2 gap-2 rounded-xl border border-slate-700 bg-slate-800/70 p-2 sm:flex sm:w-fit">
+      <section className="surface grid grid-cols-2 gap-1 p-1 sm:flex sm:w-fit">
         <button
           type="button"
           onClick={showAllCases}
-          className={`rounded-lg px-3 py-2 text-xs font-semibold transition sm:min-w-32 ${
+          className={`min-h-10 rounded-lg px-3 py-2 text-xs font-semibold transition sm:min-w-32 ${
             !showMissingOnly
               ? 'bg-cyan-600 text-white'
               : 'text-slate-400 hover:bg-slate-700 hover:text-white'
@@ -337,7 +340,7 @@ export default function List() {
         <button
           type="button"
           onClick={showMissingCases}
-          className={`rounded-lg px-3 py-2 text-xs font-semibold transition sm:min-w-40 ${
+          className={`min-h-10 rounded-lg px-3 py-2 text-xs font-semibold transition sm:min-w-40 ${
             showMissingOnly
               ? 'bg-amber-600 text-white'
               : 'text-slate-400 hover:bg-slate-700 hover:text-white'
@@ -370,7 +373,7 @@ export default function List() {
         </section>
       )}
 
-      <section className="relative">
+      <section className="relative min-w-0">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
 
         <input
@@ -378,7 +381,7 @@ export default function List() {
           value={searchTerm}
           onChange={(event) => setSearchTerm(event.target.value)}
           placeholder="Hasta, merkez, doktor, kapak veya LOT ara..."
-          className="w-full rounded-xl border border-slate-700 bg-slate-800/80 py-2.5 pl-10 pr-10 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/10"
+          className="field-control pl-10 pr-10"
         />
 
         {searchTerm && (
@@ -439,7 +442,133 @@ export default function List() {
           )}
         </section>
       ) : (
-        <section className="space-y-3">
+        <>
+          <section className="surface hidden min-w-0 overflow-hidden md:block">
+            <div className="overflow-x-auto">
+              <table className="w-full table-fixed text-left">
+                <thead className="border-b border-slate-800 bg-slate-900/70">
+                  <tr className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                    <th className="w-[10%] px-3 py-2.5">Tarih</th>
+                    <th className="w-[15%] px-3 py-2.5">Hasta</th>
+                    <th className="w-[17%] px-3 py-2.5">Merkez</th>
+                    <th className="w-[14%] px-3 py-2.5">Doktor</th>
+                    <th className="w-[12%] px-3 py-2.5">Kapak</th>
+                    <th className="w-[10%] px-3 py-2.5">LOT</th>
+                    <th className="w-[9%] px-3 py-2.5">Durum</th>
+                    <th className="w-[13%] px-3 py-2.5 text-right">İşlemler</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-800/80">
+                  {visibleItems.map((item) => {
+                    const missingFields = getMissingFields(item);
+                    const hasMissingInformation = missingFields.length > 0;
+                    const isProcessing = processingId === item.id;
+
+                    return (
+                      <tr
+                        key={item.id}
+                        className="h-14 transition-colors hover:bg-slate-800/40"
+                      >
+                        <td className="px-3 py-2 text-xs text-slate-400">
+                          {formatDate(item.vaka_tarihi)}
+                        </td>
+
+                        <td className="px-3 py-2">
+                          <p className={`truncate text-xs font-semibold ${item.hasta_adi ? 'text-slate-100' : 'text-amber-300'}`}>
+                            {item.hasta_adi || 'Hasta adı eksik'}
+                          </p>
+                        </td>
+
+                        <td className="px-3 py-2">
+                          <p className={`truncate text-xs ${item.merkez_hastane ? 'text-slate-300' : 'text-amber-300'}`} title={item.merkez_hastane || undefined}>
+                            {item.merkez_hastane || 'Merkez eksik'}
+                          </p>
+                        </td>
+
+                        <td className="px-3 py-2">
+                          <p className={`truncate text-xs ${item.doktor ? 'text-slate-300' : 'text-amber-300'}`} title={item.doktor || undefined}>
+                            {item.doktor || 'Doktor eksik'}
+                          </p>
+                        </td>
+
+                        <td className="px-3 py-2 text-xs text-cyan-300">
+                          <p className="truncate">
+                            {item.kapak_tipi || 'Tip eksik'}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-slate-500">
+                            {item.kapak_size ? `${item.kapak_size} mm` : 'Ölçü eksik'}
+                          </p>
+                        </td>
+
+                        <td className="px-3 py-2">
+                          <span className={`font-mono text-xs ${item.lot_no ? 'text-slate-300' : 'text-amber-300'}`}>
+                            {item.lot_no || 'Eksik'}
+                          </span>
+                        </td>
+
+                        <td className="px-3 py-2">
+                          {hasMissingInformation ? (
+                            <span className="status-badge border-amber-500/25 bg-amber-500/10 text-amber-200">
+                              {missingFields.length} eksik
+                            </span>
+                          ) : (
+                            <span className="status-badge border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
+                              Tam
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="px-3 py-2">
+                          <div className="flex items-center justify-end gap-1">
+                            <Link
+                              to={`/view/${item.id}`}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-700 hover:text-cyan-300"
+                              title="Vakayı görüntüle ve mail oluştur"
+                            >
+                              <Mail className="h-4 w-4" />
+                            </Link>
+
+                            <Link
+                              to={`/edit/${item.id}`}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-700 hover:text-cyan-300"
+                              title={hasMissingInformation ? 'Eksikleri tamamla' : 'Düzenle'}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Link>
+
+                            <button
+                              type="button"
+                              disabled={isProcessing}
+                              onClick={() => void archiveCase(item.id)}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-amber-500/10 hover:text-amber-300 disabled:opacity-40"
+                              title="Arşivle"
+                            >
+                              <Archive className="h-4 w-4" />
+                            </button>
+
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                disabled={isProcessing}
+                                onClick={() => void deleteCase(item.id)}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
+                                title="Sil"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="space-y-2 md:hidden">
           {visibleItems.map((item) => {
             const missingFields = getMissingFields(item);
             const hasMissingInformation =
@@ -449,13 +578,13 @@ export default function List() {
             return (
               <article
                 key={item.id}
-                className={`rounded-xl border p-4 ${
+                className={`min-w-0 rounded-xl border p-3 ${
                   hasMissingInformation
                     ? 'border-amber-500/25 bg-amber-500/[0.045]'
                     : 'border-slate-700 bg-slate-800/80'
                 }`}
               >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2
@@ -476,7 +605,7 @@ export default function List() {
                       )}
                     </div>
 
-                    <p className="mt-1.5 text-xs leading-5 text-slate-400">
+                    <p className="mt-1.5 break-words text-xs leading-5 text-slate-400">
                       <span
                         className={
                           item.vaka_tarihi
@@ -517,7 +646,7 @@ export default function List() {
                       </span>
                     </p>
 
-                    <p className="mt-1 text-xs leading-5 text-cyan-300">
+                    <p className="mt-1 break-words text-xs leading-5 text-cyan-300">
                       <span
                         className={
                           item.kapak_tipi
@@ -560,12 +689,6 @@ export default function List() {
                     </p>
                   </div>
 
-                  <Link
-                    to={`/view/${item.id}`}
-                    className="shrink-0 text-xs font-semibold text-cyan-300 transition hover:text-cyan-200"
-                  >
-                    Detayı Gör
-                  </Link>
                 </div>
 
                 {hasMissingInformation && (
@@ -587,59 +710,56 @@ export default function List() {
                   </div>
                 )}
 
-                <div
-                  className={`mt-4 grid gap-2 ${
-                    isAdmin
-                      ? 'grid-cols-2 sm:grid-cols-4'
-                      : 'grid-cols-3'
-                  }`}
-                >
+                <div className="mt-3 flex min-w-0 items-center justify-end gap-1 border-t border-slate-700/70 pt-2.5">
                   <Link
-                    className="rounded-lg bg-slate-700 px-3 py-2 text-center text-xs font-semibold text-slate-100 transition hover:bg-slate-600"
+                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-slate-300 transition hover:bg-slate-700 hover:text-cyan-300"
                     to={`/view/${item.id}`}
                   >
+                    <Eye className="h-4 w-4" />
                     Mail
                   </Link>
 
                   <Link
-                    className={`rounded-lg px-3 py-2 text-center text-xs font-semibold text-white transition ${
+                    className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition ${
                       hasMissingInformation
-                        ? 'bg-amber-600 hover:bg-amber-500'
-                        : 'bg-blue-700 hover:bg-blue-600'
+                        ? 'text-amber-300 hover:bg-amber-500/10'
+                        : 'text-cyan-300 hover:bg-cyan-500/10'
                     }`}
                     to={`/edit/${item.id}`}
                   >
+                    <Pencil className="h-4 w-4" />
                     {hasMissingInformation
-                      ? 'Eksikleri Tamamla'
+                      ? 'Tamamla'
                       : 'Düzenle'}
                   </Link>
 
                   <button
                     type="button"
                     disabled={isProcessing}
-                    className="inline-flex items-center justify-center gap-1 rounded-lg bg-orange-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 transition hover:bg-amber-500/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
                     onClick={() => void archiveCase(item.id)}
+                    aria-label="Vakayı arşivle"
                   >
                     <Archive className="h-4 w-4" />
-                    Arşiv
                   </button>
 
                   {isAdmin && (
                     <button
                       type="button"
                       disabled={isProcessing}
-                      className="inline-flex items-center justify-center gap-1 rounded-lg bg-red-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 transition hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={() => void deleteCase(item.id)}
+                      aria-label="Vakayı sil"
                     >
                       <Trash2 className="h-4 w-4" />
-                      Sil
                     </button>
                   )}
                 </div>
               </article>
             );
           })}
-        </section>
+          </section>
+        </>
       )}
     </div>
   );
