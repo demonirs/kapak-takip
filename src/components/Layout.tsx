@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Activity,
   Archive,
   Bell,
   CheckCheck,
@@ -81,35 +80,6 @@ function getPageTitle(pathname: string) {
   return 'ValveFlow';
 }
 
-function BackgroundWatermark() {
-  const words = Array.from({ length: 40 }, (_, i) => ({
-    id: i,
-    top: `${5 + ((i * 11) % 85)}%`,
-    left: `${(i * 17) % 95}%`,
-    rotate: i % 2 === 0 ? '-12deg' : '10deg',
-  }));
-
-  return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(6,182,212,0.08),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(6,182,212,0.06),transparent_35%)]" />
-
-      {words.map(word => (
-        <div
-          key={word.id}
-          className="absolute select-none font-bold tracking-[0.35em] text-cyan-400/[0.02] text-[9px] md:text-[11px]"
-          style={{
-            top: word.top,
-            left: word.left,
-            transform: `rotate(${word.rotate})`,
-          }}
-        >
-          EVOLUT PRO+
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default function Layout() {
   const { profile, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -124,6 +94,31 @@ export default function Layout() {
   const [notificationLoading, setNotificationLoading] = useState(false);
 
   const unreadCount = notifications.filter(item => !item.is_read).length;
+  const profileRole = (profile as { role?: string | null } | null)?.role;
+  const roleLabel = profileRole === 'admin' ? 'Yönetici' : 'Kullanıcı';
+
+  useEffect(() => {
+    setMenuOpen(false);
+    setNotificationOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setMenuOpen(false);
+    }
+
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [menuOpen]);
 
   useEffect(() => {
     if (!profile?.id) {
@@ -275,24 +270,25 @@ export default function Layout() {
   }
 
   return (
-    <div className="relative min-h-dvh bg-slate-950 text-white overflow-x-hidden selection:bg-cyan-500/30">
-      <BackgroundWatermark />
+    <div className="app-shell selection:bg-cyan-500/30">
 
       {menuOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-[2px]"
           onClick={() => setMenuOpen(false)}
+          aria-hidden="true"
         />
       )}
 
       <aside
-        className={`fixed top-0 left-0 z-50 h-dvh w-[82%] max-w-[300px] bg-slate-950 border-r border-slate-800 shadow-2xl transition-transform duration-300 pt-[env(safe-area-inset-top)] ${
+        aria-label="Ana menü"
+        className={`fixed left-0 top-0 z-50 h-dvh w-[min(86vw,304px)] border-r border-slate-800/80 bg-slate-950/98 pt-[env(safe-area-inset-top)] shadow-2xl transition-transform duration-200 ease-out ${
           menuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex items-center justify-between px-4 py-4 border-b border-slate-800">
+        <div className="flex min-h-16 items-center justify-between border-b border-slate-800/80 px-4">
           <button onClick={goHome} className="flex items-center gap-3 text-left">
-            <div className="w-10 h-10 rounded-xl bg-cyan-500 flex items-center justify-center shadow-md shadow-cyan-500/20">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500 text-slate-950">
               <HeartPulse className="w-5 h-5" />
             </div>
 
@@ -304,16 +300,17 @@ export default function Layout() {
 
           <button
             onClick={() => setMenuOpen(false)}
-            className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-300"
+            className="icon-button"
+            aria-label="Menüyü kapat"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="h-[calc(100dvh-73px-env(safe-area-inset-top))] overflow-y-auto px-3 py-4 pb-8">
+        <div className="h-[calc(100dvh-64px-env(safe-area-inset-top))] overflow-y-auto px-3 py-4 pb-8">
           {menuSections.map(section => (
-            <div key={section.title} className="mb-6">
-              <p className="px-3 mb-2 text-xs font-bold text-slate-500">
+            <div key={section.title} className="mb-5">
+              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                 {section.title}
               </p>
 
@@ -327,10 +324,10 @@ export default function Layout() {
                       to={item.to}
                       onClick={() => setMenuOpen(false)}
                       className={({ isActive }) =>
-                        `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium ${
+                        `flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                           isActive
-                            ? 'bg-cyan-500/15 text-cyan-200'
-                            : 'text-slate-300 hover:bg-slate-900 hover:text-white'
+                            ? 'bg-cyan-500/10 text-cyan-200 ring-1 ring-inset ring-cyan-500/15'
+                            : 'text-slate-400 hover:bg-slate-900 hover:text-slate-100'
                         }`
                       }
                     >
@@ -345,7 +342,7 @@ export default function Layout() {
 
           <button
             onClick={handleSignOut}
-            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-red-300 hover:bg-red-500/10"
+            className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/10"
           >
             <LogOut className="w-5 h-5" />
             Çıkış Yap
@@ -353,21 +350,22 @@ export default function Layout() {
         </div>
       </aside>
 
-      <header className="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 pt-[env(safe-area-inset-top)]">
-        <div className="mx-auto max-w-[1440px] px-3 py-3 sm:px-6">
+      <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/90 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+        <div className="app-container flex min-h-16 items-center">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <button
                 onClick={() => setMenuOpen(true)}
-                className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-cyan-300 shrink-0"
+                className="icon-button shrink-0 text-cyan-300"
                 title="Menü"
+                aria-label="Menüyü aç"
               >
                 <Menu className="w-5 h-5" />
               </button>
 
               <button
                 onClick={goHome}
-                className="w-9 h-9 rounded-xl bg-cyan-500 flex items-center justify-center shadow-md shadow-cyan-500/20 shrink-0"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500 text-slate-950 transition-colors hover:bg-cyan-400"
                 title="Ana Sayfa"
               >
                 <HeartPulse className="w-5 h-5" />
@@ -392,8 +390,9 @@ export default function Layout() {
                     setNotificationOpen(current => !current);
                     loadNotifications();
                   }}
-                  className="relative w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-cyan-300 hover:bg-cyan-500/10"
+                  className="icon-button relative text-cyan-300"
                   title="Bildirimler"
+                  aria-label="Bildirimler"
                 >
                   <Bell className="w-4 h-4" />
 
@@ -405,7 +404,7 @@ export default function Layout() {
                 </button>
 
                 {notificationOpen && (
-                  <div className="fixed z-[80] left-3 right-3 top-[calc(env(safe-area-inset-top)+82px)] sm:left-auto sm:right-4 sm:w-[380px] rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden">
+                  <div className="fixed left-4 right-4 top-[calc(env(safe-area-inset-top)+72px)] z-[80] overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-900 shadow-2xl sm:left-auto sm:right-6 sm:w-[380px]">
                     <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-800">
                       <div>
                         <p className="text-sm font-bold text-white">Bildirimler</p>
@@ -496,8 +495,9 @@ export default function Layout() {
 
               <button
                 onClick={toggleTheme}
-                className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-cyan-300 hover:bg-cyan-500/10"
+                className="icon-button text-cyan-300"
                 title={theme === 'dark' ? 'Gündüz Modu' : 'Gece Modu'}
+                aria-label={theme === 'dark' ? 'Gündüz moduna geç' : 'Gece moduna geç'}
               >
                 {theme === 'dark' ? (
                   <Sun className="w-4 h-4" />
@@ -506,90 +506,31 @@ export default function Layout() {
                 )}
               </button>
 
-              <div className="hidden sm:block text-right">
-                <p className="text-xs text-slate-400 leading-tight">Kullanıcı</p>
-
-                <p className="text-sm text-slate-200 font-medium leading-tight max-w-[140px] truncate">
+              <div className="hidden border-l border-slate-800 pl-3 text-right sm:block">
+                <p className="max-w-[150px] truncate text-sm font-medium leading-tight text-slate-200">
                   {profile?.full_name || 'Kullanıcı'}
+                </p>
+
+                <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.1em] text-slate-500">
+                  {roleLabel}
                 </p>
               </div>
 
               <button
                 onClick={handleSignOut}
-                className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-300 hover:text-red-200 hover:bg-red-500/10"
+                className="icon-button text-slate-400 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-300"
                 title="Çıkış Yap"
+                aria-label="Çıkış yap"
               >
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          <div className="mt-3 flex items-center gap-1 overflow-x-auto overflow-y-hidden border-t border-slate-800/70 pt-2">
-            <NavLink
-              to="/search"
-              className={({ isActive }) =>
-                `shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                  isActive
-                    ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/30'
-                    : 'bg-slate-900 text-slate-300 border-slate-800'
-                }`
-              }
-            >
-              <Search className="w-4 h-4" />
-              Arama
-            </NavLink>
-
-            <NavLink
-              to="/export"
-              className={({ isActive }) =>
-                `shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                  isActive
-                    ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/30'
-                    : 'bg-slate-900 text-slate-300 border-slate-800'
-                }`
-              }
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              Excel
-            </NavLink>
-
-            <NavLink
-              to="/archive"
-              className={({ isActive }) =>
-                `shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                  isActive
-                    ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/30'
-                    : 'bg-slate-900 text-slate-300 border-slate-800'
-                }`
-              }
-            >
-              <Archive className="w-4 h-4" />
-              Arşiv
-            </NavLink>
-
-            <NavLink
-              to="/competitor-cases"
-              className={({ isActive }) =>
-                `shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                  isActive
-                    ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/30'
-                    : 'bg-slate-900 text-slate-300 border-slate-800'
-                }`
-              }
-            >
-              <Users className="w-4 h-4" />
-              Rakip
-            </NavLink>
-
-            <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500">
-              <Activity className="w-4 h-4 text-cyan-300" />
-              TAVI Panel
-            </div>
-          </div>
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto w-full max-w-[1440px] overflow-x-hidden px-3 py-5 pb-10 sm:px-6 lg:py-7">
+      <main className="app-container relative z-10 py-5 pb-10 sm:py-6 lg:py-8">
         <Outlet />
       </main>
     </div>
