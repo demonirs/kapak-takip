@@ -149,26 +149,26 @@ function StatCard({
   iconContainerClassName,
 }: StatCardProps) {
   return (
-    <div className="min-w-[150px] px-4 py-3 sm:min-w-0 sm:border-r sm:border-slate-700/70 sm:last:border-r-0">
-      <div className="flex items-start justify-between gap-3">
+    <div className="min-w-0 rounded-lg border border-slate-800 bg-slate-900/65 p-3">
+      <div className="flex min-w-0 items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 sm:text-xs">
             {label}
           </p>
 
-          <p className="mt-1.5 text-2xl font-semibold leading-none text-white">
+          <p className="mt-1.5 text-xl font-semibold leading-none text-white sm:text-2xl">
             {value}
           </p>
         </div>
 
         <div
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${iconContainerClassName}`}
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border ${iconContainerClassName}`}
         >
           <Icon className={`h-4 w-4 ${iconClassName}`} />
         </div>
       </div>
 
-      <p className="mt-2 truncate text-[11px] text-slate-500">
+      <p className="mt-2 truncate text-[10px] leading-4 text-slate-500 sm:text-[11px]">
         {description}
       </p>
     </div>
@@ -495,7 +495,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-5">
+      <div className="surface p-4">
         <div className="flex items-center gap-3 text-sm text-slate-300">
           <RefreshCw className="h-4 w-4 animate-spin text-cyan-300" />
           Ana sayfa yükleniyor...
@@ -534,40 +534,40 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-4 pb-4 sm:space-y-5">
-      <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="min-w-0 space-y-4 pb-4">
+      <section className="page-header">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-400 sm:text-xs">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-400">
             ValveFlow
           </p>
 
-          <h1 className="mt-1 text-xl font-bold text-white sm:text-2xl">
+          <h1 className="page-title mt-1">
             Ana Sayfa
           </h1>
 
-          <p className="mt-1 text-xs text-slate-400 sm:text-sm">
+          <p className="page-description">
             TAVI vaka ve kapak yönetim özetiniz
           </p>
         </div>
 
         <Link
           to="/add"
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-cyan-950/30 transition hover:bg-cyan-500 sm:w-auto"
+          className="button-primary w-full sm:w-auto"
         >
           <Plus className="h-4 w-4" />
           Yeni Vaka
         </Link>
       </section>
 
-      <section className="-mx-1 overflow-x-auto px-1 pb-1 sm:mx-0 sm:overflow-visible sm:px-0">
-        <div className="flex divide-x divide-slate-700/70 rounded-xl border border-slate-700/80 bg-slate-800/45 sm:grid sm:grid-cols-2 sm:divide-x-0 lg:grid-cols-3 xl:grid-cols-6 xl:divide-x">
+      <section className="w-full max-w-full">
+        <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <StatCard
-            label="Toplam Vaka"
-            value={stats.totalCases}
-            description="Aktif vaka kaydı"
-            icon={Layers}
-            iconClassName="text-cyan-300"
-            iconContainerClassName="border-cyan-500/20 bg-cyan-500/10"
+            label="Toplam Stok"
+            value={stats.stockTotal}
+            description="Stokta bulunan kapak"
+            icon={Package}
+            iconClassName="text-emerald-300"
+            iconContainerClassName="border-emerald-500/20 bg-emerald-500/10"
           />
 
           <StatCard
@@ -580,12 +580,12 @@ export default function Dashboard() {
           />
 
           <StatCard
-            label="Toplam Stok"
-            value={stats.stockTotal}
-            description="Stokta bulunan kapak"
-            icon={Package}
-            iconClassName="text-emerald-300"
-            iconContainerClassName="border-emerald-500/20 bg-emerald-500/10"
+            label="Toplam Vaka"
+            value={stats.totalCases}
+            description="Aktif vaka kaydı"
+            icon={Layers}
+            iconClassName="text-cyan-300"
+            iconContainerClassName="border-cyan-500/20 bg-cyan-500/10"
           />
 
           <StatCard
@@ -625,8 +625,8 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.8fr)]">
-        <div className="overflow-hidden border-t border-slate-700/80">
+      <section className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.8fr)]">
+        <div className="surface min-w-0 overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-700/80 px-4 py-3">
             <div>
               <h2 className="text-sm font-semibold text-white">
@@ -648,7 +648,7 @@ export default function Dashboard() {
           </div>
 
           {recentCases.length === 0 ? (
-            <div className="flex min-h-[220px] flex-col items-center justify-center px-4 py-8 text-center">
+            <div className="flex min-h-[180px] flex-col items-center justify-center px-4 py-6 text-center">
               <CalendarDays className="h-7 w-7 text-slate-600" />
 
               <p className="mt-3 text-sm font-medium text-slate-300">
@@ -665,7 +665,7 @@ export default function Dashboard() {
                 <Link
                   key={caseItem.id}
                   to={`/view/${caseItem.id}`}
-                  className="group block px-4 py-3 transition hover:bg-slate-700/25"
+                  className="group block px-4 py-2.5 transition hover:bg-slate-700/25"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -705,8 +705,8 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="space-y-6">
-          <div className="overflow-hidden border-t border-slate-700/80">
+        <div className="min-w-0 space-y-4">
+          <div className="surface min-w-0 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-700/80 px-4 py-3">
               <div>
                 <h2 className="text-sm font-semibold text-white">
@@ -721,16 +721,16 @@ export default function Dashboard() {
               <Package className="h-4 w-4 text-emerald-300" />
             </div>
 
-            <div className="p-4">
-              <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center">
+            <div className="p-3.5">
+              <div className="flex min-w-0 flex-col items-center gap-4 sm:flex-row sm:items-center">
                 <div
-                  className="relative flex h-32 w-32 shrink-0 items-center justify-center rounded-full"
+                  className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full"
                   style={{
                     background: stockChartBackground,
                   }}
                 >
-                  <div className="flex h-[88px] w-[88px] flex-col items-center justify-center rounded-full border border-slate-700 bg-slate-900">
-                    <p className="text-2xl font-bold text-white">
+                  <div className="flex h-[76px] w-[76px] flex-col items-center justify-center rounded-full border border-slate-700 bg-slate-900">
+                    <p className="text-xl font-semibold text-white">
                       {stockItems.length}
                     </p>
 
@@ -808,7 +808,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="overflow-hidden border-t border-slate-700/80">
+          <div className="surface min-w-0 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-700/80 px-4 py-3">
               <div>
                 <h2 className="text-sm font-semibold text-white">
@@ -823,8 +823,8 @@ export default function Dashboard() {
               <TrendingUp className="h-4 w-4 text-cyan-300" />
             </div>
 
-            <div className="p-4">
-              <div className="flex h-36 items-end gap-2">
+            <div className="p-3.5">
+              <div className="flex h-32 min-w-0 items-end gap-1.5">
                 {monthlyTrend.map((item) => {
                   const heightPercentage =
                     item.value === 0
@@ -843,7 +843,7 @@ export default function Dashboard() {
                         {item.value}
                       </span>
 
-                      <div className="flex h-[100px] w-full items-end justify-center">
+                      <div className="flex h-[88px] w-full items-end justify-center">
                         <div
                           className="w-full max-w-8 rounded-t-md bg-gradient-to-t from-cyan-700 to-cyan-400 transition-all"
                           style={{
@@ -863,8 +863,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="space-y-6 xl:col-span-2 xl:grid xl:grid-cols-2 xl:gap-6 xl:space-y-0">
-          <div className="overflow-hidden border-t border-slate-700/80">
+        <div className="min-w-0 space-y-4 xl:col-span-2 xl:grid xl:grid-cols-2 xl:gap-4 xl:space-y-0">
+          <div className="surface min-w-0 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-700/80 px-4 py-3">
               <div>
                 <h2 className="text-sm font-semibold text-white">
@@ -879,7 +879,7 @@ export default function Dashboard() {
               <Clock3 className="h-4 w-4 text-cyan-300" />
             </div>
 
-            <div className="space-y-2 p-3">
+            <div className="p-3">
               {operationalItems.map((item) => {
                 const Icon = item.icon;
 
@@ -887,7 +887,7 @@ export default function Dashboard() {
                   <Link
                     key={item.label}
                     to={item.to}
-                    className="group flex items-center gap-3 border-b border-slate-700/60 px-1 py-3 transition last:border-b-0 hover:bg-slate-700/15"
+                    className="group flex min-w-0 items-center gap-3 border-b border-slate-700/60 px-1 py-2.5 transition last:border-b-0 hover:bg-slate-700/15"
                   >
                     <div
                       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${item.iconContainerClassName}`}
@@ -920,7 +920,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="overflow-hidden border-t border-slate-700/80">
+          <div className="surface min-w-0 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-700/80 px-4 py-3">
               <div>
                 <h2 className="text-sm font-semibold text-white">
