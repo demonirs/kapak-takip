@@ -275,7 +275,7 @@ export default function Layout() {
   }
 
   return (
-    <div className="relative min-h-dvh bg-slate-950 text-white overflow-x-hidden">
+    <div className="relative min-h-dvh bg-slate-950 text-white overflow-x-hidden selection:bg-cyan-500/30">
       <BackgroundWatermark />
 
       {menuOpen && (
@@ -286,7 +286,7 @@ export default function Layout() {
       )}
 
       <aside
-        className={`fixed top-0 left-0 z-50 h-dvh w-[82%] max-w-[320px] bg-slate-950 border-r border-slate-800 shadow-2xl transition-transform duration-300 pt-[env(safe-area-inset-top)] ${
+        className={`fixed top-0 left-0 z-50 h-dvh w-[82%] max-w-[300px] bg-slate-950 border-r border-slate-800 shadow-2xl transition-transform duration-300 pt-[env(safe-area-inset-top)] ${
           menuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -327,7 +327,7 @@ export default function Layout() {
                       to={item.to}
                       onClick={() => setMenuOpen(false)}
                       className={({ isActive }) =>
-                        `flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium ${
+                        `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium ${
                           isActive
                             ? 'bg-cyan-500/15 text-cyan-200'
                             : 'text-slate-300 hover:bg-slate-900 hover:text-white'
@@ -353,8 +353,8 @@ export default function Layout() {
         </div>
       </aside>
 
-      <header className="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800 pt-[env(safe-area-inset-top)]">
-        <div className="px-3 sm:px-4 py-3">
+      <header className="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 pt-[env(safe-area-inset-top)]">
+        <div className="mx-auto max-w-[1440px] px-3 py-3 sm:px-6">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <button
@@ -524,11 +524,11 @@ export default function Layout() {
             </div>
           </div>
 
-          <div className="mt-3 flex items-center gap-2 overflow-x-auto overflow-y-hidden pb-1">
+          <div className="mt-3 flex items-center gap-1 overflow-x-auto overflow-y-hidden border-t border-slate-800/70 pt-2">
             <NavLink
               to="/search"
               className={({ isActive }) =>
-                `shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border ${
+                `shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${
                   isActive
                     ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/30'
                     : 'bg-slate-900 text-slate-300 border-slate-800'
@@ -542,7 +542,7 @@ export default function Layout() {
             <NavLink
               to="/export"
               className={({ isActive }) =>
-                `shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border ${
+                `shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${
                   isActive
                     ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/30'
                     : 'bg-slate-900 text-slate-300 border-slate-800'
@@ -556,7 +556,7 @@ export default function Layout() {
             <NavLink
               to="/archive"
               className={({ isActive }) =>
-                `shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border ${
+                `shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${
                   isActive
                     ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/30'
                     : 'bg-slate-900 text-slate-300 border-slate-800'
@@ -570,7 +570,7 @@ export default function Layout() {
             <NavLink
               to="/competitor-cases"
               className={({ isActive }) =>
-                `shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border ${
+                `shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${
                   isActive
                     ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/30'
                     : 'bg-slate-900 text-slate-300 border-slate-800'
@@ -581,7 +581,7 @@ export default function Layout() {
               Rakip
             </NavLink>
 
-            <div className="shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium bg-slate-900 border border-slate-800 text-slate-400">
+            <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500">
               <Activity className="w-4 h-4 text-cyan-300" />
               TAVI Panel
             </div>
@@ -589,7 +589,7 @@ export default function Layout() {
         </div>
       </header>
 
-      <main className="relative z-10 w-full max-w-5xl mx-auto px-3 sm:px-4 py-4 pb-8 overflow-x-hidden">
+      <main className="relative z-10 mx-auto w-full max-w-[1440px] overflow-x-hidden px-3 py-5 pb-10 sm:px-6 lg:py-7">
         <Outlet />
       </main>
     </div>
