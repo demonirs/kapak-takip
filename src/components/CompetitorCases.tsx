@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { PlusCircle, Trash2 } from 'lucide-react';
+mport { useEffect, useMemo, useState } from 'react';
+import { CalendarDays, Plus, Trash2, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -25,9 +25,9 @@ const MARKALAR = [
 
 function StatCard({ title, value }: { title: string; value: number }) {
   return (
-    <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-      <div className="text-sm text-slate-400">{title}</div>
-      <div className="text-2xl font-bold">{value}</div>
+    <div className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2.5">
+      <div className="truncate text-xs text-slate-400">{title}</div>
+      <div className="text-sm font-bold text-white">{value}</div>
     </div>
   );
 }
@@ -44,6 +44,7 @@ export default function CompetitorCases() {
   const [items, setItems] = useState<CompetitorCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
   const [merkez, setMerkez] = useState('');
   const [doktor, setDoktor] = useState('');
@@ -125,6 +126,7 @@ export default function CompetitorCases() {
     setNotlar('');
     setDigerAciklama('');
     setMessage('Rakip vaka eklendi.');
+    setIsFormOpen(false);
 
     await loadCases();
   }
@@ -197,15 +199,29 @@ export default function CompetitorCases() {
   }
 
   return (
-    <div className="space-y-6 pb-24 overflow-y-auto">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Rakip Vakalar</h1>
-        <p className="text-slate-400">
-          Merkez bazlı TAVI rakip kapak kullanım takibi
-        </p>
+    <div className="space-y-4 pb-24">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-white sm:text-2xl">Rakip Vakalar</h1>
+          <p className="mt-1 text-sm text-slate-400">
+            Merkez bazlı TAVI rakip kapak kullanım takibi
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setIsFormOpen(value => !value);
+            setMessage('');
+          }}
+          className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-500 sm:w-auto"
+        >
+          {isFormOpen ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+          {isFormOpen ? 'Formu Kapat' : 'Yeni Rakip Vaka'}
+        </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
         <StatCard title="Toplam" value={stats.total} />
         <StatCard title="Meril" value={stats.meril} />
         <StatCard title="Allegra" value={stats.allegra} />
@@ -215,7 +231,8 @@ export default function CompetitorCases() {
         <StatCard title="Diğer" value={stats.diger} />
       </div>
 
-      <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 space-y-4">
+      {isFormOpen && (
+      <div className="space-y-4 rounded-xl border border-cyan-500/25 bg-slate-800/70 p-4">
         <h2 className="text-lg font-semibold text-white">Yeni Rakip Vaka</h2>
 
         <div className="grid md:grid-cols-3 gap-3">
@@ -293,14 +310,21 @@ export default function CompetitorCases() {
           onClick={addCase}
           className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-4 py-2 text-white font-medium"
         >
-          <PlusCircle className="w-4 h-4" />
+          <Plus className="w-4 h-4" />
           Kaydet
         </button>
 
         {message && <div className="text-sm text-slate-300">{message}</div>}
       </div>
+      )}
 
-      <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 space-y-4">
+      {!isFormOpen && message && (
+        <div role="status" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-300">
+          {message}
+        </div>
+      )}
+
+      <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-800/70 p-3.5">
         <h2 className="text-lg font-semibold text-white">Filtreler</h2>
 
         <div className="grid md:grid-cols-4 gap-3">
@@ -372,76 +396,117 @@ export default function CompetitorCases() {
       </div>
 
       {loading ? (
-        <div className="text-slate-400">Yükleniyor...</div>
+        <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-8 text-center text-sm text-slate-400">Rakip vakalar yükleniyor...</div>
       ) : (
-        <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-          <div className="w-full max-w-full overflow-x-auto overflow-y-visible">
-            <table className="min-w-[900px] w-full">
-              <thead className="bg-slate-700">
-                <tr>
-                  <th className="text-left p-3 whitespace-nowrap">TARİH</th>
-                  <th className="text-left p-3 whitespace-nowrap">MERKEZ</th>
-                  <th className="text-left p-3 whitespace-nowrap">DOKTOR</th>
-                  <th className="text-left p-3 whitespace-nowrap">MARKA</th>
-                  <th className="text-left p-3 whitespace-nowrap">AÇIKLAMA</th>
-                  <th className="text-left p-3 whitespace-nowrap">NOT</th>
+        <>
+        {filteredItems.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-700 bg-slate-800/50 p-8 text-center text-sm text-slate-400">
+            Filtrelere uygun rakip vaka bulunamadı.
+          </div>
+        ) : (
+          <>
+          <div className="space-y-2.5 md:hidden">
+            {filteredItems.map(item => (
+              <article key={item.id} className="rounded-xl border border-slate-700 bg-slate-800/70 p-3.5">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                      <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-semibold text-cyan-300">
+                        {item.marka}
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                        <CalendarDays className="h-3.5 w-3.5" />
+                        {formatDate(item.vaka_tarihi)}
+                      </span>
+                    </div>
+                    <h2 className="break-words text-sm font-semibold text-slate-100">{item.merkez}</h2>
+                    <p className="mt-1 break-words text-xs text-slate-400">{item.doktor || 'Doktor bilgisi yok'}</p>
+                  </div>
+
                   {isAdmin && (
-                    <th className="text-left p-3 whitespace-nowrap">SİL</th>
+                    <button
+                      type="button"
+                      onClick={() => deleteCase(item.id)}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-red-300 transition hover:bg-red-500/10"
+                      aria-label={`${item.merkez} rakip vaka kaydını sil`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+
+                {(item.diger_aciklama || item.notlar) && (
+                  <div className="mt-3 space-y-1.5 border-t border-slate-700/70 pt-3 text-xs">
+                    {item.diger_aciklama && <p className="break-words text-slate-300"><span className="text-slate-500">Açıklama:</span> {item.diger_aciklama}</p>}
+                    {item.notlar && <p className="break-words text-slate-300"><span className="text-slate-500">Not:</span> {item.notlar}</p>}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+
+        <div className="hidden overflow-hidden rounded-xl border border-slate-700 bg-slate-800/70 md:block">
+            <table className="w-full table-fixed">
+              <thead className="border-b border-slate-700 bg-slate-900/50">
+                <tr>
+                  <th className="w-[13%] p-3 text-left text-xs text-slate-400">TARİH</th>
+                  <th className="w-[20%] p-3 text-left text-xs text-slate-400">MERKEZ</th>
+                  <th className="w-[17%] p-3 text-left text-xs text-slate-400">DOKTOR</th>
+                  <th className="w-[12%] p-3 text-left text-xs text-slate-400">MARKA</th>
+                  <th className="w-[16%] p-3 text-left text-xs text-slate-400">AÇIKLAMA</th>
+                  <th className="w-[16%] p-3 text-left text-xs text-slate-400">NOT</th>
+                  {isAdmin && (
+                    <th className="w-[6%] p-3 text-right text-xs text-slate-400">İŞLEM</th>
                   )}
                 </tr>
               </thead>
 
               <tbody>
-                {filteredItems.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={isAdmin ? 7 : 6}
-                      className="p-4 text-slate-400 text-center"
-                    >
-                      Filtrelere uygun rakip vaka bulunamadı.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredItems.map(item => (
+                  {filteredItems.map(item => (
                     <tr key={item.id} className="border-t border-slate-700">
-                      <td className="p-3 whitespace-nowrap">
+                      <td className="whitespace-nowrap p-3 text-xs text-slate-400">
                         {formatDate(item.vaka_tarihi)}
                       </td>
 
-                      <td className="p-3 whitespace-nowrap">{item.merkez}</td>
+                      <td className="p-3"><div className="truncate text-sm font-medium text-slate-100" title={item.merkez}>{item.merkez}</div></td>
 
-                      <td className="p-3 whitespace-nowrap">
+                      <td className="p-3 text-sm">
+                        <div className="truncate" title={item.doktor || '-'}>
                         {item.doktor || '-'}
+                        </div>
                       </td>
 
-                      <td className="p-3 whitespace-nowrap">{item.marka}</td>
+                      <td className="p-3"><span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-xs font-semibold text-cyan-300">{item.marka}</span></td>
 
-                      <td className="p-3 whitespace-nowrap">
+                      <td className="p-3 text-sm"><div className="truncate" title={item.diger_aciklama || '-'}>
                         {item.diger_aciklama || '-'}
+                      </div>
                       </td>
 
-                      <td className="p-3 whitespace-nowrap">
+                      <td className="p-3 text-sm"><div className="truncate" title={item.notlar || '-'}>
                         {item.notlar || '-'}
+                      </div>
                       </td>
 
                       {isAdmin && (
-                        <td className="p-3 whitespace-nowrap">
+                        <td className="p-3 text-right">
                           <button
                             onClick={() => deleteCase(item.id)}
-                            className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-red-300 hover:bg-red-500/10"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-red-300 hover:bg-red-500/10"
+                            aria-label={`${item.merkez} rakip vaka kaydını sil`}
                           >
                             <Trash2 className="w-4 h-4" />
-                            Sil
                           </button>
                         </td>
                       )}
                     </tr>
-                  ))
-                )}
+                  ))}
               </tbody>
             </table>
-          </div>
         </div>
+        </>
+        )}
+        </>
       )}
     </div>
   );
