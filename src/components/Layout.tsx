@@ -328,6 +328,7 @@ export default function Layout() {
 
     setPushLoading(true);
     setPushMessage('');
+    setNotificationOpen(false);
 
     try {
       await enablePushNotifications(profile.id);
@@ -618,7 +619,7 @@ export default function Layout() {
                               }`}
                             >
                               {pushLoading ? (
-                                <LoaderCircle className="h-4 w-4 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                               ) : pushStatus === 'enabled' ? (
                                 <BellRing className="h-4 w-4" />
                               ) : (
