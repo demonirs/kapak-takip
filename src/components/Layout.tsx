@@ -18,7 +18,7 @@ import {
   Menu,
   Moon,
   Info,
-  LoaderCircle,
+  Loader2,
   Package,
   PlusCircle,
   Search,
