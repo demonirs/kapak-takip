@@ -1335,7 +1335,7 @@ export default function Stock() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6 overflow-y-auto pb-24">
+    <div className="mx-auto max-w-[1600px] space-y-4 pb-24">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-white sm:text-2xl">
@@ -1365,13 +1365,13 @@ export default function Stock() {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-1 rounded-xl border border-white/[0.08] bg-slate-900/50 p-1.5">
+      <div className="grid grid-cols-3 gap-1 rounded-xl border border-white/[0.08] bg-slate-900/50 p-1">
         <button
           type="button"
           onClick={() =>
             selectTab('mevcut')
           }
-          className={`rounded-lg border px-3 py-2.5 text-left transition sm:px-4 ${tabClass(
+          className={`rounded-lg border px-2.5 py-2 text-left transition sm:px-4 ${tabClass(
             'mevcut'
           )}`}
         >
@@ -1379,7 +1379,7 @@ export default function Stock() {
             Mevcut
           </div>
 
-          <div className="mt-0.5 text-xl font-semibold sm:text-2xl">
+          <div className="mt-0.5 text-lg font-semibold sm:text-xl">
             {mevcutItems.length}
           </div>
         </button>
@@ -1389,7 +1389,7 @@ export default function Stock() {
           onClick={() =>
             selectTab('bu-ay')
           }
-          className={`rounded-lg border px-3 py-2.5 text-left transition sm:px-4 ${tabClass(
+          className={`rounded-lg border px-2.5 py-2 text-left transition sm:px-4 ${tabClass(
             'bu-ay'
           )}`}
         >
@@ -1397,7 +1397,7 @@ export default function Stock() {
             Bu Ay
           </div>
 
-          <div className="mt-0.5 text-xl font-semibold sm:text-2xl">
+          <div className="mt-0.5 text-lg font-semibold sm:text-xl">
             {currentMonthItems.length}
           </div>
         </button>
@@ -1407,7 +1407,7 @@ export default function Stock() {
           onClick={() =>
             selectTab('gecmis')
           }
-          className={`rounded-lg border px-3 py-2.5 text-left transition sm:px-4 ${tabClass(
+          className={`rounded-lg border px-2.5 py-2 text-left transition sm:px-4 ${tabClass(
             'gecmis'
           )}`}
         >
@@ -1415,7 +1415,7 @@ export default function Stock() {
             Geçmiş
           </div>
 
-          <div className="mt-0.5 text-xl font-semibold sm:text-2xl">
+          <div className="mt-0.5 text-lg font-semibold sm:text-xl">
             {allHistoryItems.length}
           </div>
         </button>
@@ -1462,7 +1462,7 @@ export default function Stock() {
       </div>
 
       {activeTab === 'mevcut' && (
-        <div className="space-y-5 rounded-2xl border border-white/[0.08] bg-slate-900/50 p-4 shadow-2xl shadow-black/10 sm:p-6">
+        <div className="space-y-4 rounded-xl border border-white/[0.08] bg-slate-900/50 p-3.5 shadow-xl shadow-black/10 sm:p-5">
           <div>
             <label
               htmlFor="stock-barcode"
@@ -1491,7 +1491,7 @@ export default function Stock() {
               placeholder="Barkod okut veya yapıştır"
               autoFocus
               autoComplete="off"
-              className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-4 text-lg font-medium text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400/70 focus:ring-4 focus:ring-cyan-500/10 sm:px-5 sm:py-5 sm:text-xl"
+              className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-base font-medium text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400/70 focus:ring-4 focus:ring-cyan-500/10 sm:text-lg"
             />
             <p className="mt-2 flex items-center gap-1.5 text-xs text-emerald-400/80">
               <CheckCircle2 className="h-3.5 w-3.5" />
@@ -1659,7 +1659,7 @@ export default function Stock() {
               </button>
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg bg-black/20 px-4 py-3 text-sm">
+            <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-black/20 px-3 py-2.5 text-center text-xs sm:flex sm:items-center sm:gap-6 sm:text-left sm:text-sm">
               <p className="text-slate-400">Okutulan <strong className="ml-1 text-white">{auditEntries.length}</strong></p>
               <p className="text-slate-400">Bulunan <strong className="ml-1 text-emerald-400">{auditFoundCount}</strong></p>
               <p className="text-slate-400">Eksik <strong className="ml-1 text-amber-400">{auditMissingCount}</strong></p>
@@ -1795,7 +1795,79 @@ export default function Stock() {
           Yükleniyor...
         </div>
       ) : activeTab === 'mevcut' ? (
-        <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-800">
+        <>
+        <div className="space-y-2.5 md:hidden">
+          {filteredStockItems.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-800/60 p-6 text-center text-sm text-slate-400">
+              Bu filtreye uygun stok kaydı bulunamadı.
+            </div>
+          ) : filteredStockItems.map(item => {
+            const isHighlighted =
+              auditResult?.status === 'found' &&
+              auditResult.stockItemId === item.id;
+            const isAuditedFound = auditedFoundStockIds.has(item.id);
+
+            return (
+              <article
+                key={item.id}
+                ref={isHighlighted ? highlightedRowRef : null}
+                className={`rounded-xl border p-3.5 transition ${
+                  isHighlighted
+                    ? 'border-emerald-400 bg-emerald-500/15 ring-1 ring-emerald-400/60'
+                    : isAuditedFound
+                      ? 'border-emerald-500/40 bg-emerald-500/10'
+                      : 'border-slate-700 bg-slate-800/70'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="break-words text-sm font-semibold text-slate-100">
+                        {item.urun_adi}
+                      </h2>
+                      {isAuditedFound && (
+                        <span className="rounded-md border border-emerald-400/40 bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-200">
+                          {isHighlighted ? 'SON BULUNAN' : 'DENETLENDİ'}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 font-mono text-xs font-semibold text-cyan-300">
+                      {normalizeLot(item.lot_no)}
+                    </p>
+                  </div>
+
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => void deleteStockItem(item.id)}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-red-300 hover:bg-red-500/10"
+                      aria-label={`${normalizeLot(item.lot_no)} stok kaydını sil`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-700/70 pt-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-500">Boyut</p>
+                    <p className="mt-1 text-xs font-semibold text-white">{item.kapak_boyutu} mm</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-500">SKT</p>
+                    <p className="mt-1 text-xs text-slate-300">{formatDate(item.son_kullanma_tarihi)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-500">Kalan</p>
+                    <p className="mt-1 text-xs text-slate-300">{kalanGun(item.son_kullanma_tarihi)} gün</p>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+
+        <div className="hidden overflow-hidden rounded-xl border border-slate-700 bg-slate-800 md:block">
           <table className="w-full min-w-[900px]">
             <thead className="bg-slate-700">
               <tr>
@@ -1892,7 +1964,7 @@ export default function Stock() {
                           mm
                         </td>
 
-                        <td className="p-3 font-semibold text-cyan-300">
+                        <td className="p-3 font-mono text-xs font-semibold text-cyan-300">
                           {normalizeLot(
                             item.lot_no
                           )}
@@ -1934,8 +2006,57 @@ export default function Stock() {
             </tbody>
           </table>
         </div>
+        </>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-800">
+        <>
+        <div className="space-y-2.5 md:hidden">
+          {filteredUsageItems.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-800/60 p-6 text-center text-sm text-slate-400">
+              Bu filtreye uygun kullanım kaydı bulunamadı.
+            </div>
+          ) : filteredUsageItems.map(item => (
+            <article key={item.key} className="rounded-xl border border-slate-700 bg-slate-800/70 p-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="break-words text-sm font-semibold text-slate-100">{item.urun_adi}</h2>
+                    <span className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold ${
+                      item.source === 'valveflow'
+                        ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
+                        : 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                    }`}>
+                      {item.source === 'valveflow' ? 'ValveFlow' : 'Eski Kayıt'}
+                    </span>
+                  </div>
+                  <p className="mt-1 font-mono text-xs font-semibold text-cyan-300">
+                    {item.lot_no ? normalizeLot(item.lot_no) : '-'}
+                  </p>
+                </div>
+
+                {item.caseId && (
+                  <button
+                    type="button"
+                    onClick={() => openCase(item.caseId)}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-cyan-300 hover:bg-cyan-500/10"
+                    aria-label="İlgili vakayı aç"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-700/70 pt-3 text-xs">
+                <div><span className="text-slate-500">Boyut:</span> <span className="text-slate-300">{item.kapak_boyutu ? `${item.kapak_boyutu} mm` : '-'}</span></div>
+                <div><span className="text-slate-500">Kullanım:</span> <span className="text-slate-300">{formatDate(item.kullanim_tarihi)}</span></div>
+                <div className="min-w-0"><span className="text-slate-500">Hasta:</span> <span className="break-words text-slate-300">{item.hasta_adi || '-'}</span></div>
+                <div className="min-w-0"><span className="text-slate-500">Doktor:</span> <span className="break-words text-slate-300">{item.doktor || '-'}</span></div>
+                <div className="col-span-2 min-w-0"><span className="text-slate-500">Merkez:</span> <span className="break-words text-slate-300">{item.merkez_hastane || '-'}</span></div>
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <div className="hidden overflow-x-auto rounded-xl border border-slate-700 bg-slate-800 md:block">
           <table className="w-full min-w-[1100px]">
             <thead className="bg-slate-700">
               <tr>
@@ -2010,7 +2131,7 @@ export default function Stock() {
                           : '-'}
                       </td>
 
-                      <td className="p-3 font-semibold text-cyan-300">
+                      <td className="p-3 font-mono text-xs font-semibold text-cyan-300">
                         {item.lot_no
                           ? normalizeLot(
                               item.lot_no
@@ -2084,6 +2205,7 @@ export default function Stock() {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );
