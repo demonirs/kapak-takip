@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Archive,
@@ -94,6 +95,7 @@ export default function Layout() {
   const navigate = useNavigate();
 
   const notificationRef = useRef<HTMLDivElement | null>(null);
+  const notificationPanelRef = useRef<HTMLElement | null>(null);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -193,7 +195,8 @@ export default function Layout() {
     function handleClickOutside(event: MouseEvent) {
       if (
         notificationRef.current &&
-        !notificationRef.current.contains(event.target as Node)
+        !notificationRef.current.contains(event.target as Node) &&
+        !notificationPanelRef.current?.contains(event.target as Node)
       ) {
         setNotificationOpen(false);
       }
@@ -460,7 +463,7 @@ export default function Layout() {
                   )}
                 </button>
 
-                {notificationOpen && (
+                {notificationOpen && createPortal(
                   <>
                     <div
                       className="fixed inset-0 z-[70] bg-slate-950/60 backdrop-blur-[2px] sm:hidden"
@@ -469,6 +472,7 @@ export default function Layout() {
                     />
 
                     <section
+                      ref={notificationPanelRef}
                       aria-label="Bildirim paneli"
                       className="fixed inset-x-0 bottom-0 z-[80] flex max-h-[min(82dvh,680px)] flex-col overflow-hidden rounded-t-2xl border border-b-0 border-slate-700/80 bg-slate-900 shadow-2xl sm:bottom-auto sm:left-auto sm:right-5 sm:top-[calc(env(safe-area-inset-top)+68px)] sm:w-[400px] sm:rounded-2xl sm:border-b"
                     >
@@ -630,7 +634,8 @@ export default function Layout() {
                         )}
                       </div>
                     </section>
-                  </>
+                  </>,
+                  document.body
                 )}
               </div>
 
