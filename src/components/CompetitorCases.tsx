@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, Check, ChevronDown, Plus, Trash2, X } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, Filter, Plus, Trash2, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -146,6 +146,7 @@ export default function CompetitorCases() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
   const [merkez, setMerkez] = useState('');
   const [doktor, setDoktor] = useState('');
@@ -295,6 +296,15 @@ export default function CompetitorCases() {
     };
   }, [filteredItems]);
 
+  const activeFilterCount = useMemo(() => {
+    return [
+      filterBrand !== 'Tümü',
+      Boolean(startDate),
+      Boolean(endDate),
+      Boolean(searchText.trim()),
+    ].filter(Boolean).length;
+  }, [filterBrand, startDate, endDate, searchText]);
+
   function formatDate(date: string) {
     return new Date(date).toLocaleDateString('tr-TR');
   }
@@ -420,8 +430,90 @@ export default function CompetitorCases() {
         </div>
       )}
 
-      <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-800/70 p-3.5">
-        <h2 className="text-lg font-semibold text-white">Filtreler</h2>
+      <div className="space-y-2.5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <button
+            type="button"
+            onClick={() => setIsFiltersOpen(open => !open)}
+            aria-expanded={isFiltersOpen}
+            className={`inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition sm:w-auto ${
+              isFiltersOpen || activeFilterCount > 0
+                ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-200'
+                : 'border-slate-700 bg-slate-800/70 text-slate-300 hover:border-slate-600 hover:text-white'
+            }`}
+          >
+            <Filter className="h-4 w-4" />
+            Filtreler
+            {activeFilterCount > 0 && (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-md bg-cyan-400/20 px-1.5 text-[11px] font-bold text-cyan-100">
+                {activeFilterCount}
+              </span>
+            )}
+            <ChevronDown
+              className={`h-4 w-4 text-slate-400 transition-transform ${
+                isFiltersOpen ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+
+          <div className="text-xs text-slate-400 sm:text-sm">
+            Gösterilen kayıt:{' '}
+            <strong className="text-white">{filteredItems.length}</strong>
+          </div>
+        </div>
+
+        {!isFiltersOpen && activeFilterCount > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {filterBrand !== 'Tümü' && (
+              <span className="rounded-md border border-cyan-500/25 bg-cyan-500/10 px-2 py-1 text-[11px] text-cyan-200">
+                Marka: {filterBrand}
+              </span>
+            )}
+
+            {startDate && (
+              <span className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] text-slate-300">
+                Başlangıç: {formatDate(startDate)}
+              </span>
+            )}
+
+            {endDate && (
+              <span className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] text-slate-300">
+                Bitiş: {formatDate(endDate)}
+              </span>
+            )}
+
+            {searchText.trim() && (
+              <span className="max-w-full truncate rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] text-slate-300">
+                Arama: {searchText.trim()}
+              </span>
+            )}
+
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="inline-flex min-h-7 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-red-300 transition hover:bg-red-500/10"
+            >
+              <X className="h-3.5 w-3.5" />
+              Temizle
+            </button>
+          </div>
+        )}
+
+        {isFiltersOpen && (
+        <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-800/70 p-3.5">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-white">Filtre Seçenekleri</h2>
+
+            {activeFilterCount > 0 && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="rounded-lg px-3 py-2 text-xs font-medium text-red-300 transition hover:bg-red-500/10"
+              >
+                Filtreleri Temizle
+              </button>
+            )}
+          </div>
 
         <div className="grid md:grid-cols-4 gap-3">
           <div>
@@ -471,18 +563,17 @@ export default function CompetitorCases() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm text-slate-400">
-            Gösterilen kayıt: <b className="text-white">{filteredItems.length}</b>
-          </div>
-
+        <div className="flex justify-end">
           <button
-            onClick={clearFilters}
-            className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-slate-300 hover:border-cyan-500/60 hover:text-white"
+            type="button"
+            onClick={() => setIsFiltersOpen(false)}
+            className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-500"
           >
-            Filtreleri Temizle
+            Sonuçları Göster
           </button>
         </div>
+        </div>
+        )}
       </div>
 
       {loading ? (
