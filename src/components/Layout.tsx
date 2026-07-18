@@ -5,6 +5,8 @@ import {
   Archive,
   AlertTriangle,
   Bell,
+  BellOff,
+  BellRing,
   CheckCircle2,
   CheckCheck,
   Circle,
@@ -16,6 +18,7 @@ import {
   Menu,
   Moon,
   Info,
+  LoaderCircle,
   Package,
   PlusCircle,
   Search,
@@ -28,6 +31,12 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  getPushNotificationStatus,
+  type PushNotificationStatus,
+} from '../lib/pushNotifications';
 
 type NotificationItem = {
   id: string;
@@ -103,6 +112,10 @@ export default function Layout() {
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationFilter, setNotificationFilter] =
     useState<NotificationFilter>('all');
+  const [pushStatus, setPushStatus] =
+    useState<PushNotificationStatus>('disabled');
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushMessage, setPushMessage] = useState('');
 
   const unreadCount = notifications.filter(item => !item.is_read).length;
   const visibleNotifications = notifications.filter(item =>
@@ -188,6 +201,24 @@ export default function Layout() {
 
     return () => {
       supabase.removeChannel(channel);
+    };
+  }, [profile?.id]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    let isMounted = true;
+
+    getPushNotificationStatus()
+      .then(status => {
+        if (isMounted) setPushStatus(status);
+      })
+      .catch(() => {
+        if (isMounted) setPushStatus('disabled');
+      });
+
+    return () => {
+      isMounted = false;
     };
   }, [profile?.id]);
 
@@ -289,6 +320,56 @@ export default function Layout() {
 
     if (item.related_table === 'rakip_vakalar') {
       navigate('/competitor-cases');
+    }
+  }
+
+  async function handleEnablePushNotifications() {
+    if (!profile?.id || pushLoading) return;
+
+    setPushLoading(true);
+    setPushMessage('');
+
+    try {
+      await enablePushNotifications(profile.id);
+      setPushStatus('enabled');
+      setPushMessage('Telefon bildirimleri açıldı.');
+    } catch (error) {
+      const status = await getPushNotificationStatus().catch(
+        () => 'disabled' as PushNotificationStatus
+      );
+
+      setPushStatus(status);
+      setPushMessage(
+        error instanceof Error
+          ? error.message
+          : 'Telefon bildirimleri açılamadı.'
+      );
+    } finally {
+      setPushLoading(false);
+    }
+  }
+
+  async function handleDisablePushNotifications() {
+    if (!profile?.id || pushLoading) return;
+
+    const ok = window.confirm('Bu cihazdaki telefon bildirimleri kapatılsın mı?');
+    if (!ok) return;
+
+    setPushLoading(true);
+    setPushMessage('');
+
+    try {
+      await disablePushNotifications(profile.id);
+      setPushStatus('disabled');
+      setPushMessage('Bu cihazdaki telefon bildirimleri kapatıldı.');
+    } catch (error) {
+      setPushMessage(
+        error instanceof Error
+          ? error.message
+          : 'Telefon bildirimleri kapatılamadı.'
+      );
+    } finally {
+      setPushLoading(false);
     }
   }
 
@@ -514,6 +595,94 @@ export default function Layout() {
                             <X className="h-4 w-4" />
                           </button>
                         </div>
+                      </div>
+
+                      <div className="border-b border-slate-800 px-3 py-2.5">
+                        <div
+                          className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 ${
+                            pushStatus === 'enabled'
+                              ? 'border-emerald-500/25 bg-emerald-500/[0.07]'
+                              : pushStatus === 'denied'
+                                ? 'border-red-500/25 bg-red-500/[0.07]'
+                                : 'border-slate-700 bg-slate-950/35'
+                          }`}
+                        >
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            <div
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                                pushStatus === 'enabled'
+                                  ? 'bg-emerald-500/15 text-emerald-300'
+                                  : pushStatus === 'denied'
+                                    ? 'bg-red-500/15 text-red-300'
+                                    : 'bg-slate-800 text-slate-400'
+                              }`}
+                            >
+                              {pushLoading ? (
+                                <LoaderCircle className="h-4 w-4 animate-spin" />
+                              ) : pushStatus === 'enabled' ? (
+                                <BellRing className="h-4 w-4" />
+                              ) : (
+                                <BellOff className="h-4 w-4" />
+                              )}
+                            </div>
+
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-slate-200">
+                                {pushStatus === 'enabled'
+                                  ? 'Telefon bildirimleri açık'
+                                  : pushStatus === 'denied'
+                                    ? 'Bildirim izni engellendi'
+                                    : pushStatus === 'unsupported'
+                                      ? 'Bu tarayıcı desteklemiyor'
+                                      : pushStatus === 'unconfigured'
+                                        ? 'Bildirim sistemi hazırlanıyor'
+                                        : 'Telefon bildirimleri kapalı'}
+                              </p>
+                              <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
+                                {pushStatus === 'enabled'
+                                  ? 'Uygulama kapalıyken de bildirim alırsınız.'
+                                  : pushStatus === 'denied'
+                                    ? 'Chrome site ayarlarından bildirime izin verin.'
+                                    : pushStatus === 'unsupported'
+                                      ? 'Samsung Chrome veya kurulu PWA kullanın.'
+                                      : pushStatus === 'unconfigured'
+                                        ? 'Yeni deployment sonrasında kullanılabilir.'
+                                        : 'Bu cihazda anlık bildirim almak için açın.'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {pushStatus === 'enabled' ? (
+                            <button
+                              type="button"
+                              onClick={handleDisablePushNotifications}
+                              disabled={pushLoading}
+                              className="shrink-0 rounded-lg px-3 py-2 text-xs font-semibold text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:opacity-40"
+                            >
+                              Kapat
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleEnablePushNotifications}
+                              disabled={
+                                pushLoading ||
+                                pushStatus === 'denied' ||
+                                pushStatus === 'unsupported' ||
+                                pushStatus === 'unconfigured'
+                              }
+                              className="shrink-0 rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              Aç
+                            </button>
+                          )}
+                        </div>
+
+                        {pushMessage && (
+                          <p className="mt-2 px-1 text-[11px] leading-relaxed text-slate-400">
+                            {pushMessage}
+                          </p>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-1 border-b border-slate-800 bg-slate-950/30 px-3 py-2">
