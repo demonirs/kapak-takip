@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { BarChart3, Check, ChevronDown, Trophy } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 type CompetitorCase = {
@@ -16,6 +17,8 @@ type BrandStat = {
   oran: number;
 };
 
+type Period = 'all' | '30' | '90' | '180' | '365';
+
 const MARKALAR = [
   'Medtronic',
   'Edwards',
@@ -27,10 +30,115 @@ const MARKALAR = [
   'Diğer',
 ];
 
+const PERIOD_OPTIONS: Array<{ value: Period; label: string }> = [
+  { value: 'all', label: 'Tüm Zamanlar' },
+  { value: '30', label: 'Son 30 Gün' },
+  { value: '90', label: 'Son 90 Gün' },
+  { value: '180', label: 'Son 6 Ay' },
+  { value: '365', label: 'Son 1 Yıl' },
+];
+
+type PeriodSelectProps = {
+  value: Period;
+  onChange: (value: Period) => void;
+};
+
+function PeriodSelect({ value, onChange }: PeriodSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const selectedLabel =
+    PERIOD_OPTIONS.find(option => option.value === value)?.label ||
+    'Tüm Zamanlar';
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent | TouchEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative w-full sm:w-56">
+      <button
+        type="button"
+        onClick={() => setIsOpen(open => !open)}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        className={`flex min-h-10 w-full items-center justify-between gap-3 rounded-lg border bg-slate-900 px-3 py-2 text-left text-sm text-white transition ${
+          isOpen
+            ? 'border-cyan-400 ring-2 ring-cyan-500/10'
+            : 'border-slate-700 hover:border-slate-600'
+        }`}
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+
+      {isOpen && (
+        <div
+          role="listbox"
+          aria-label="Pazar payı dönemi"
+          className="absolute left-0 right-0 z-50 mt-1.5 overflow-hidden rounded-xl border border-slate-600 bg-slate-900 p-1.5 shadow-2xl shadow-black/50"
+        >
+          {PERIOD_OPTIONS.map(option => {
+            const selected = option.value === value;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+                className={`flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition ${
+                  selected
+                    ? 'bg-cyan-500/15 text-cyan-200'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <span>{option.label}</span>
+                {selected && <Check className="h-4 w-4 text-cyan-300" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MarketShare() {
   const [items, setItems] = useState<CompetitorCase[]>([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState('all');
+  const [period, setPeriod] = useState<Period>('all');
 
   useEffect(() => {
     loadCases();
@@ -108,85 +216,117 @@ export default function MarketShare() {
   }, [filteredItems]);
 
   function periodText() {
-    if (period === '30') return 'Son 30 Gün';
-    if (period === '90') return 'Son 90 Gün';
-    if (period === '180') return 'Son 6 Ay';
-    if (period === '365') return 'Son 1 Yıl';
-    return 'Tüm Zamanlar';
+    return (
+      PERIOD_OPTIONS.find(option => option.value === period)?.label ||
+      'Tüm Zamanlar'
+    );
   }
 
   return (
-    <div className="space-y-6 pb-24 overflow-y-auto">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Pazar Payı</h1>
-        <p className="text-slate-400">
-          Rakip vaka kayıtlarına göre marka ve model dağılımı
-        </p>
-      </div>
+    <div className="space-y-4 pb-24">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-white sm:text-2xl">
+            Pazar Payı
+          </h1>
+          <p className="mt-1 text-sm text-slate-400">
+            Rakip vaka kayıtlarına göre marka ve model dağılımı
+          </p>
+        </div>
 
-      <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-        <label className="block text-sm text-slate-300 mb-2">Dönem</label>
-
-        <select
-          value={period}
-          onChange={e => setPeriod(e.target.value)}
-          className="w-full md:w-64 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
-        >
-          <option value="all">Tüm Zamanlar</option>
-          <option value="30">Son 30 Gün</option>
-          <option value="90">Son 90 Gün</option>
-          <option value="180">Son 6 Ay</option>
-          <option value="365">Son 1 Yıl</option>
-        </select>
-      </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-slate-400">
+            Dönem
+          </label>
+          <PeriodSelect value={period} onChange={setPeriod} />
+        </div>
+      </header>
 
       {loading ? (
-        <div className="text-slate-400">Yükleniyor...</div>
+        <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-8 text-center text-sm text-slate-400">
+          Pazar payı verileri yükleniyor...
+        </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-              <div className="text-sm text-slate-400">Dönem</div>
-              <div className="text-xl font-bold">{periodText()}</div>
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+            <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-3.5">
+              <div className="text-xs text-slate-400">Toplam Vaka</div>
+              <div className="mt-1 text-xl font-bold text-white">
+                {stats.total}
+              </div>
+              <div className="mt-1 truncate text-[11px] text-slate-500">
+                {periodText()}
+              </div>
             </div>
 
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-              <div className="text-sm text-slate-400">Toplam Vaka</div>
-              <div className="text-2xl font-bold">{stats.total}</div>
+            <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/[0.07] p-3.5">
+              <div className="text-xs text-slate-400">Medtronic Payı</div>
+              <div className="mt-1 text-xl font-bold text-cyan-200">
+                %{stats.medtronicShare}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-500">
+                Seçili dönem
+              </div>
             </div>
 
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-              <div className="text-sm text-slate-400">Medtronic Payı</div>
-              <div className="text-2xl font-bold">%{stats.medtronicShare}</div>
+            <div className="col-span-2 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3.5 lg:col-span-1">
+              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                <Trophy className="h-3.5 w-3.5 text-amber-300" />
+                Lider Marka
+              </div>
+              <div className="mt-1 flex items-baseline justify-between gap-3">
+                <span className="truncate text-lg font-bold text-white">
+                  {stats.leader?.marka || '-'}
+                </span>
+                <span className="shrink-0 text-sm font-semibold text-amber-200">
+                  {stats.leader ? `%${stats.leader.oran}` : '-'}
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 space-y-4">
+          <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-800/70 p-3.5 sm:p-4">
             <div>
-              <h2 className="text-lg font-semibold text-white">
+              <h2 className="text-base font-semibold text-white">
                 Marka Bazlı Pazar Payı
               </h2>
-              <p className="text-sm text-slate-400">
+              <p className="mt-0.5 text-xs text-slate-400">
                 En yüksek kullanım en üstte gösterilir.
               </p>
             </div>
 
             {stats.brandStats.length === 0 ? (
-              <div className="text-slate-400">Bu dönem için kayıt yok.</div>
+              <div className="rounded-lg border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">
+                Bu dönem için kayıt yok.
+              </div>
             ) : (
               <div className="space-y-3">
-                {stats.brandStats.map(item => (
+                {stats.brandStats.map((item, index) => (
                   <div key={item.marka}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium">{item.marka}</span>
-                      <span className="text-sm text-slate-300">
-                        {item.adet} vaka / %{item.oran}
+                    <div className="mb-1.5 flex min-w-0 items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-slate-700 text-[10px] font-bold text-slate-300">
+                          {index + 1}
+                        </span>
+                        <span className="truncate text-sm font-medium text-slate-200">
+                          {item.marka}
+                        </span>
+                      </div>
+
+                      <span className="shrink-0 text-xs text-slate-400">
+                        <strong className="text-white">{item.adet}</strong> vaka
+                        {' · '}
+                        <strong className="text-cyan-300">%{item.oran}</strong>
                       </span>
                     </div>
 
-                    <div className="h-3 rounded-full bg-slate-900 overflow-hidden">
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-900">
                       <div
-                        className="h-full rounded-full bg-cyan-500"
+                        className={`h-full rounded-full ${
+                          item.marka === 'Medtronic'
+                            ? 'bg-cyan-500'
+                            : 'bg-slate-500'
+                        }`}
                         style={{ width: `${item.oran}%` }}
                       />
                     </div>
@@ -194,45 +334,73 @@ export default function MarketShare() {
                 ))}
               </div>
             )}
-          </div>
+          </section>
 
-          <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-            <div className="p-4 border-b border-slate-700">
-              <h2 className="text-lg font-semibold text-white">
+          <section className="overflow-hidden rounded-xl border border-slate-700 bg-slate-800/70">
+            <div className="flex items-center gap-2 border-b border-slate-700 px-4 py-3">
+              <BarChart3 className="h-4 w-4 text-cyan-300" />
+              <h2 className="text-base font-semibold text-white">
                 Model Dağılımı
               </h2>
             </div>
 
-            <div className="w-full max-w-full overflow-x-auto overflow-y-visible">
-              <table className="min-w-[620px] w-full">
-                <thead className="bg-slate-700">
-                  <tr>
-                    <th className="text-left p-3 whitespace-nowrap">MODEL</th>
-                    <th className="text-left p-3 whitespace-nowrap">ADET</th>
-                    <th className="text-left p-3 whitespace-nowrap">ORAN</th>
-                  </tr>
-                </thead>
+            {modelStats.length === 0 ? (
+              <div className="p-6 text-center text-sm text-slate-400">
+                Bu dönem için model kaydı yok.
+              </div>
+            ) : (
+              <>
+                <div className="divide-y divide-slate-700/70 md:hidden">
+                  {modelStats.map(item => (
+                    <div
+                      key={item.model}
+                      className="flex items-center justify-between gap-3 px-4 py-3"
+                    >
+                      <span className="min-w-0 break-words text-sm font-medium text-slate-200">
+                        {item.model}
+                      </span>
 
-                <tbody>
-                  {modelStats.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="p-4 text-slate-400 text-center">
-                        Bu dönem için model kaydı yok.
-                      </td>
+                      <div className="shrink-0 text-right">
+                        <div className="text-sm font-semibold text-white">
+                          {item.adet} vaka
+                        </div>
+                        <div className="text-xs text-cyan-300">%{item.oran}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <table className="hidden w-full table-fixed md:table">
+                  <thead className="bg-slate-900/50">
+                    <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      <th className="w-[65%] px-4 py-2.5">Model</th>
+                      <th className="w-[18%] px-4 py-2.5">Adet</th>
+                      <th className="w-[17%] px-4 py-2.5">Oran</th>
                     </tr>
-                  ) : (
-                    modelStats.map(item => (
-                      <tr key={item.model} className="border-t border-slate-700">
-                        <td className="p-3 whitespace-nowrap">{item.model}</td>
-                        <td className="p-3 whitespace-nowrap">{item.adet}</td>
-                        <td className="p-3 whitespace-nowrap">%{item.oran}</td>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-700/70">
+                    {modelStats.map(item => (
+                      <tr
+                        key={item.model}
+                        className="text-sm transition hover:bg-slate-700/30"
+                      >
+                        <td className="px-4 py-2.5 font-medium text-slate-200">
+                          {item.model}
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-300">
+                          {item.adet}
+                        </td>
+                        <td className="px-4 py-2.5 font-semibold text-cyan-300">
+                          %{item.oran}
+                        </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </section>
         </>
       )}
     </div>
