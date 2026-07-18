@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Plus, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CalendarDays, Check, ChevronDown, Plus, Trash2, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -22,6 +22,107 @@ const MARKALAR = [
   'MicroPort',
   'Diğer',
 ];
+
+type BrandSelectProps = {
+  value: string;
+  options: readonly string[];
+  onChange: (value: string) => void;
+  ariaLabel: string;
+};
+
+function BrandSelect({
+  value,
+  options,
+  onChange,
+  ariaLabel,
+}: BrandSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent | TouchEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen(open => !open)}
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        className={`flex min-h-10 w-full items-center justify-between gap-3 rounded-lg border bg-slate-900 px-3 py-2 text-left text-sm text-white outline-none transition ${
+          isOpen
+            ? 'border-cyan-400 ring-2 ring-cyan-500/10'
+            : 'border-slate-700 hover:border-slate-600'
+        }`}
+      >
+        <span className="truncate">{value}</span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+
+      {isOpen && (
+        <div
+          role="listbox"
+          aria-label={ariaLabel}
+          className="absolute left-0 right-0 z-50 mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-slate-600 bg-slate-900 p-1.5 shadow-2xl shadow-black/50"
+        >
+          {options.map(option => {
+            const selected = option === value;
+
+            return (
+              <button
+                key={option}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => {
+                  onChange(option);
+                  setIsOpen(false);
+                }}
+                className={`flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition ${
+                  selected
+                    ? 'bg-cyan-500/15 text-cyan-200'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <span>{option}</span>
+                {selected && <Check className="h-4 w-4 text-cyan-300" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function StatCard({ title, value }: { title: string; value: number }) {
   return (
@@ -268,17 +369,12 @@ export default function CompetitorCases() {
 
           <div>
             <label className="block text-sm text-slate-300 mb-2">Marka *</label>
-            <select
+            <BrandSelect
               value={marka}
-              onChange={e => setMarka(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
-            >
-              {MARKALAR.map(item => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
+              options={MARKALAR}
+              onChange={setMarka}
+              ariaLabel="Rakip kapak markası seç"
+            />
           </div>
 
           {marka === 'Diğer' && (
@@ -330,18 +426,12 @@ export default function CompetitorCases() {
         <div className="grid md:grid-cols-4 gap-3">
           <div>
             <label className="block text-sm text-slate-300 mb-2">Marka</label>
-            <select
+            <BrandSelect
               value={filterBrand}
-              onChange={e => setFilterBrand(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
-            >
-              <option value="Tümü">Tümü</option>
-              {MARKALAR.map(item => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
+              options={['Tümü', ...MARKALAR]}
+              onChange={setFilterBrand}
+              ariaLabel="Rakip vaka marka filtresi seç"
+            />
           </div>
 
           <div>
