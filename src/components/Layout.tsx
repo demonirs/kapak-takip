@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Archive,
+  AlertTriangle,
   Bell,
+  CheckCircle2,
   CheckCheck,
+  Circle,
   FileSpreadsheet,
   HeartPulse,
   Home,
@@ -11,6 +14,7 @@ import {
   LogOut,
   Menu,
   Moon,
+  Info,
   Package,
   PlusCircle,
   Search,
@@ -18,6 +22,7 @@ import {
   Sun,
   Users,
   X,
+  XCircle,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -34,6 +39,8 @@ type NotificationItem = {
   is_read: boolean;
   created_at: string;
 };
+
+type NotificationFilter = 'all' | 'unread';
 
 const menuSections = [
   {
@@ -92,8 +99,13 @@ export default function Layout() {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationFilter, setNotificationFilter] =
+    useState<NotificationFilter>('all');
 
   const unreadCount = notifications.filter(item => !item.is_read).length;
+  const visibleNotifications = notifications.filter(item =>
+    notificationFilter === 'unread' ? !item.is_read : true
+  );
   const profileRole = (profile as { role?: string | null } | null)?.role;
   const roleLabel = profileRole === 'admin' ? 'Yönetici' : 'Kullanıcı';
 
@@ -119,6 +131,24 @@ export default function Layout() {
       document.removeEventListener('keydown', handleEscape);
     };
   }, [menuOpen]);
+
+  useEffect(() => {
+    if (!notificationOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setNotificationOpen(false);
+    }
+
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [notificationOpen]);
 
   useEffect(() => {
     if (!profile?.id) {
@@ -231,6 +261,34 @@ export default function Layout() {
     );
   }
 
+  async function handleNotificationClick(item: NotificationItem) {
+    if (!item.is_read) {
+      await markNotificationAsRead(item.id);
+    }
+
+    setNotificationOpen(false);
+
+    if (!item.related_id) return;
+
+    if (
+      item.related_table === 'kapaklar' ||
+      item.related_table === 'cases' ||
+      item.related_table === 'vakalar'
+    ) {
+      navigate(`/view/${item.related_id}`);
+      return;
+    }
+
+    if (item.related_table === 'stok_hareketleri') {
+      navigate('/stock-movements');
+      return;
+    }
+
+    if (item.related_table === 'rakip_vakalar') {
+      navigate('/competitor-cases');
+    }
+  }
+
   function formatNotificationDate(date: string) {
     const diffMs = Date.now() - new Date(date).getTime();
     const diffMinutes = Math.floor(diffMs / 60000);
@@ -246,17 +304,20 @@ export default function Layout() {
   }
 
   function notificationTypeClass(type: string) {
-    if (type === 'success') return 'bg-emerald-500/15 text-emerald-300';
-    if (type === 'warning') return 'bg-orange-500/15 text-orange-300';
-    if (type === 'error') return 'bg-red-500/15 text-red-300';
-    return 'bg-cyan-500/15 text-cyan-300';
+    if (type === 'success')
+      return 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300';
+    if (type === 'warning')
+      return 'border-amber-500/25 bg-amber-500/10 text-amber-300';
+    if (type === 'error')
+      return 'border-red-500/25 bg-red-500/10 text-red-300';
+    return 'border-cyan-500/25 bg-cyan-500/10 text-cyan-300';
   }
 
   function notificationTypeIcon(type: string) {
-    if (type === 'success') return '✓';
-    if (type === 'warning') return '!';
-    if (type === 'error') return '×';
-    return 'i';
+    if (type === 'success') return <CheckCircle2 className="h-4 w-4" />;
+    if (type === 'warning') return <AlertTriangle className="h-4 w-4" />;
+    if (type === 'error') return <XCircle className="h-4 w-4" />;
+    return <Info className="h-4 w-4" />;
   }
 
   function goHome() {
@@ -400,92 +461,176 @@ export default function Layout() {
                 </button>
 
                 {notificationOpen && (
-                  <div className="fixed left-4 right-4 top-[calc(env(safe-area-inset-top)+72px)] z-[80] overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-900 shadow-2xl sm:left-auto sm:right-6 sm:w-[380px]">
-                    <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-800">
-                      <div>
-                        <p className="text-sm font-bold text-white">Bildirimler</p>
-                        <p className="text-xs text-slate-400">
-                          {unreadCount > 0
-                            ? `${unreadCount} okunmamış bildirim`
-                            : 'Yeni bildirim yok'}
-                        </p>
+                  <>
+                    <div
+                      className="fixed inset-0 z-[70] bg-slate-950/60 backdrop-blur-[2px] sm:hidden"
+                      onClick={() => setNotificationOpen(false)}
+                      aria-hidden="true"
+                    />
+
+                    <section
+                      aria-label="Bildirim paneli"
+                      className="fixed inset-x-0 bottom-0 z-[80] flex max-h-[min(82dvh,680px)] flex-col overflow-hidden rounded-t-2xl border border-b-0 border-slate-700/80 bg-slate-900 shadow-2xl sm:bottom-auto sm:left-auto sm:right-5 sm:top-[calc(env(safe-area-inset-top)+68px)] sm:w-[400px] sm:rounded-2xl sm:border-b"
+                    >
+                      <div className="flex items-start justify-between gap-3 border-b border-slate-800 px-4 py-3.5">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-bold text-white">
+                              Bildirimler
+                            </p>
+                            {unreadCount > 0 && (
+                              <span className="rounded-md bg-red-500/15 px-1.5 py-0.5 text-[10px] font-bold text-red-300">
+                                {unreadCount} yeni
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 text-xs text-slate-400">
+                            Son {notifications.length} bildirim gösteriliyor
+                          </p>
+                        </div>
+
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={markAllNotificationsAsRead}
+                            disabled={unreadCount === 0}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-cyan-300 transition hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-30"
+                            title="Tümünü okundu yap"
+                            aria-label="Tüm bildirimleri okundu yap"
+                          >
+                            <CheckCheck className="h-4 w-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setNotificationOpen(false)}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                            aria-label="Bildirim panelini kapat"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={markAllNotificationsAsRead}
-                        disabled={unreadCount === 0}
-                        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-cyan-300 hover:bg-cyan-500/10 disabled:opacity-40"
-                        title="Tümünü okundu yap"
-                      >
-                        <CheckCheck className="w-4 h-4" />
-                        Okundu
-                      </button>
-                    </div>
+                      <div className="flex items-center gap-1 border-b border-slate-800 bg-slate-950/30 px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() => setNotificationFilter('all')}
+                          className={`min-h-9 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                            notificationFilter === 'all'
+                              ? 'bg-cyan-500/15 text-cyan-200'
+                              : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                          }`}
+                        >
+                          Tümü ({notifications.length})
+                        </button>
 
-                    <div className="max-h-[min(420px,calc(100dvh-150px-env(safe-area-inset-top)))] overflow-y-auto">
-                      {notificationLoading ? (
-                        <div className="px-4 py-6 text-sm text-slate-400 text-center">
-                          Bildirimler yükleniyor...
-                        </div>
-                      ) : notifications.length === 0 ? (
-                        <div className="px-4 py-8 text-center">
-                          <div className="mx-auto mb-3 w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400">
-                            <Bell className="w-5 h-5" />
+                        <button
+                          type="button"
+                          onClick={() => setNotificationFilter('unread')}
+                          className={`min-h-9 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                            notificationFilter === 'unread'
+                              ? 'bg-cyan-500/15 text-cyan-200'
+                              : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                          }`}
+                        >
+                          Okunmamış ({unreadCount})
+                        </button>
+                      </div>
+
+                      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
+                        {notificationLoading ? (
+                          <div className="px-4 py-10 text-center text-sm text-slate-400">
+                            Bildirimler yükleniyor...
                           </div>
-
-                          <p className="text-sm font-semibold text-slate-200">
-                            Henüz bildirim yok
-                          </p>
-
-                          <p className="mt-1 text-xs text-slate-500">
-                            ValveFlow önemli gelişmeleri burada gösterecek.
-                          </p>
-                        </div>
-                      ) : (
-                        notifications.map(item => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => markNotificationAsRead(item.id)}
-                            className={`w-full text-left px-4 py-3 border-b border-slate-800 hover:bg-slate-800/80 ${
-                              item.is_read ? 'opacity-70' : ''
-                            }`}
-                          >
-                            <div className="flex gap-3">
-                              <div
-                                className={`mt-0.5 w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${notificationTypeClass(
-                                  item.type
-                                )}`}
-                              >
-                                {notificationTypeIcon(item.type)}
-                              </div>
-
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-start justify-between gap-2">
-                                  <p className="text-sm font-semibold text-slate-100 leading-snug">
-                                    {item.title}
-                                  </p>
-
-                                  {!item.is_read && (
-                                    <span className="mt-1 w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
-                                  )}
-                                </div>
-
-                                <p className="mt-1 text-xs text-slate-400 leading-relaxed">
-                                  {item.message}
-                                </p>
-
-                                <p className="mt-2 text-[11px] text-slate-500">
-                                  {formatNotificationDate(item.created_at)}
-                                </p>
-                              </div>
+                        ) : notifications.length === 0 ? (
+                          <div className="px-4 py-12 text-center">
+                            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-400">
+                              <Bell className="h-5 w-5" />
                             </div>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
+                            <p className="text-sm font-semibold text-slate-200">
+                              Henüz bildirim yok
+                            </p>
+                            <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-slate-500">
+                              ValveFlow önemli gelişmeleri ve işlem sonuçlarını
+                              burada gösterecek.
+                            </p>
+                          </div>
+                        ) : visibleNotifications.length === 0 ? (
+                          <div className="px-4 py-12 text-center">
+                            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
+                              <CheckCheck className="h-5 w-5" />
+                            </div>
+                            <p className="text-sm font-semibold text-slate-200">
+                              Tüm bildirimler okundu
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Şu anda bekleyen yeni bildiriminiz yok.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-slate-800/80">
+                            {visibleNotifications.map(item => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => handleNotificationClick(item)}
+                                className={`relative w-full px-4 py-3.5 text-left transition hover:bg-slate-800/70 ${
+                                  item.is_read ? 'bg-transparent' : 'bg-cyan-500/[0.035]'
+                                }`}
+                              >
+                                {!item.is_read && (
+                                  <span className="absolute bottom-3 left-0 top-3 w-0.5 rounded-r-full bg-cyan-400" />
+                                )}
+
+                                <div className="flex gap-3">
+                                  <div
+                                    className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${notificationTypeClass(
+                                      item.type
+                                    )}`}
+                                  >
+                                    {notificationTypeIcon(item.type)}
+                                  </div>
+
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <p className={`break-words text-sm leading-snug ${
+                                        item.is_read
+                                          ? 'font-medium text-slate-300'
+                                          : 'font-semibold text-slate-100'
+                                      }`}>
+                                        {item.title}
+                                      </p>
+
+                                      {!item.is_read && (
+                                        <Circle className="mt-1 h-2.5 w-2.5 shrink-0 fill-cyan-400 text-cyan-400" />
+                                      )}
+                                    </div>
+
+                                    <p className="mt-1.5 break-words text-xs leading-relaxed text-slate-400">
+                                      {item.message}
+                                    </p>
+
+                                    <div className="mt-2 flex items-center justify-between gap-2">
+                                      <span className="text-[11px] text-slate-500">
+                                        {formatNotificationDate(item.created_at)}
+                                      </span>
+
+                                      {item.related_id && (
+                                        <span className="text-[11px] font-medium text-cyan-300">
+                                          Detayı aç
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  </>
                 )}
               </div>
 
