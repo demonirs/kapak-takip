@@ -1,5 +1,15 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+} from 'react-router-dom';
+
+import {
+  AuthProvider,
+  useAuth,
+} from './contexts/AuthContext';
+
 import Layout from './components/Layout';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
@@ -17,7 +27,11 @@ import MarketShare from './components/MarketShare';
 import CenterAnalysis from './components/CenterAnalysis';
 import Users from './components/Users';
 
-function Protected({ children }: { children: React.ReactNode }) {
+function Protected({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -41,6 +55,11 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
 
       <Route
+        path="/reset-password"
+        element={<Login />}
+      />
+
+      <Route
         path="/"
         element={
           <Protected>
@@ -61,17 +80,35 @@ function AppRoutes() {
         <Route path="export" element={<Export />} />
 
         <Route path="stock" element={<Stock />} />
-        <Route path="stock-movements" element={<StockMovements />} />
-        <Route path="archive" element={<ArchivedMovements />} />
+        <Route
+          path="stock-movements"
+          element={<StockMovements />}
+        />
+        <Route
+          path="archive"
+          element={<ArchivedMovements />}
+        />
 
-        <Route path="competitor-cases" element={<CompetitorCases />} />
-        <Route path="market-share" element={<MarketShare />} />
-        <Route path="center-analysis" element={<CenterAnalysis />} />
+        <Route
+          path="competitor-cases"
+          element={<CompetitorCases />}
+        />
+        <Route
+          path="market-share"
+          element={<MarketShare />}
+        />
+        <Route
+          path="center-analysis"
+          element={<CenterAnalysis />}
+        />
 
         <Route path="users" element={<Users />} />
       </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route
+        path="*"
+        element={<Navigate to="/" replace />}
+      />
     </Routes>
   );
 }
