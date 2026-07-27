@@ -365,17 +365,47 @@ export default function AddCase() {
     }));
   }
 
-  async function markStockAsUsed(
-    stockId: string,
-    vakaId: string
-  ) {
-    const selected = stockItems.find(item => item.id === stockId);
+  async function findCurrentStockMatch(
+    lotNo: string,
+    size: number
+  ): Promise<StockItem | null> {
+    const { data, error: stockError } = await timeout(
+      supabase
+        .from('kapak_stok')
+        .select(
+          'id, urun_adi, kapak_boyutu, lot_no, son_kullanma_tarihi'
+        )
+        .eq('durum', 'stokta')
+        .eq('kapak_boyutu', size),
+      10000
+    );
 
-    if (!selected) {
+    if (stockError) {
       throw new Error(
-        'Seçilen stok kaydı bulunamadı veya artık stokta değil.'
+        `Güncel stok kontrol edilemedi: ${stockError.message}`
       );
     }
+
+    const normalizedLot = normalizeLot(lotNo);
+
+    const matches = ((data || []) as StockItem[]).filter(
+      item => normalizeLot(item.lot_no) === normalizedLot
+    );
+
+    if (matches.length > 1) {
+      throw new Error(
+        'Aynı LOT/SN ile birden fazla stok kaydı bulundu. Stok kayıtlarını kontrol edin.'
+      );
+    }
+
+    return matches[0] || null;
+  }
+
+  async function markStockAsUsed(
+    selected: StockItem,
+    vakaId: string
+  ) {
+    const stockId = selected.id;
 
     const { data: updatedStock, error: stockUpdateError } =
       await timeout(
@@ -475,8 +505,25 @@ export default function AddCase() {
         return;
       }
 
-      const stockIdToUse =
-        selectedStockId || manualMatchedStock?.id || '';
+      const valveSize = getSizeNumber(payload.kapak_size);
+
+      if (!valveSize) {
+        throw new Error(
+          'Kapak ölçüsü belirlenemedi. Kapak seçimini kontrol edin.'
+        );
+      }
+
+      const currentStockMatch =
+        await findCurrentStockMatch(
+          payload.lot_no,
+          valveSize
+        );
+
+      if (!currentStockMatch) {
+        throw new Error(
+          `${valveSize} mm, LOT/SN ${payload.lot_no} için stokta eşleşen kapak bulunamadı. Önce kapağın stok girişini yapın veya stoktan doğru kapağı seçin.`
+        );
+      }
 
       const { data, error: insertError } = await timeout(
         supabase
@@ -503,9 +550,10 @@ export default function AddCase() {
 
       const newCaseId = data.id as string;
 
-      if (stockIdToUse) {
-        await markStockAsUsed(stockIdToUse, newCaseId);
-      }
+      await markStockAsUsed(
+        currentStockMatch,
+        newCaseId
+      );
 
       await notifyAdmins({
         title: 'Yeni Vaka',
@@ -629,8 +677,10 @@ export default function AddCase() {
               !selectedStock &&
               !manualMatchedStock && (
                 <div className="text-xs leading-5 text-slate-400">
-                  Kapak seçmeden devam etmek istersen aşağıdaki
-                  alanları manuel doldurabilirsin.
+                  Kapak bilgilerini manuel girebilirsin. Kayıt
+                  sırasında LOT/SN ve ölçü güncel stokla yeniden
+                  doğrulanır. Stokta eşleşmeyen kapakla vaka
+                  kaydedilemez.
                 </div>
               )}
 
