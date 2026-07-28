@@ -519,12 +519,6 @@ export default function AddCase() {
           valveSize
         );
 
-      if (!currentStockMatch) {
-        throw new Error(
-          `${valveSize} mm, LOT/SN ${payload.lot_no} için stokta eşleşen kapak bulunamadı. Önce kapağın stok girişini yapın veya stoktan doğru kapağı seçin.`
-        );
-      }
-
       const { data, error: insertError } = await timeout(
         supabase
           .from('kapaklar')
@@ -550,10 +544,12 @@ export default function AddCase() {
 
       const newCaseId = data.id as string;
 
-      await markStockAsUsed(
-        currentStockMatch,
-        newCaseId
-      );
+      if (currentStockMatch) {
+        await markStockAsUsed(
+          currentStockMatch,
+          newCaseId
+        );
+      }
 
       await notifyAdmins({
         title: 'Yeni Vaka',
@@ -679,8 +675,9 @@ export default function AddCase() {
                 <div className="text-xs leading-5 text-slate-400">
                   Kapak bilgilerini manuel girebilirsin. Kayıt
                   sırasında LOT/SN ve ölçü güncel stokla yeniden
-                  doğrulanır. Stokta eşleşmeyen kapakla vaka
-                  kaydedilemez.
+                  doğrulanır. Eşleşme bulunursa kapak otomatik
+                  stoktan düşer; bulunamazsa vaka manuel olarak
+                  kaydedilir.
                 </div>
               )}
 
