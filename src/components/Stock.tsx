@@ -10,6 +10,7 @@ import {
   ClipboardCheck,
   ExternalLink,
   RotateCcw,
+  Search,
   SearchX,
   Trash2,
   X,
@@ -330,6 +331,99 @@ function buildValveProductName(
   return 'Evolut Pro+';
 }
 
+const HISTORY_FETCH_SIZE = 1000;
+
+function normalizeSearchText(value: unknown): string {
+  return String(value ?? '')
+    .toLocaleLowerCase('tr-TR')
+    .trim();
+}
+
+async function fetchAllCaseRows(): Promise<CaseInfo[]> {
+  const rows: CaseInfo[] = [];
+
+  for (let from = 0; ; from += HISTORY_FETCH_SIZE) {
+    const { data, error } = await supabase
+      .from('kapaklar')
+      .select(
+        `
+          id,
+          vaka_tarihi,
+          merkez_hastane,
+          doktor,
+          hasta_adi,
+          kapak_tipi,
+          kapak_size,
+          lot_no,
+          son_kul_tarihi
+        `
+      )
+      .order('vaka_tarihi', {
+        ascending: false,
+      })
+      .range(
+        from,
+        from + HISTORY_FETCH_SIZE - 1
+      );
+
+    if (error) throw error;
+
+    const batch = (data as CaseInfo[]) || [];
+    rows.push(...batch);
+
+    if (batch.length < HISTORY_FETCH_SIZE) {
+      break;
+    }
+  }
+
+  return rows;
+}
+
+async function fetchAllHistoricalRows(): Promise<
+  HistoricalItem[]
+> {
+  const rows: HistoricalItem[] = [];
+
+  for (let from = 0; ; from += HISTORY_FETCH_SIZE) {
+    const { data, error } = await supabase
+      .from('gecmis_kullanilan_kapaklar')
+      .select(
+        `
+          id,
+          urun_adi,
+          kapak_boyutu,
+          lot_no,
+          son_kullanma_tarihi,
+          kullanim_tarihi,
+          merkez_hastane,
+          doktor,
+          hasta_adi,
+          kaynak
+        `
+      )
+      .order('kullanim_tarihi', {
+        ascending: false,
+      })
+      .range(
+        from,
+        from + HISTORY_FETCH_SIZE - 1
+      );
+
+    if (error) throw error;
+
+    const batch =
+      (data as HistoricalItem[]) || [];
+
+    rows.push(...batch);
+
+    if (batch.length < HISTORY_FETCH_SIZE) {
+      break;
+    }
+  }
+
+  return rows;
+}
+
 export default function Stock() {
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -374,6 +468,9 @@ export default function Stock() {
 
   const [activeFilter, setActiveFilter] =
     useState<(typeof FILTERS)[number]>('Tümü');
+
+  const [usageSearchTerm, setUsageSearchTerm] =
+    useState('');
 
   const [auditResult, setAuditResult] =
     useState<AuditResult | null>(null);
@@ -437,107 +534,55 @@ export default function Stock() {
     setLoading(true);
     setMessage('');
 
-    const [
-      stockResponse,
-      casesResponse,
-      historicalResponse,
-    ] = await Promise.all([
-      supabase
-        .from('kapak_stok')
-        .select(
-          `
-            id,
-            urun_adi,
-            kapak_boyutu,
-            lot_no,
-            son_kullanma_tarihi,
-            durum,
-            kullanilan_vaka_id,
-            created_at
-          `
-        )
-        .in('durum', ['stokta', 'kullanildi'])
-        .order('kapak_boyutu')
-        .order('son_kullanma_tarihi'),
+    try {
+      const [
+        stockResponse,
+        casesResponse,
+        historicalResponse,
+      ] = await Promise.all([
+        supabase
+          .from('kapak_stok')
+          .select(
+            `
+              id,
+              urun_adi,
+              kapak_boyutu,
+              lot_no,
+              son_kullanma_tarihi,
+              durum,
+              kullanilan_vaka_id,
+              created_at
+            `
+          )
+          .in('durum', ['stokta', 'kullanildi'])
+          .order('kapak_boyutu')
+          .order('son_kullanma_tarihi'),
 
-      supabase
-        .from('kapaklar')
-        .select(
-          `
-            id,
-            vaka_tarihi,
-            merkez_hastane,
-            doktor,
-            hasta_adi,
-            kapak_tipi,
-            kapak_size,
-            lot_no,
-            son_kul_tarihi
-          `
-        )
-        .order('vaka_tarihi', {
-          ascending: false,
-        }),
+        fetchAllCaseRows(),
 
-      supabase
-        .from('gecmis_kullanilan_kapaklar')
-        .select(
-          `
-            id,
-            urun_adi,
-            kapak_boyutu,
-            lot_no,
-            son_kullanma_tarihi,
-            kullanim_tarihi,
-            merkez_hastane,
-            doktor,
-            hasta_adi,
-            kaynak
-          `
-        )
-        .order('kullanim_tarihi', {
-          ascending: false,
-        }),
-    ]);
+        fetchAllHistoricalRows(),
+      ]);
 
-    if (stockResponse.error) {
-      setMessage(
-        `Stok kayıtları alınamadı: ${stockResponse.error.message}`
+      if (stockResponse.error) {
+        throw stockResponse.error;
+      }
+
+      setItems(
+        (stockResponse.data as StockItem[]) || []
       );
-      setLoading(false);
-      return;
-    }
 
-    if (casesResponse.error) {
+      setCases(casesResponse);
+
+      setHistoricalItems(historicalResponse);
+    } catch (loadError: unknown) {
       setMessage(
-        `Vaka kayıtları alınamadı: ${casesResponse.error.message}`
+        loadError instanceof Error
+          ? `Stok ve geçmiş kayıtları alınamadı: ${loadError.message}`
+          : 'Stok ve geçmiş kayıtları alınamadı.'
       );
+    } finally {
       setLoading(false);
-      return;
     }
-
-    if (historicalResponse.error) {
-      setMessage(
-        `Geçmiş kayıtlar alınamadı: ${historicalResponse.error.message}`
-      );
-      setLoading(false);
-      return;
-    }
-
-    setItems(
-      (stockResponse.data as StockItem[]) || []
-    );
-
-    setCases(
-      (casesResponse.data as CaseInfo[]) || []
-    );
-
-    setHistoricalItems(
-      (historicalResponse.data as HistoricalItem[]) ||
-        []
-    );
-
-    setLoading(false);
   }
 
   const mevcutItems = useMemo(
@@ -694,16 +739,44 @@ export default function Stock() {
   ]);
 
   const filteredUsageItems = useMemo(() => {
-    if (activeFilter === 'Tümü') {
-      return activeUsageItems;
+    const sizeFilteredItems =
+      activeFilter === 'Tümü'
+        ? activeUsageItems
+        : activeUsageItems.filter(
+            item =>
+              item.kapak_boyutu ===
+              Number(activeFilter)
+          );
+
+    const normalizedSearch =
+      normalizeSearchText(usageSearchTerm);
+
+    if (!normalizedSearch) {
+      return sizeFilteredItems;
     }
 
-    return activeUsageItems.filter(
-      item =>
-        item.kapak_boyutu ===
-        Number(activeFilter)
-    );
-  }, [activeUsageItems, activeFilter]);
+    return sizeFilteredItems.filter(item => {
+      const searchableText = [
+        item.hasta_adi,
+        item.merkez_hastane,
+        item.doktor,
+        item.urun_adi,
+        item.kapak_boyutu,
+        item.lot_no,
+        item.kullanim_tarihi,
+      ]
+        .map(normalizeSearchText)
+        .join(' ');
+
+      return searchableText.includes(
+        normalizedSearch
+      );
+    });
+  }, [
+    activeUsageItems,
+    activeFilter,
+    usageSearchTerm,
+  ]);
 
   const visibleCount =
     activeTab === 'mevcut'
@@ -1789,6 +1862,37 @@ export default function Stock() {
           </button>
         ))}
       </div>
+
+      {activeTab !== 'mevcut' && (
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+
+          <input
+            type="text"
+            value={usageSearchTerm}
+            onChange={event =>
+              setUsageSearchTerm(
+                event.target.value
+              )
+            }
+            placeholder="Hasta, merkez, doktor, kapak veya LOT/SN ara..."
+            className="field-control pl-10 pr-10"
+          />
+
+          {usageSearchTerm && (
+            <button
+              type="button"
+              onClick={() =>
+                setUsageSearchTerm('')
+              }
+              aria-label="Geçmiş aramasını temizle"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-500 transition hover:bg-slate-700 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="rounded-xl border border-slate-700 bg-slate-800 p-5 text-slate-400">
