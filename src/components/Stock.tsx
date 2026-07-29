@@ -20,7 +20,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 type StockStatus = 'stokta' | 'kullanildi';
-type Tab = 'mevcut' | 'bu-ay' | 'gecmis';
+type Tab = 'mevcut' | 'kullanilan';
 
 type StockItem = {
   id: string;
@@ -250,48 +250,6 @@ function parseDateOnly(
   date.setHours(0, 0, 0, 0);
 
   return date;
-}
-
-function isCurrentMonth(
-  value: string | null | undefined
-) {
-  const date = parseDateOnly(value);
-
-  if (!date) {
-    return false;
-  }
-
-  const now = new Date();
-
-  return (
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth()
-  );
-}
-
-function isBeforeCurrentMonth(
-  value: string | null | undefined
-) {
-  const date = parseDateOnly(value);
-
-  if (!date) {
-    return false;
-  }
-
-  const now = new Date();
-
-  const firstDayOfCurrentMonth = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    1
-  );
-
-  firstDayOfCurrentMonth.setHours(0, 0, 0, 0);
-
-  return (
-    date.getTime() <
-    firstDayOfCurrentMonth.getTime()
-  );
 }
 
 function parseValveSize(
@@ -626,41 +584,6 @@ export default function Stock() {
       [cases]
     );
 
-  const currentMonthItems = useMemo(
-    () =>
-      valveFlowUsageRows
-        .filter(item =>
-          isCurrentMonth(
-            item.kullanim_tarihi
-          )
-        )
-        .sort((a, b) => {
-          const first =
-            parseDateOnly(
-              a.kullanim_tarihi
-            )?.getTime() || 0;
-
-          const second =
-            parseDateOnly(
-              b.kullanim_tarihi
-            )?.getTime() || 0;
-
-          return second - first;
-        }),
-    [valveFlowUsageRows]
-  );
-
-  const previousValveFlowHistory =
-    useMemo(
-      () =>
-        valveFlowUsageRows.filter(item =>
-          isBeforeCurrentMonth(
-            item.kullanim_tarihi
-          )
-        ),
-      [valveFlowUsageRows]
-    );
-
   const importedHistory =
     useMemo<UsageRow[]>(
       () =>
@@ -686,10 +609,10 @@ export default function Stock() {
       [historicalItems]
     );
 
-  const allHistoryItems = useMemo(
+  const allUsageItems = useMemo(
     () =>
       [
-        ...previousValveFlowHistory,
+        ...valveFlowUsageRows,
         ...importedHistory,
       ].sort((a, b) => {
         const first =
@@ -705,7 +628,7 @@ export default function Stock() {
         return second - first;
       }),
     [
-      previousValveFlowHistory,
+      valveFlowUsageRows,
       importedHistory,
     ]
   );
@@ -723,19 +646,14 @@ export default function Stock() {
   }, [mevcutItems, activeFilter]);
 
   const activeUsageItems = useMemo(() => {
-    if (activeTab === 'bu-ay') {
-      return currentMonthItems;
-    }
-
-    if (activeTab === 'gecmis') {
-      return allHistoryItems;
+    if (activeTab === 'kullanilan') {
+      return allUsageItems;
     }
 
     return [];
   }, [
     activeTab,
-    currentMonthItems,
-    allHistoryItems,
+    allUsageItems,
   ]);
 
   const filteredUsageItems = useMemo(() => {
@@ -1383,9 +1301,7 @@ export default function Stock() {
       const sheetName =
         activeTab === 'mevcut'
           ? 'Mevcut Stok'
-          : activeTab === 'bu-ay'
-            ? 'Bu Ay Kullanılanlar'
-            : 'Geçmiş Kullanımlar';
+          : 'Kullanılan Kapaklar';
 
       XLSX.utils.book_append_sheet(
         workbook,
@@ -1438,7 +1354,7 @@ export default function Stock() {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-1 rounded-xl border border-white/[0.08] bg-slate-900/50 p-1">
+      <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/[0.08] bg-slate-900/50 p-1">
         <button
           type="button"
           onClick={() =>
@@ -1460,36 +1376,18 @@ export default function Stock() {
         <button
           type="button"
           onClick={() =>
-            selectTab('bu-ay')
+            selectTab('kullanilan')
           }
           className={`rounded-lg border px-2.5 py-2 text-left transition sm:px-4 ${tabClass(
-            'bu-ay'
+            'kullanilan'
           )}`}
         >
           <div className="text-[11px] opacity-80 sm:text-sm">
-            Bu Ay
+            Kullanılan Kapaklar
           </div>
 
           <div className="mt-0.5 text-lg font-semibold sm:text-xl">
-            {currentMonthItems.length}
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() =>
-            selectTab('gecmis')
-          }
-          className={`rounded-lg border px-2.5 py-2 text-left transition sm:px-4 ${tabClass(
-            'gecmis'
-          )}`}
-        >
-          <div className="text-[11px] opacity-80 sm:text-sm">
-            Geçmiş
-          </div>
-
-          <div className="mt-0.5 text-lg font-semibold sm:text-xl">
-            {allHistoryItems.length}
+            {allUsageItems.length}
           </div>
         </button>
       </div>
@@ -1885,7 +1783,7 @@ export default function Stock() {
               onClick={() =>
                 setUsageSearchTerm('')
               }
-              aria-label="Geçmiş aramasını temizle"
+              aria-label="Kullanılan kapaklar aramasını temizle"
               className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-500 transition hover:bg-slate-700 hover:text-white"
             >
               <X className="h-4 w-4" />
