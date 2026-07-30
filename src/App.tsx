@@ -34,20 +34,11 @@ const List = lazy(() => import('./components/List'));
 const ViewCase = lazy(
   () => import('./components/ViewCase')
 );
-const Export = lazy(
-  () => import('./components/Export')
-);
-const Search = lazy(
-  () => import('./components/Search')
-);
 const Stock = lazy(
   () => import('./components/Stock')
 );
 const StockMovements = lazy(
   () => import('./components/StockMovements')
-);
-const ArchivedMovements = lazy(
-  () => import('./components/ArchivedMovements')
 );
 const CompetitorCases = lazy(
   () => import('./components/CompetitorCases')
@@ -173,8 +164,16 @@ function AppRoutes() {
 
           <Route path="list" element={<List />} />
           <Route path="view/:id" element={<ViewCase />} />
-          <Route path="search" element={<Search />} />
-          <Route path="export" element={<Export />} />
+
+          <Route
+            path="search"
+            element={<Navigate to="/list" replace />}
+          />
+
+          <Route
+            path="export"
+            element={<Navigate to="/list" replace />}
+          />
 
           <Route path="stock" element={<Stock />} />
 
@@ -185,7 +184,7 @@ function AppRoutes() {
 
           <Route
             path="archive"
-            element={<ArchivedMovements />}
+            element={<Navigate to="/list" replace />}
           />
 
           <Route
