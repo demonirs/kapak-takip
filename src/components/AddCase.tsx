@@ -447,6 +447,24 @@ export default function AddCase() {
     );
 
     if (movementError) {
+      const { error: rollbackError } = await timeout(
+        supabase
+          .from('kapak_stok')
+          .update({
+            durum: 'stokta',
+            kullanilan_vaka_id: null,
+          })
+          .eq('id', stockId)
+          .eq('kullanilan_vaka_id', vakaId),
+        10000
+      );
+
+      if (rollbackError) {
+        throw new Error(
+          `Stok hareketi yazılamadı ve stok geri alınamadı: ${movementError.message}. Yönetici kontrolü gerekli.`
+        );
+      }
+
       throw movementError;
     }
   }
@@ -545,19 +563,46 @@ export default function AddCase() {
       const newCaseId = data.id as string;
 
       if (currentStockMatch) {
-        await markStockAsUsed(
-          currentStockMatch,
-          newCaseId
-        );
+        try {
+          await markStockAsUsed(
+            currentStockMatch,
+            newCaseId
+          );
+        } catch (stockUseError: unknown) {
+          const { error: rollbackCaseError } =
+            await timeout(
+              supabase
+                .from('kapaklar')
+                .delete()
+                .eq('id', newCaseId)
+                .eq('user_id', user.id),
+              10000
+            );
+
+          if (rollbackCaseError) {
+            throw new Error(
+              'Vaka kaydedildi ancak kapak stoktan düşürülemedi ve vaka kaydı geri alınamadı. Tekrar kayıt girmeyin; yönetici kontrolü gerekli.'
+            );
+          }
+
+          throw stockUseError;
+        }
       }
 
-      await notifyAdmins({
-        title: 'Yeni Vaka',
-        message: `${currentCrimpYapan} vaka ekledi`,
-        type: 'success',
-        related_table: 'kapaklar',
-        related_id: newCaseId,
-      });
+      try {
+        await notifyAdmins({
+          title: 'Yeni Vaka',
+          message: `${currentCrimpYapan} vaka ekledi`,
+          type: 'success',
+          related_table: 'kapaklar',
+          related_id: newCaseId,
+        });
+      } catch (notificationError) {
+        console.error(
+          'Vaka kaydedildi ancak bildirim gönderilemedi:',
+          notificationError
+        );
+      }
 
       if (hasFoc) {
         navigate(`/foc/${newCaseId}`);
