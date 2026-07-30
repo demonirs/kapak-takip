@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, Check, ChevronDown, Filter, Plus, Trash2, X } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase, timeout } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+
+const DATABASE_PAGE_SIZE = 1000;
 
 type CompetitorCase = {
   id: string;
@@ -13,6 +15,35 @@ type CompetitorCase = {
   diger_aciklama: string | null;
   created_at: string;
 };
+
+async function fetchAllCompetitorCases(): Promise<
+  CompetitorCase[]
+> {
+  const allRows: CompetitorCase[] = [];
+
+  for (let from = 0; ; from += DATABASE_PAGE_SIZE) {
+    const { data, error } = await timeout(
+      supabase
+        .from('rakip_vakalar')
+        .select(
+          'id, merkez, doktor, vaka_tarihi, marka, notlar, diger_aciklama, created_at'
+        )
+        .order('vaka_tarihi', { ascending: false })
+        .order('created_at', { ascending: false })
+        .range(from, from + DATABASE_PAGE_SIZE - 1),
+      15000
+    );
+
+    if (error) throw error;
+
+    const batch = (data || []) as CompetitorCase[];
+    allRows.push(...batch);
+
+    if (batch.length < DATABASE_PAGE_SIZE) break;
+  }
+
+  return allRows;
+}
 
 const MARKALAR = [
   'Meril',
@@ -135,12 +166,11 @@ function StatCard({ title, value }: { title: string; value: number }) {
 
 export default function CompetitorCases() {
   const { profile } = useAuth();
-  const currentProfile = profile as any;
 
   const isAdmin =
-    currentProfile?.role === 'admin' ||
-    currentProfile?.yetki === 'admin' ||
-    currentProfile?.is_admin === true;
+    profile?.role === 'admin' ||
+    profile?.yetki === 'admin' ||
+    profile?.is_admin === true;
 
   const [items, setItems] = useState<CompetitorCase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,24 +199,18 @@ export default function CompetitorCases() {
   async function loadCases() {
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from('rakip_vakalar')
-      .select(
-        'id, merkez, doktor, vaka_tarihi, marka, notlar, diger_aciklama, created_at'
-      )
-      .order('vaka_tarihi', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(300);
-
-    if (error) {
-      setMessage(error.message);
+    try {
+      const allRows = await fetchAllCompetitorCases();
+      setItems(allRows);
+    } catch (loadError: unknown) {
+      setMessage(
+        loadError instanceof Error
+          ? loadError.message
+          : 'Rakip vakalar yüklenemedi.'
+      );
+    } finally {
+      setLoading(false);
     }
-
-    if (!error && data) {
-      setItems(data);
-    }
-
-    setLoading(false);
   }
 
   async function addCase() {
