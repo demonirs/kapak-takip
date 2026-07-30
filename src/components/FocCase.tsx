@@ -73,6 +73,30 @@ function normalizeLot(value: string) {
   return value.trim().replace(/\s+/g, '').toUpperCase();
 }
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (
+    typeof error === 'object' &&
+    error !== null
+  ) {
+    const possibleError = error as {
+      message?: string;
+      details?: string;
+    };
+
+    return (
+      possibleError.message ||
+      possibleError.details ||
+      'Bilinmeyen hata'
+    );
+  }
+
+  return 'Bilinmeyen hata';
+}
+
 function getSizeNumber(size: string) {
   const match = size.match(/\d+/);
   return match ? Number(match[0]) : null;
@@ -370,16 +394,18 @@ CRİMP: ${
   ]);
 
   useEffect(() => {
-    void loadPage();
-  }, [vakaId]);
-
-  async function loadPage() {
     if (!vakaId) {
       setError('Vaka kimliği bulunamadı.');
       setPageLoading(false);
       return;
     }
 
+    void loadPage(vakaId);
+  }, [vakaId]);
+
+  async function loadPage(
+    currentVakaId: string
+  ) {
     setPageLoading(true);
     setError(null);
 
@@ -395,7 +421,7 @@ CRİMP: ${
             .select(
               'id, user_id, vaka_tarihi, merkez_hastane, doktor, hasta_adi, kapak_tipi, kapak_size, lot_no, son_kul_tarihi, pre_balon, post_balon, paravalvuler_ay, proglide_adedi, crimp_yapan, created_at'
             )
-            .eq('id', vakaId)
+            .eq('id', currentVakaId)
             .maybeSingle(),
           10000
         ),
@@ -416,7 +442,7 @@ CRİMP: ${
           supabase
             .from('foc_kayitlari')
             .select('id, vaka_id')
-            .eq('vaka_id', vakaId)
+            .eq('vaka_id', currentVakaId)
             .maybeSingle(),
           10000
         ),
@@ -551,7 +577,87 @@ CRİMP: ${
       );
 
     if (movementError) {
+      const { error: rollbackError } =
+        await timeout(
+          supabase
+            .from('kapak_stok')
+            .update({
+              durum: 'stokta',
+              kullanilan_vaka_id: null,
+            })
+            .eq('id', stockItem.id)
+            .eq(
+              'kullanilan_vaka_id',
+              currentVakaId
+            ),
+          10000
+        );
+
+      if (rollbackError) {
+        throw new Error(
+          `Stok hareketi kaydedilemedi ve FOC kapağı stoka geri alınamadı: ${getErrorMessage(
+            rollbackError
+          )}`
+        );
+      }
+
       throw movementError;
+    }
+  }
+
+  async function rollbackFocStockUsage(
+    stockItem: StockItem,
+    currentVakaId: string
+  ) {
+    const rollbackErrors: string[] = [];
+
+    const { error: movementDeleteError } =
+      await timeout(
+        supabase
+          .from('stok_hareketleri')
+          .delete()
+          .eq('kapak_stok_id', stockItem.id)
+          .eq('vaka_id', currentVakaId)
+          .eq('islem', 'kullanildi'),
+        10000
+      );
+
+    if (movementDeleteError) {
+      rollbackErrors.push(
+        `stok hareketi silinemedi: ${getErrorMessage(
+          movementDeleteError
+        )}`
+      );
+    }
+
+    const { error: stockRollbackError } =
+      await timeout(
+        supabase
+          .from('kapak_stok')
+          .update({
+            durum: 'stokta',
+            kullanilan_vaka_id: null,
+          })
+          .eq('id', stockItem.id)
+          .eq(
+            'kullanilan_vaka_id',
+            currentVakaId
+          ),
+        10000
+      );
+
+    if (stockRollbackError) {
+      rollbackErrors.push(
+        `kapak stoka alınamadı: ${getErrorMessage(
+          stockRollbackError
+        )}`
+      );
+    }
+
+    if (rollbackErrors.length > 0) {
+      throw new Error(
+        rollbackErrors.join(' | ')
+      );
     }
   }
 
@@ -653,6 +759,11 @@ CRİMP: ${
     setSaving(true);
     setError(null);
 
+    let usedFocStock: StockItem | null =
+      null;
+
+    let focCreated = false;
+
     try {
       if (
         secondValveMode === 'stock' &&
@@ -662,6 +773,8 @@ CRİMP: ${
           selectedStock,
           vakaId
         );
+
+        usedFocStock = selectedStock;
       }
 
       const { error: focInsertError } =
@@ -716,6 +829,8 @@ CRİMP: ${
         throw focInsertError;
       }
 
+      focCreated = true;
+
       try {
         await notifyAdmins({
           title: 'Yeni FOC Kaydı',
@@ -738,33 +853,34 @@ CRİMP: ${
 
       navigate(`/view/${vakaId}`);
     } catch (caughtError: unknown) {
+      let finalError = caughtError;
+
+      if (usedFocStock && !focCreated) {
+        try {
+          await rollbackFocStockUsage(
+            usedFocStock,
+            vakaId
+          );
+        } catch (rollbackError: unknown) {
+          finalError = new Error(
+            `FOC kaydı oluşturulamadı ve stok geri alma tamamlanamadı. FOC kapağını stoktan kontrol edin. Kayıt hatası: ${getErrorMessage(
+              caughtError
+            )} | Geri alma hatası: ${getErrorMessage(
+              rollbackError
+            )}`
+          );
+        }
+      }
+
       console.error(
         'FOC kayıt hatası:',
-        caughtError
+        finalError
       );
 
-      if (caughtError instanceof Error) {
-        setError(caughtError.message);
-      } else if (
-        typeof caughtError === 'object' &&
-        caughtError !== null
-      ) {
-        const possibleError =
-          caughtError as {
-            message?: string;
-            details?: string;
-          };
-
-        setError(
-          possibleError.message ||
-            possibleError.details ||
-            'FOC kaydı oluşturulamadı.'
-        );
-      } else {
-        setError(
+      setError(
+        getErrorMessage(finalError) ||
           'FOC kaydı oluşturulamadı.'
-        );
-      }
+      );
     } finally {
       setSaving(false);
     }
