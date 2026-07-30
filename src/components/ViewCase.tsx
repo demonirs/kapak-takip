@@ -8,35 +8,87 @@ import {
 } from 'lucide-react';
 import { Kapak, supabase, timeout } from '../lib/supabase';
 
+function formatValveSize(value: string | number | null | undefined) {
+  const text = String(value ?? '').trim();
+
+  if (!text) {
+    return 'Ölçü belirtilmedi';
+  }
+
+  return /mm$/i.test(text) ? text : `${text} mm`;
+}
+
 export default function ViewCase() {
   const { id } = useParams();
   const [k, setK] = useState<Kapak | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    (async () => {
+    let active = true;
+
+    async function loadCase(caseId: string) {
+      setLoading(true);
+      setError(null);
+
       try {
         const { data, error: loadError } = await timeout(
           supabase
             .from('kapaklar')
             .select('*')
-            .eq('id', id)
+            .eq('id', caseId)
             .maybeSingle(),
           10000
         );
 
         if (loadError) throw loadError;
-        setK(data as Kapak);
+
+        if (!data) {
+          throw new Error(
+            'Vaka kaydı bulunamadı veya bu kaydı görüntüleme yetkiniz yok.'
+          );
+        }
+
+        if (active) {
+          setK(data as Kapak);
+        }
       } catch (loadError: unknown) {
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : 'Vaka bilgisi yüklenemedi.'
-        );
+        if (active) {
+          setK(null);
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : 'Vaka bilgisi yüklenemedi.'
+          );
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
-    })();
+    }
+
+    if (!id) {
+      setK(null);
+      setError('Vaka kimliği bulunamadı.');
+      setLoading(false);
+    } else {
+      void loadCase(id);
+    }
+
+    return () => {
+      active = false;
+    };
   }, [id]);
+
+  if (loading) {
+    return (
+      <div className="surface p-4 text-sm text-slate-400">
+        Vaka bilgisi yükleniyor...
+      </div>
+    );
+  }
 
   if (error) {
     return (
@@ -60,8 +112,8 @@ export default function ViewCase() {
 
   if (!k) {
     return (
-      <div className="surface p-4 text-sm text-slate-400">
-        Vaka bilgisi yükleniyor...
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+        Vaka kaydı bulunamadı.
       </div>
     );
   }
@@ -72,7 +124,7 @@ export default function ViewCase() {
 
   const mail = `${formattedDate}
 
-${k.hasta_adi} isimli hastaya Medtronic ${k.kapak_tipi} ${k.kapak_size} kapak Lot no (${k.lot_no}) Dr. ${k.doktor} tarafından başarılı bir şekilde implante edildi.
+${k.hasta_adi} isimli hastaya Medtronic ${k.kapak_tipi} ${formatValveSize(k.kapak_size)} kapak Lot no (${k.lot_no}) Dr. ${k.doktor} tarafından başarılı bir şekilde implante edildi.
 
 Paravalvüler AY ${String(k.paravalvuler_ay).toLowerCase()}.
 
@@ -115,7 +167,9 @@ CRİMP: ${k.crimp_yapan}`;
               {formattedDate}
               <span className="mx-1.5 text-slate-700">•</span>
               {k.kapak_tipi || 'Kapak tipi eksik'}
-              {k.kapak_size ? ` / ${k.kapak_size} mm` : ''}
+              {k.kapak_size
+                ? ` / ${formatValveSize(k.kapak_size)}`
+                : ''}
             </p>
           </div>
 
