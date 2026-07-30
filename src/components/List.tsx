@@ -437,7 +437,7 @@ export default function List() {
     }
 
     const confirmed = window.confirm(
-      'Bu vaka kalıcı olarak silinsin mi? Bu işlem geri alınamaz.'
+      'Bu vaka kalıcı olarak silinsin mi? Vakada kullanılan kapaklar yeniden stoka alınacaktır.'
     );
 
     if (!confirmed) return;
@@ -445,15 +445,27 @@ export default function List() {
     setProcessingId(item.key);
 
     try {
-      const { error: deleteError } = await timeout(
-        supabase
-          .from('kapaklar')
-          .delete()
-          .eq('id', item.recordId),
-        10000
+      const { data, error: deleteError } = await timeout(
+        supabase.rpc(
+          'delete_case_and_restore_stock',
+          {
+            p_case_id: item.recordId,
+          }
+        ),
+        15000
       );
 
       if (deleteError) throw deleteError;
+
+      const result = data as {
+        success?: boolean;
+      } | null;
+
+      if (!result?.success) {
+        throw new Error(
+          'Vaka silme işlemi veritabanı tarafından doğrulanamadı.'
+        );
+      }
 
       setItems(previous =>
         previous.filter(row => row.key !== item.key)
