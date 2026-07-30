@@ -43,12 +43,6 @@ const StockMovements = lazy(
 const CompetitorCases = lazy(
   () => import('./components/CompetitorCases')
 );
-const MarketShare = lazy(
-  () => import('./components/MarketShare')
-);
-const CenterAnalysis = lazy(
-  () => import('./components/CenterAnalysis')
-);
 const Users = lazy(
   () => import('./components/Users')
 );
@@ -190,16 +184,6 @@ function AppRoutes() {
           <Route
             path="competitor-cases"
             element={<CompetitorCases />}
-          />
-
-          <Route
-            path="market-share"
-            element={<MarketShare />}
-          />
-
-          <Route
-            path="center-analysis"
-            element={<CenterAnalysis />}
           />
 
           <Route path="users" element={<Users />} />
