@@ -181,16 +181,20 @@ export default function AddCase() {
       return;
     }
 
-    void loadCase();
+    void loadCase(id);
   }, [id]);
 
-  async function loadCase() {
+  async function loadCase(caseId: string) {
     setLoading(true);
     setError(null);
 
     try {
       const { data, error: loadError } = await timeout(
-        supabase.from('kapaklar').select('*').eq('id', id).maybeSingle(),
+        supabase
+          .from('kapaklar')
+          .select('*')
+          .eq('id', caseId)
+          .maybeSingle(),
         10000
       );
 
