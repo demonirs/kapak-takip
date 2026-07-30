@@ -1,328 +1,267 @@
-import { useEffect, useMemo, useState } from 'react';
 import {
-  Archive,
-  CalendarDays,
-  ExternalLink,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import {
+  CalendarClock,
   PackageOpen,
+  RefreshCw,
+  Search,
+  X,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
-type MovementType = 'giris' | 'kullanildi' | 'iptal';
-type ActiveTab = 'giris' | 'kullanildi';
+const DATABASE_PAGE_SIZE = 1000;
 
-type StockMovement = {
-  id: string;
-  islem: MovementType;
-  urun_adi: string;
-  lot_no: string;
-  kapak_boyutu: number | null;
-  son_kullanma_tarihi: string | null;
-  created_at: string;
-  vaka_id: string | null;
-};
-
-type UsedStockItem = {
+type StockItem = {
   id: string;
   urun_adi: string | null;
   kapak_adi: string | null;
-  lot_no: string;
   kapak_boyutu: number | null;
+  lot_no: string | null;
   son_kullanma_tarihi: string | null;
-  created_at: string;
-  kullanilan_vaka_id: string | null;
-  durum: string;
+  durum: string | null;
+  created_at: string | null;
 };
 
-type DisplayItem = {
-  id: string;
-  islem: MovementType;
-  urun_adi: string;
-  lot_no: string;
-  kapak_boyutu: number | null;
-  son_kullanma_tarihi: string | null;
-  created_at: string;
-  vaka_id: string | null;
-  source: 'stok_hareketleri' | 'kapak_stok';
-};
+async function fetchAllStockEntries(): Promise<StockItem[]> {
+  const allRows: StockItem[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('kapak_stok')
+      .select(
+        `
+          id,
+          urun_adi,
+          kapak_adi,
+          kapak_boyutu,
+          lot_no,
+          son_kullanma_tarihi,
+          durum,
+          created_at
+        `
+      )
+      .order('created_at', { ascending: false })
+      .range(from, from + DATABASE_PAGE_SIZE - 1);
+
+    if (error) {
+      throw error;
+    }
+
+    const rows = (data || []) as StockItem[];
+    allRows.push(...rows);
+
+    if (rows.length < DATABASE_PAGE_SIZE) {
+      break;
+    }
+
+    from += DATABASE_PAGE_SIZE;
+  }
+
+  return allRows;
+}
+
+function normalize(value: unknown): string {
+  return String(value ?? '')
+    .toLocaleLowerCase('tr-TR')
+    .trim();
+}
+
+function formatDate(date: string | null): string {
+  if (!date) return '-';
+
+  const parsedDate = new Date(date);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return date;
+  }
+
+  return parsedDate.toLocaleDateString('tr-TR');
+}
+
+function formatDateTime(date: string | null): string {
+  if (!date) return 'Tarih bilgisi yok';
+
+  const parsedDate = new Date(date);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return date;
+  }
+
+  return parsedDate.toLocaleString('tr-TR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function productName(item: StockItem): string {
+  return item.urun_adi || item.kapak_adi || 'Kapak';
+}
+
+function sizeText(size: number | null): string {
+  return size ? `${size} mm` : '-';
+}
+
+function statusText(status: string | null): string {
+  if (status === 'stokta') return 'Stokta';
+  if (status === 'kullanildi') return 'Kullanıldı';
+
+  return status || 'Bilinmiyor';
+}
+
+function statusClass(status: string | null): string {
+  if (status === 'stokta') {
+    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+  }
+
+  if (status === 'kullanildi') {
+    return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300';
+  }
+
+  return 'border-slate-600 bg-slate-700/50 text-slate-300';
+}
 
 export default function StockMovements() {
-  const navigate = useNavigate();
-
-  const [girisItems, setGirisItems] = useState<DisplayItem[]>([]);
-  const [kullanildiItems, setKullanildiItems] = useState<DisplayItem[]>([]);
+  const [items, setItems] = useState<StockItem[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
-  const [activeTab, setActiveTab] = useState<ActiveTab>('giris');
 
-  useEffect(() => {
-    loadMovements();
-  }, []);
-
-  async function loadMovements() {
+  const loadEntries = useCallback(async () => {
     setLoading(true);
     setMessage('');
 
-    const { data: girisData, error: girisError } = await supabase
-      .from('stok_hareketleri')
-      .select(
-        'id, islem, urun_adi, lot_no, kapak_boyutu, son_kullanma_tarihi, created_at, vaka_id'
-      )
-      .eq('islem', 'giris')
-      .or('arsivlendi.eq.false,arsivlendi.is.null')
-      .order('created_at', { ascending: false })
-      .limit(5000);
-
-    if (girisError) {
-      setMessage(girisError.message);
+    try {
+      const rows = await fetchAllStockEntries();
+      setItems(rows);
+    } catch (error: unknown) {
+      setMessage(
+        error instanceof Error
+          ? `Stok girişleri alınamadı: ${error.message}`
+          : 'Stok girişleri alınamadı.'
+      );
+    } finally {
       setLoading(false);
-      return;
     }
+  }, []);
 
-    const { data: usedMovementData, error: usedMovementError } = await supabase
-      .from('stok_hareketleri')
-      .select(
-        'id, islem, urun_adi, lot_no, kapak_boyutu, son_kullanma_tarihi, created_at, vaka_id'
-      )
-      .eq('islem', 'kullanildi')
-      .or('arsivlendi.eq.false,arsivlendi.is.null')
-      .order('created_at', { ascending: false })
-      .limit(5000);
-
-    if (usedMovementError) {
-      setMessage(usedMovementError.message);
-      setLoading(false);
-      return;
-    }
-
-    const { data: usedStockData, error: usedStockError } = await supabase
-      .from('kapak_stok')
-      .select(
-        'id, urun_adi, kapak_adi, lot_no, kapak_boyutu, son_kullanma_tarihi, created_at, kullanilan_vaka_id, durum'
-      )
-      .eq('durum', 'kullanildi')
-      .order('created_at', { ascending: false })
-      .limit(5000);
-
-    if (usedStockError) {
-      setMessage(usedStockError.message);
-      setLoading(false);
-      return;
-    }
-
-    const formattedGirisItems: DisplayItem[] = (
-      (girisData || []) as StockMovement[]
-    ).map(item => ({
-      id: item.id,
-      islem: item.islem,
-      urun_adi: item.urun_adi,
-      lot_no: item.lot_no,
-      kapak_boyutu: item.kapak_boyutu,
-      son_kullanma_tarihi: item.son_kullanma_tarihi,
-      created_at: item.created_at,
-      vaka_id: item.vaka_id,
-      source: 'stok_hareketleri',
-    }));
-
-    const formattedUsedMovementItems: DisplayItem[] = (
-      (usedMovementData || []) as StockMovement[]
-    ).map(item => ({
-      id: item.id,
-      islem: 'kullanildi',
-      urun_adi: item.urun_adi || 'Kapak',
-      lot_no: item.lot_no,
-      kapak_boyutu: item.kapak_boyutu,
-      son_kullanma_tarihi: item.son_kullanma_tarihi,
-      created_at: item.created_at,
-      vaka_id: item.vaka_id,
-      source: 'stok_hareketleri',
-    }));
-
-    const formattedUsedStockItems: DisplayItem[] = (
-      (usedStockData || []) as UsedStockItem[]
-    ).map(item => ({
-      id: item.id,
-      islem: 'kullanildi',
-      urun_adi: item.urun_adi || item.kapak_adi || 'Kapak',
-      lot_no: item.lot_no,
-      kapak_boyutu: item.kapak_boyutu,
-      son_kullanma_tarihi: item.son_kullanma_tarihi,
-      created_at: item.created_at,
-      vaka_id: item.kullanilan_vaka_id,
-      source: 'kapak_stok',
-    }));
-
-    const mergedUsedItemsMap = new Map<string, DisplayItem>();
-
-    [...formattedUsedMovementItems, ...formattedUsedStockItems].forEach(item => {
-      const key = `${item.vaka_id || 'no-case'}-${item.lot_no}`;
-
-      if (!mergedUsedItemsMap.has(key)) {
-        mergedUsedItemsMap.set(key, item);
-      }
-    });
-
-    const mergedUsedItems = Array.from(mergedUsedItemsMap.values()).sort(
-      (a, b) =>
-        new Date(b.created_at).getTime() -
-        new Date(a.created_at).getTime()
-    );
-
-    setGirisItems(formattedGirisItems);
-    setKullanildiItems(mergedUsedItems);
-    setLoading(false);
-  }
+  useEffect(() => {
+    void loadEntries();
+  }, [loadEntries]);
 
   const filteredItems = useMemo(() => {
-    return activeTab === 'giris' ? girisItems : kullanildiItems;
-  }, [activeTab, girisItems, kullanildiItems]);
+    const query = normalize(searchTerm);
 
-  async function archiveMovement(item: DisplayItem) {
-    if (item.source !== 'stok_hareketleri') {
-      setMessage(
-        'Kullanılan stok kayıtları kapak_stok tablosundan gelir; buradan arşivlenmez.'
-      );
-      return;
-    }
+    if (!query) return items;
 
-    const ok = window.confirm('Bu hareket kaydı arşivlensin mi?');
+    return items.filter(item => {
+      const searchableText = [
+        productName(item),
+        item.kapak_boyutu,
+        item.lot_no,
+        item.son_kullanma_tarihi,
+        statusText(item.durum),
+        formatDateTime(item.created_at),
+      ]
+        .map(normalize)
+        .join(' ');
 
-    if (!ok) return;
-
-    const { error } = await supabase
-      .from('stok_hareketleri')
-      .update({ arsivlendi: true })
-      .eq('id', item.id);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    loadMovements();
-  }
-
-  function openRelatedCase(item: DisplayItem) {
-    if (!item.vaka_id) {
-      setMessage('Bu kayıt bir vaka ile ilişkili değil.');
-      return;
-    }
-
-    navigate(`/view/${item.vaka_id}`);
-  }
-
-  function changeTab(tab: ActiveTab) {
-    setActiveTab(tab);
-    setMessage('');
-  }
-
-  function formatDate(date: string | null) {
-    if (!date) return '-';
-
-    return new Date(date).toLocaleDateString('tr-TR');
-  }
-
-  function formatDateTime(date: string) {
-    return new Date(date).toLocaleString('tr-TR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+      return searchableText.includes(query);
     });
-  }
-
-  function islemText(islem: MovementType) {
-    if (islem === 'giris') return 'Giriş';
-    if (islem === 'kullanildi') return 'Kullanım';
-
-    return 'İptal';
-  }
-
-  function islemClass(islem: MovementType) {
-    if (islem === 'giris') {
-      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
-    }
-
-    if (islem === 'kullanildi') {
-      return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300';
-    }
-
-    return 'border-red-500/30 bg-red-500/10 text-red-300';
-  }
-
-  function tabClass(tab: ActiveTab) {
-    return activeTab === tab
-      ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-100 shadow-sm'
-      : 'border-transparent text-slate-400 hover:bg-slate-800 hover:text-slate-200';
-  }
-
-  function emptyMessage() {
-    return activeTab === 'giris'
-      ? 'Henüz giriş hareketi bulunmuyor.'
-      : 'Henüz kullanım hareketi bulunmuyor.';
-  }
+  }, [items, searchTerm]);
 
   return (
     <div className="space-y-4 pb-24">
-      <header>
-        <h1 className="text-xl font-bold text-white sm:text-2xl">
-          Stok Hareketleri
-        </h1>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-white sm:text-2xl">
+            Stok Girişleri
+          </h1>
 
-        <p className="mt-1 text-sm text-slate-400">
-          Kapak girişlerini ve kullanım hareketlerini görüntüleyin.
-        </p>
+          <p className="mt-1 text-sm text-slate-400">
+            Stoka eklenen tüm kapaklar ve giriş zamanları.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => void loadEntries()}
+          disabled={loading}
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-300 transition hover:border-slate-600 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <RefreshCw
+            className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`}
+          />
+          Yenile
+        </button>
       </header>
 
-      <div className="inline-flex w-full rounded-xl border border-slate-700 bg-slate-900/60 p-1 sm:w-auto">
-        <button
-          type="button"
-          onClick={() => changeTab('giris')}
-          aria-pressed={activeTab === 'giris'}
-          className={`flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition sm:flex-none ${tabClass(
-            'giris'
-          )}`}
-        >
-          <span>Giriş</span>
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Toplam Giriş
+          </div>
 
-          <span
-            className={`rounded-md px-1.5 py-0.5 text-xs font-bold ${
-              activeTab === 'giris'
-                ? 'bg-cyan-400/20 text-cyan-100'
-                : 'bg-slate-700 text-slate-300'
-            }`}
+          <div className="mt-1 text-2xl font-bold text-white">
+            {items.length}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-emerald-300/70">
+            Stokta
+          </div>
+
+          <div className="mt-1 text-2xl font-bold text-emerald-300">
+            {items.filter(item => item.durum === 'stokta').length}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-cyan-300/70">
+            Kullanılmış
+          </div>
+
+          <div className="mt-1 text-2xl font-bold text-cyan-300">
+            {items.filter(item => item.durum === 'kullanildi').length}
+          </div>
+        </div>
+      </section>
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+
+        <input
+          type="search"
+          value={searchTerm}
+          onChange={event => setSearchTerm(event.target.value)}
+          placeholder="LOT, ürün, ölçü, durum veya giriş tarihi ara..."
+          className="min-h-11 w-full rounded-xl border border-slate-700 bg-slate-900/70 py-2.5 pl-10 pr-11 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+        />
+
+        {searchTerm && (
+          <button
+            type="button"
+            onClick={() => setSearchTerm('')}
+            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-700 hover:text-white"
+            aria-label="Aramayı temizle"
           >
-            {girisItems.length}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => changeTab('kullanildi')}
-          aria-pressed={activeTab === 'kullanildi'}
-          className={`flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition sm:flex-none ${tabClass(
-            'kullanildi'
-          )}`}
-        >
-          <span>Kullanım</span>
-
-          <span
-            className={`rounded-md px-1.5 py-0.5 text-xs font-bold ${
-              activeTab === 'kullanildi'
-                ? 'bg-cyan-400/20 text-cyan-100'
-                : 'bg-slate-700 text-slate-300'
-            }`}
-          >
-            {kullanildiItems.length}
-          </span>
-        </button>
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {message && (
         <div
-          role="status"
-          className="rounded-xl border border-slate-700 bg-slate-800/80 px-4 py-3 text-sm text-slate-300"
+          role="alert"
+          className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
         >
           {message}
         </div>
@@ -330,7 +269,7 @@ export default function StockMovements() {
 
       {loading ? (
         <div className="rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-10 text-center text-sm text-slate-400">
-          Stok hareketleri yükleniyor...
+          Stok girişleri yükleniyor...
         </div>
       ) : filteredItems.length === 0 ? (
         <div className="flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-800/40 px-4 py-10 text-center">
@@ -343,7 +282,9 @@ export default function StockMovements() {
           </h2>
 
           <p className="mt-1 text-sm text-slate-400">
-            {emptyMessage()}
+            {searchTerm
+              ? 'Arama ölçütüne uygun stok girişi yok.'
+              : 'Henüz stok girişi bulunmuyor.'}
           </p>
         </div>
       ) : (
@@ -352,95 +293,56 @@ export default function StockMovements() {
             <table className="w-full table-fixed">
               <thead className="border-b border-slate-700 bg-slate-900/50">
                 <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  <th className="w-[18%] px-3 py-2.5">Tarih</th>
-                  <th className="w-[13%] px-3 py-2.5">İşlem</th>
-                  <th className="w-[27%] px-3 py-2.5">Ürün</th>
-                  <th className="w-[18%] px-3 py-2.5">LOT</th>
-                  <th className="w-[16%] px-3 py-2.5">SKT</th>
-                  <th className="w-[8%] px-3 py-2.5 text-right">
-                    İşlem
+                  <th className="w-[21%] px-3 py-2.5">
+                    Giriş Tarihi ve Saati
                   </th>
+                  <th className="w-[25%] px-3 py-2.5">Ürün</th>
+                  <th className="w-[12%] px-3 py-2.5">Ölçü</th>
+                  <th className="w-[18%] px-3 py-2.5">LOT</th>
+                  <th className="w-[13%] px-3 py-2.5">SKT</th>
+                  <th className="w-[11%] px-3 py-2.5">Durum</th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-700/70">
                 {filteredItems.map(item => (
                   <tr
-                    key={`${item.source}-${item.id}`}
+                    key={item.id}
                     className="text-sm text-slate-300 transition hover:bg-slate-700/30"
                   >
-                    <td className="px-3 py-2.5 whitespace-nowrap text-xs text-slate-400">
+                    <td className="whitespace-nowrap px-3 py-3 text-xs font-medium text-slate-300">
                       {formatDateTime(item.created_at)}
                     </td>
 
-                    <td className="px-3 py-2.5">
-                      <span
-                        className={`inline-flex rounded-md border px-2 py-1 text-xs font-medium ${islemClass(
-                          item.islem
-                        )}`}
-                      >
-                        {islemText(item.islem)}
+                    <td
+                      className="truncate px-3 py-3 font-medium text-slate-100"
+                      title={productName(item)}
+                    >
+                      {productName(item)}
+                    </td>
+
+                    <td className="whitespace-nowrap px-3 py-3 text-sm">
+                      {sizeText(item.kapak_boyutu)}
+                    </td>
+
+                    <td className="px-3 py-3 font-mono text-xs font-semibold text-cyan-300">
+                      <span className="block truncate" title={item.lot_no || '-'}>
+                        {item.lot_no || '-'}
                       </span>
                     </td>
 
-                    <td className="px-3 py-2.5">
-                      <div
-                        className="truncate font-medium text-slate-200"
-                        title={`${item.urun_adi}${
-                          item.kapak_boyutu
-                            ? ` ${item.kapak_boyutu} mm`
-                            : ''
-                        }`}
-                      >
-                        {item.urun_adi}
-
-                        {item.kapak_boyutu
-                          ? ` ${item.kapak_boyutu} mm`
-                          : ''}
-                      </div>
-                    </td>
-
-                    <td className="px-3 py-2.5">
-                      <button
-                        type="button"
-                        onClick={() => openRelatedCase(item)}
-                        className={`inline-flex max-w-full items-center gap-1.5 rounded-md font-mono text-xs font-semibold ${
-                          item.vaka_id
-                            ? 'text-cyan-300 hover:text-cyan-200'
-                            : 'text-slate-400 hover:text-slate-300'
-                        }`}
-                        title={
-                          item.vaka_id
-                            ? 'İlgili vakayı aç'
-                            : 'Bu kayıt vaka ile ilişkili değil'
-                        }
-                      >
-                        <span className="truncate">{item.lot_no || '-'}</span>
-
-                        {item.vaka_id && (
-                          <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                        )}
-                      </button>
-                    </td>
-
-                    <td className="px-3 py-2.5 whitespace-nowrap text-xs text-slate-300">
+                    <td className="whitespace-nowrap px-3 py-3 text-xs">
                       {formatDate(item.son_kullanma_tarihi)}
                     </td>
 
-                    <td className="px-3 py-2.5 text-right">
-                      {item.source === 'stok_hareketleri' ? (
-                        <button
-                          type="button"
-                          onClick={() => archiveMovement(item)}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-amber-300 transition hover:bg-amber-500/10 hover:text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
-                          title="Hareketi arşivle"
-                          aria-label={`${item.lot_no} LOT numaralı hareketi arşivle`}
-                        >
-                          <Archive className="h-4 w-4" />
-                        </button>
-                      ) : (
-                        <span className="text-sm text-slate-600">—</span>
-                      )}
+                    <td className="px-3 py-3">
+                      <span
+                        className={`inline-flex rounded-md border px-2 py-1 text-xs font-medium ${statusClass(
+                          item.durum
+                        )}`}
+                      >
+                        {statusText(item.durum)}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -451,46 +353,28 @@ export default function StockMovements() {
           <div className="space-y-3 md:hidden">
             {filteredItems.map(item => (
               <article
-                key={`${item.source}-${item.id}`}
+                key={item.id}
                 className="rounded-xl border border-slate-700 bg-slate-800/70 p-3.5"
               >
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                      <span
-                        className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-medium ${islemClass(
-                          item.islem
-                        )}`}
-                      >
-                        {islemText(item.islem)}
-                      </span>
-
-                      <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
-                        <CalendarDays className="h-3.5 w-3.5" />
-                        {formatDateTime(item.created_at)}
-                      </span>
-                    </div>
-
                     <h2 className="break-words text-sm font-semibold text-slate-100">
-                      {item.urun_adi}
-
-                      {item.kapak_boyutu
-                        ? ` ${item.kapak_boyutu} mm`
-                        : ''}
+                      {productName(item)} {sizeText(item.kapak_boyutu)}
                     </h2>
+
+                    <div className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-400">
+                      <CalendarClock className="h-3.5 w-3.5 shrink-0 text-cyan-400" />
+                      <span>{formatDateTime(item.created_at)}</span>
+                    </div>
                   </div>
 
-                  {item.source === 'stok_hareketleri' && (
-                    <button
-                      type="button"
-                      onClick={() => archiveMovement(item)}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-amber-300 transition hover:bg-amber-500/10 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
-                      title="Hareketi arşivle"
-                      aria-label={`${item.lot_no} LOT numaralı hareketi arşivle`}
-                    >
-                      <Archive className="h-4 w-4" />
-                    </button>
-                  )}
+                  <span
+                    className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-medium ${statusClass(
+                      item.durum
+                    )}`}
+                  >
+                    {statusText(item.durum)}
+                  </span>
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-700/70 pt-3">
@@ -499,21 +383,9 @@ export default function StockMovements() {
                       LOT
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => openRelatedCase(item)}
-                      className={`mt-1 flex max-w-full items-center gap-1.5 font-mono text-xs font-semibold ${
-                        item.vaka_id
-                          ? 'text-cyan-300'
-                          : 'text-slate-300'
-                      }`}
-                    >
-                      <span className="break-all">{item.lot_no || '-'}</span>
-
-                      {item.vaka_id && (
-                        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                      )}
-                    </button>
+                    <div className="mt-1 break-all font-mono text-xs font-semibold text-cyan-300">
+                      {item.lot_no || '-'}
+                    </div>
                   </div>
 
                   <div className="min-w-0 rounded-lg bg-slate-900/40 px-3 py-2">
