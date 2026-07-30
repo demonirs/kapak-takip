@@ -67,9 +67,12 @@ export const PARAVALVULER_OPTIONS = [
 
 export const PROGLIDE_OPTIONS = [1, 2, 3, 4] as const;
 
-export function timeout<T>(promise: Promise<T>, ms = 10000): Promise<T> {
+export function timeout<T>(
+  promise: PromiseLike<T>,
+  ms = 10000
+): Promise<T> {
   return Promise.race([
-    promise,
+    Promise.resolve(promise),
     new Promise<T>((_, reject) =>
       setTimeout(() => reject(new Error('İstek zaman aşımına uğradı.')), ms)
     ),
