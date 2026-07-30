@@ -512,10 +512,25 @@ export default function List() {
           </p>
         </div>
 
-        <Link to="/add" className="button-primary w-full sm:w-auto">
-          <Plus className="h-4 w-4" />
-          Yeni Vaka
-        </Link>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <button
+            type="button"
+            disabled={exporting || items.length === 0}
+            onClick={() => void downloadCaseBackup()}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/5 px-4 py-2.5 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            {exporting ? 'Hazırlanıyor...' : "Excel'e Aktar"}
+          </button>
+
+          <Link
+            to="/add"
+            className="button-primary w-full sm:w-auto"
+          >
+            <Plus className="h-4 w-4" />
+            Yeni Vaka
+          </Link>
+        </div>
       </section>
 
       {items.length >= BACKUP_WARNING_LIMIT && (
