@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Archive,
   AlertTriangle,
   Bell,
   BellOff,
@@ -10,7 +14,6 @@ import {
   CheckCircle2,
   CheckCheck,
   Circle,
-  FileSpreadsheet,
   HeartPulse,
   Home,
   List,
@@ -21,7 +24,6 @@ import {
   Loader2,
   Package,
   PlusCircle,
-  Search,
   Shuffle,
   Sun,
   Users,
@@ -59,16 +61,13 @@ const menuSections = [
       { to: '/', label: 'Ana Sayfa', icon: Home },
       { to: '/add', label: 'Yeni Vaka', icon: PlusCircle },
       { to: '/list', label: 'Vakalar', icon: List },
-      { to: '/search', label: 'Arama', icon: Search },
-      { to: '/export', label: 'Excel Aktar', icon: FileSpreadsheet },
     ],
   },
   {
     title: 'STOK YÖNETİMİ',
     items: [
       { to: '/stock', label: 'Stok Takip', icon: Package },
-      { to: '/stock-movements', label: 'Stok Hareketleri', icon: Shuffle },
-      { to: '/archive', label: 'Arşiv', icon: Archive },
+      { to: '/stock-movements', label: 'Stok Girişleri', icon: Shuffle },
     ],
   },
   {
@@ -88,7 +87,7 @@ function getPageTitle(pathname: string) {
   if (pathname.startsWith('/list')) return 'Vakalar';
   if (pathname.startsWith('/view')) return 'Vaka Detayı';
   if (pathname.startsWith('/search')) return 'Arama';
-  if (pathname.startsWith('/stock-movements')) return 'Stok Hareketleri';
+  if (pathname.startsWith('/stock-movements')) return 'Stok Girişleri';
   if (pathname.startsWith('/stock')) return 'Stok Takip';
   if (pathname.startsWith('/archive')) return 'Arşiv';
   if (pathname.startsWith('/users')) return 'Kullanıcı Yönetimi';
@@ -123,6 +122,27 @@ export default function Layout() {
   );
   const profileRole = (profile as { role?: string | null } | null)?.role;
   const roleLabel = profileRole === 'admin' ? 'Yönetici' : 'Kullanıcı';
+
+  const loadNotifications = useCallback(async () => {
+    if (!profile?.id) return;
+
+    setNotificationLoading(true);
+
+    const { data, error } = await supabase
+      .from('notifications')
+      .select(
+        'id, user_id, title, message, type, related_table, related_id, is_read, created_at'
+      )
+      .eq('user_id', profile.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (!error && data) {
+      setNotifications(data as NotificationItem[]);
+    }
+
+    setNotificationLoading(false);
+  }, [profile?.id]);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -202,7 +222,7 @@ export default function Layout() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile?.id]);
+  }, [loadNotifications, profile?.id]);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -239,27 +259,6 @@ export default function Layout() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
-
-  async function loadNotifications() {
-    if (!profile?.id) return;
-
-    setNotificationLoading(true);
-
-    const { data, error } = await supabase
-      .from('notifications')
-      .select(
-        'id, user_id, title, message, type, related_table, related_id, is_read, created_at'
-      )
-      .eq('user_id', profile.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
-
-    if (!error && data) {
-      setNotifications(data as NotificationItem[]);
-    }
-
-    setNotificationLoading(false);
-  }
 
   async function markNotificationAsRead(notificationId: string) {
     const { error } = await supabase
