@@ -16,6 +16,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { supabase, timeout } from '../lib/supabase';
+import { fetchUnifiedCases } from '../lib/caseData';
 
 type DashboardCase = {
   id: string;
@@ -67,6 +68,18 @@ function getCurrentMonthRange(): {
     start: toDateInputValue(firstDay),
     end: toDateInputValue(firstDayOfNextMonth),
   };
+}
+
+function isDateInRange(
+  value: string | null,
+  start: string,
+  end: string
+): boolean {
+  if (!value) return false;
+
+  const datePart = value.split('T')[0];
+
+  return datePart >= start && datePart < end;
 }
 
 function currentMonthLabel(): string {
@@ -160,32 +173,10 @@ export default function Dashboard() {
       const monthRange = getCurrentMonthRange();
 
       const [
-        monthCountResponse,
-        totalCountResponse,
+        unifiedCases,
         stockCountResponse,
-        recentCasesResponse,
       ] = await Promise.all([
-        timeout(
-          supabase
-            .from('kapaklar')
-            .select('id', {
-              count: 'exact',
-              head: true,
-            })
-            .gte('vaka_tarihi', monthRange.start)
-            .lt('vaka_tarihi', monthRange.end),
-          10000
-        ),
-
-        timeout(
-          supabase
-            .from('kapaklar')
-            .select('id', {
-              count: 'exact',
-              head: true,
-            }),
-          10000
-        ),
+        fetchUnifiedCases(),
 
         timeout(
           supabase
@@ -197,40 +188,42 @@ export default function Dashboard() {
             .eq('durum', 'stokta'),
           10000
         ),
-
-        timeout(
-          supabase
-            .from('kapaklar')
-            .select(
-              'id, vaka_tarihi, merkez_hastane, doktor, hasta_adi, kapak_tipi, kapak_size, lot_no'
-            )
-            .order('vaka_tarihi', {
-              ascending: false,
-              nullsFirst: false,
-            })
-            .limit(5),
-          10000
-        ),
       ]);
 
-      const firstError =
-        monthCountResponse.error ||
-        totalCountResponse.error ||
-        stockCountResponse.error ||
-        recentCasesResponse.error;
+      const firstError = stockCountResponse.error;
 
       if (firstError) {
         throw firstError;
       }
 
+      const currentMonthCases = unifiedCases.filter(item =>
+        isDateInRange(
+          item.vaka_tarihi,
+          monthRange.start,
+          monthRange.end
+        )
+      ).length;
+
       setStats({
-        monthCases: monthCountResponse.count ?? 0,
-        totalCases: totalCountResponse.count ?? 0,
+        monthCases: currentMonthCases,
+        totalCases: unifiedCases.length,
         stockTotal: stockCountResponse.count ?? 0,
       });
 
       setRecentCases(
-        (recentCasesResponse.data as DashboardCase[] | null) || []
+        unifiedCases
+          .filter(item => item.source === 'valveflow')
+          .slice(0, 5)
+          .map(item => ({
+            id: item.recordId,
+            vaka_tarihi: item.vaka_tarihi,
+            merkez_hastane: item.merkez_hastane,
+            doktor: item.doktor,
+            hasta_adi: item.hasta_adi,
+            kapak_tipi: item.kapak_tipi,
+            kapak_size: item.kapak_size,
+            lot_no: item.lot_no,
+          }))
       );
     } catch (error: unknown) {
       setErrorMessage(
@@ -326,7 +319,7 @@ export default function Dashboard() {
         <StatCard
           label="Toplam Vaka"
           value={stats.totalCases}
-          description="Tüm zamanlardaki kayıtlar"
+          description="ValveFlow ve eski listedeki vakalar"
           icon={Layers}
           iconClassName="text-violet-300"
           iconContainerClassName="border-violet-500/20 bg-violet-500/10"
