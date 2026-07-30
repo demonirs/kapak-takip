@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
 import { Download, FileSpreadsheet, Filter, Search, X } from 'lucide-react';
 import { Kapak, supabase, timeout } from '../lib/supabase';
+import { downloadExcel } from '../lib/excel';
 
 function formatDate(value?: string | null): string {
   if (!value) return '';
@@ -132,7 +132,7 @@ export default function Export() {
     Boolean(endDate),
   ].filter(Boolean).length;
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     if (filteredItems.length === 0 || exporting) return;
 
     setExporting(true);
@@ -155,48 +155,6 @@ export default function Export() {
         'Crimp Yapan': item.crimp_yapan || '',
       }));
 
-      const worksheet = XLSX.utils.json_to_sheet(rows);
-
-      worksheet['!cols'] = [
-        { wch: 7 },
-        { wch: 14 },
-        { wch: 30 },
-        { wch: 25 },
-        { wch: 25 },
-        { wch: 18 },
-        { wch: 14 },
-        { wch: 20 },
-        { wch: 20 },
-        { wch: 16 },
-        { wch: 16 },
-        { wch: 20 },
-        { wch: 18 },
-        { wch: 25 },
-      ];
-
-      if (worksheet['!ref']) {
-        worksheet['!autofilter'] = {
-          ref: worksheet['!ref'],
-        };
-      }
-
-      const workbook = XLSX.utils.book_new();
-
-      workbook.Props = {
-        Title: 'ValveFlow Vaka Raporu',
-        Subject: 'TAVI vaka kayıtları',
-        Author: 'ValveFlow',
-        Company: 'Fokus Sağlık',
-        Comments: 'ValveFlow tarafından oluşturulmuştur.',
-        CreatedDate: new Date(),
-      };
-
-      XLSX.utils.book_append_sheet(
-        workbook,
-        worksheet,
-        'Vaka Kayıtları'
-      );
-
       const today = new Date().toISOString().slice(0, 10);
 
       let fileNameDatePart = today;
@@ -213,8 +171,14 @@ export default function Export() {
         `ValveFlow_Vaka_Raporu_${fileNameDatePart}.xlsx`
       );
 
-      XLSX.writeFile(workbook, fileName, {
-        compression: true,
+      await downloadExcel({
+        rows,
+        widths: [
+          7, 14, 30, 25, 25, 18, 14, 20, 20, 16, 16,
+          20, 18, 25,
+        ],
+        sheetName: 'Vaka Kayıtları',
+        fileName,
       });
     } catch (error) {
       const message =
