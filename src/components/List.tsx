@@ -767,12 +767,12 @@ export default function List() {
               return (
                 <article
                   key={item.key}
-                  className={`min-w-0 rounded-xl border p-3 ${
+                  className={`min-w-0 rounded-2xl border bg-slate-950/20 p-4 ${
                     isLegacy
-                      ? 'border-violet-500/25 bg-violet-500/[0.045]'
+                      ? 'border-violet-500/30'
                       : missingFields.length > 0
-                        ? 'border-amber-500/25 bg-amber-500/[0.045]'
-                        : 'border-slate-700 bg-slate-800/80'
+                        ? 'border-amber-500/30'
+                        : 'border-cyan-500/20'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -818,32 +818,35 @@ export default function List() {
                   </div>
 
                   {isLegacy ? (
-                    <div className="mt-3 border-t border-violet-500/15 pt-2.5 text-right text-xs text-violet-300/70">
+                    <div className="mt-4 border-t border-violet-500/15 pt-3 text-right text-xs text-violet-300/70">
                       Geçmiş liste kaydı
                     </div>
                   ) : (
-                    <div className="mt-3 flex min-w-0 items-center justify-end gap-1 border-t border-slate-700/70 pt-2.5">
+                    <div className="mt-4 flex min-w-0 items-center justify-end gap-1 border-t border-cyan-500/10 pt-3">
                       <Link
-                        className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-slate-300 transition hover:bg-slate-700 hover:text-cyan-300"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-cyan-300"
                         to={`/view/${item.recordId}`}
+                        title="Vakayı görüntüle"
+                        aria-label="Vakayı görüntüle"
                       >
                         <Eye className="h-4 w-4" />
-                        Görüntüle
                       </Link>
                       <Link
-                        className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/10"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-cyan-300 transition hover:bg-cyan-500/10"
                         to={`/edit/${item.recordId}`}
+                        title="Vakayı düzenle"
+                        aria-label="Vakayı düzenle"
                       >
                         <Pencil className="h-4 w-4" />
-                        Düzenle
                       </Link>
 
                       {isAdmin && (
                         <button
                           type="button"
                           disabled={isProcessing}
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 transition hover:bg-red-500/10 hover:text-red-300 disabled:opacity-50"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-red-500/10 hover:text-red-300 disabled:opacity-50"
                           onClick={() => void deleteCase(item)}
+                          title="Vakayı sil"
                           aria-label="Vakayı sil"
                         >
                           <Trash2 className="h-4 w-4" />
