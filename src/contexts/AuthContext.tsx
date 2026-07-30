@@ -1,8 +1,22 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, timeout } from '../lib/supabase';
 
-type Profile = { id: string; full_name: string; created_at?: string };
+export type Profile = {
+  id: string;
+  full_name: string;
+  role?: string | null;
+  yetki?: string | null;
+  is_admin?: boolean | null;
+  created_at?: string;
+};
 
 type AuthContextValue = {
   user: User | null;
@@ -26,36 +40,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadProfile = async (currentUser: User | null) => {
-    if (!currentUser) {
-      setProfile(null);
-      return;
-    }
+  const loadProfile = useCallback(
+    async (currentUser: User | null) => {
+      if (!currentUser) {
+        setProfile(null);
+        return;
+      }
 
-    const name = fallbackName(currentUser);
-    const { data, error } = await timeout(
-      supabase.from('profiles').select('*').eq('id', currentUser.id).maybeSingle(),
-      8000
-    );
-
-    if (error) {
-      console.error('Profil yükleme hatası:', error);
-      setProfile({ id: currentUser.id, full_name: name });
-      return;
-    }
-
-    if (!data) {
-      const { data: inserted, error: insertError } = await timeout(
-        supabase.from('profiles').upsert({ id: currentUser.id, full_name: name }).select().maybeSingle(),
+      const name = fallbackName(currentUser);
+      const { data, error } = await timeout(
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', currentUser.id)
+          .maybeSingle(),
         8000
       );
-      if (insertError) console.error('Profil oluşturma hatası:', insertError);
-      setProfile(inserted || { id: currentUser.id, full_name: name });
-      return;
-    }
 
-    setProfile(data);
-  };
+      if (error) {
+        console.error('Profil yükleme hatası:', error);
+        setProfile({
+          id: currentUser.id,
+          full_name: name,
+        });
+        return;
+      }
+
+      if (!data) {
+        const {
+          data: inserted,
+          error: insertError,
+        } = await timeout(
+          supabase
+            .from('profiles')
+            .upsert({
+              id: currentUser.id,
+              full_name: name,
+            })
+            .select()
+            .maybeSingle(),
+          8000
+        );
+
+        if (insertError) {
+          console.error(
+            'Profil oluşturma hatası:',
+            insertError
+          );
+        }
+
+        setProfile(
+          inserted || {
+            id: currentUser.id,
+            full_name: name,
+          }
+        );
+        return;
+      }
+
+      setProfile(data);
+    },
+    []
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -76,39 +122,81 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     init();
-    const { data } = supabase.auth.onAuthStateChange(async (_event, currentSession) => {
+    const { data } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
-      await loadProfile(currentSession?.user ?? null);
       setLoading(false);
+
+      window.setTimeout(() => {
+        void loadProfile(
+          currentSession?.user ?? null
+        ).catch(error => {
+          console.error(
+            'Oturum sonrası profil yükleme hatası:',
+            error
+          );
+        });
+      }, 0);
     });
 
     return () => {
       mounted = false;
       data.subscription.unsubscribe();
     };
-  }, []);
+  }, [loadProfile]);
 
-  const signIn = async (email: string, password: string) => {
-    const { data, error } = await timeout(supabase.auth.signInWithPassword({ email, password }), 10000);
-    if (error) return error.message;
-    setSession(data.session);
-    setUser(data.user);
-    await loadProfile(data.user);
-    return null;
-  };
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      const { data, error } = await timeout(
+        supabase.auth.signInWithPassword({
+          email,
+          password,
+        }),
+        10000
+      );
 
-  const signUp = async (email: string, password: string, fullName: string) => {
-    const { data, error } = await timeout(
-      supabase.auth.signUp({ email, password, options: { data: { full_name: fullName || email.split('@')[0] } } }),
-      10000
-    );
-    if (error) return error.message;
-    if (data.user) await loadProfile(data.user);
-    return null;
-  };
+      if (error) return error.message;
 
-  const signOut = async () => {
+      setSession(data.session);
+      setUser(data.user);
+      await loadProfile(data.user);
+      return null;
+    },
+    [loadProfile]
+  );
+
+  const signUp = useCallback(
+    async (
+      email: string,
+      password: string,
+      fullName: string
+    ) => {
+      const { data, error } = await timeout(
+        supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name:
+                fullName || email.split('@')[0],
+            },
+          },
+        }),
+        10000
+      );
+
+      if (error) return error.message;
+
+      if (data.user) {
+        await loadProfile(data.user);
+      }
+
+      return null;
+    },
+    [loadProfile]
+  );
+
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     localStorage.clear();
     sessionStorage.clear();
@@ -116,9 +204,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setProfile(null);
     window.location.href = '/login';
-  };
+  }, []);
 
-  const value = useMemo(() => ({ user, session, profile, loading, signIn, signUp, signOut }), [user, session, profile, loading]);
+  const value = useMemo(
+    () => ({
+      user,
+      session,
+      profile,
+      loading,
+      signIn,
+      signUp,
+      signOut,
+    }),
+    [
+      user,
+      session,
+      profile,
+      loading,
+      signIn,
+      signUp,
+      signOut,
+    ]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
