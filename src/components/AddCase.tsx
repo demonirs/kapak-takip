@@ -37,6 +37,14 @@ const initial = {
 
 type FormState = typeof initial;
 
+type LockedValveFields = Pick<
+  FormState,
+  | 'kapak_tipi'
+  | 'kapak_size'
+  | 'lot_no'
+  | 'son_kul_tarihi'
+>;
+
 type StockItem = {
   id: string;
   urun_adi: string;
@@ -154,6 +162,8 @@ export default function AddCase() {
   const [selectedStockId, setSelectedStockId] = useState('');
   const [selectedSize, setSelectedSize] = useState<number | null>(null);
   const [originalCrimpYapan, setOriginalCrimpYapan] = useState('');
+  const [lockedValveFields, setLockedValveFields] =
+    useState<LockedValveFields | null>(null);
   const [hasFoc, setHasFoc] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -209,6 +219,13 @@ export default function AddCase() {
       const currentCase = data as CaseWithCrimp;
 
       setOriginalCrimpYapan(currentCase.crimp_yapan || '');
+
+      setLockedValveFields({
+        kapak_tipi: currentCase.kapak_tipi,
+        kapak_size: currentCase.kapak_size,
+        lot_no: normalizeLot(currentCase.lot_no),
+        son_kul_tarihi: currentCase.son_kul_tarihi,
+      });
 
       setForm({
         vaka_tarihi: currentCase.vaka_tarihi,
@@ -484,12 +501,20 @@ export default function AddCase() {
     setLoading(true);
     setError(null);
 
+    const inventorySafeForm =
+      isEdit && lockedValveFields
+        ? {
+            ...form,
+            ...lockedValveFields,
+          }
+        : form;
+
     const payload = {
-      ...form,
+      ...inventorySafeForm,
       merkez_hastane: form.merkez_hastane.trim(),
       doktor: form.doktor.trim(),
       hasta_adi: form.hasta_adi.trim(),
-      lot_no: normalizeLot(form.lot_no),
+      lot_no: normalizeLot(inventorySafeForm.lot_no),
       proglide_adedi: Number(form.proglide_adedi) || 1,
     };
 
@@ -905,31 +930,61 @@ export default function AddCase() {
               Kapak Bilgileri
             </h2>
             <p className="mt-0.5 text-[11px] text-slate-500">
-              Kapak, LOT ve son kullanma tarihi
+              {isEdit
+                ? 'Stok tutarlılığı için kayıtlı kapak bilgileri değiştirilemez.'
+                : 'Kapak, LOT ve son kullanma tarihi'}
             </p>
           </div>
+
+          {isEdit && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5 text-amber-100">
+              Yanlış kapak veya LOT kaydedildiyse bu vakayı silin.
+              Kullanılan kapak otomatik olarak stoka döner; ardından
+              vakayı doğru kapakla yeniden oluşturabilirsiniz.
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 
           <Field label="Kapak Tipi">
-            <CompactSelect
-              value={form.kapak_tipi}
-              onChange={value => set('kapak_tipi', value)}
-              options={KAPAK_TIPLERI}
-            />
+            {isEdit ? (
+              <input
+                className={`${inputClass} cursor-not-allowed opacity-70`}
+                value={form.kapak_tipi}
+                readOnly
+              />
+            ) : (
+              <CompactSelect
+                value={form.kapak_tipi}
+                onChange={value => set('kapak_tipi', value)}
+                options={KAPAK_TIPLERI}
+              />
+            )}
           </Field>
 
           <Field label="Kapak Size">
-            <CompactSelect
-              value={form.kapak_size}
-              onChange={value => set('kapak_size', value)}
-              options={KAPAK_SIZES}
-            />
+            {isEdit ? (
+              <input
+                className={`${inputClass} cursor-not-allowed opacity-70`}
+                value={form.kapak_size}
+                readOnly
+              />
+            ) : (
+              <CompactSelect
+                value={form.kapak_size}
+                onChange={value => set('kapak_size', value)}
+                options={KAPAK_SIZES}
+              />
+            )}
           </Field>
 
           <Field label="Lot No">
             <input
-              className={inputClass}
+              className={`${inputClass} ${
+                isEdit
+                  ? 'cursor-not-allowed opacity-70'
+                  : ''
+              }`}
               value={form.lot_no}
               onChange={event =>
                 set(
@@ -937,18 +992,24 @@ export default function AddCase() {
                   normalizeLot(event.target.value)
                 )
               }
+              readOnly={isEdit}
               required
             />
           </Field>
 
           <Field label="Son Kullanma Tarihi">
             <input
-              className={inputClass}
+              className={`${inputClass} ${
+                isEdit
+                  ? 'cursor-not-allowed opacity-70'
+                  : ''
+              }`}
               type="date"
               value={form.son_kul_tarihi}
               onChange={event =>
                 set('son_kul_tarihi', event.target.value)
               }
+              readOnly={isEdit}
               required
             />
           </Field>
