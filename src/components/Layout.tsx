@@ -14,7 +14,6 @@ import {
   CheckCircle2,
   CheckCheck,
   Circle,
-  HeartPulse,
   Home,
   List,
   LogOut,
@@ -433,8 +432,12 @@ export default function Layout() {
       >
         <div className="flex min-h-16 items-center justify-between border-b border-slate-800/80 px-4">
           <button onClick={goHome} className="flex items-center gap-3 text-left">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500 text-slate-950">
-              <HeartPulse className="w-5 h-5" />
+            <div className="h-10 w-10 overflow-hidden rounded-xl border border-slate-700 bg-[#202020]">
+              <img
+                src="/valveflow-heart.png"
+                alt=""
+                className="h-full w-full object-contain"
+              />
             </div>
 
             <div>
@@ -510,10 +513,15 @@ export default function Layout() {
 
               <button
                 onClick={goHome}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500 text-slate-950 transition-colors hover:bg-cyan-400"
+                className="h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-slate-700 bg-[#202020] transition hover:border-cyan-500/50"
                 title="Ana Sayfa"
+                aria-label="Ana Sayfa"
               >
-                <HeartPulse className="w-5 h-5" />
+                <img
+                  src="/valveflow-heart.png"
+                  alt=""
+                  className="h-full w-full object-contain"
+                />
               </button>
 
               <div className="min-w-0">
