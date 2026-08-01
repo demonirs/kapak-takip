@@ -7,6 +7,7 @@ import {
 } from 'react';
 import {
   AlertTriangle,
+  ArrowRightLeft,
   CheckCircle2,
   ClipboardCheck,
   Download,
@@ -22,6 +23,90 @@ import { supabase } from '../lib/supabase';
 import { downloadExcel } from '../lib/excel';
 
 const DATABASE_PAGE_SIZE = 1000;
+
+const TURKEY_PROVINCES = [
+  'Adana',
+  'Adıyaman',
+  'Afyonkarahisar',
+  'Ağrı',
+  'Amasya',
+  'Ankara',
+  'Antalya',
+  'Artvin',
+  'Aydın',
+  'Balıkesir',
+  'Bilecik',
+  'Bingöl',
+  'Bitlis',
+  'Bolu',
+  'Burdur',
+  'Bursa',
+  'Çanakkale',
+  'Çankırı',
+  'Çorum',
+  'Denizli',
+  'Diyarbakır',
+  'Edirne',
+  'Elazığ',
+  'Erzincan',
+  'Erzurum',
+  'Eskişehir',
+  'Gaziantep',
+  'Giresun',
+  'Gümüşhane',
+  'Hakkâri',
+  'Hatay',
+  'Isparta',
+  'Mersin',
+  'İstanbul',
+  'İzmir',
+  'Kars',
+  'Kastamonu',
+  'Kayseri',
+  'Kırklareli',
+  'Kırşehir',
+  'Kocaeli',
+  'Konya',
+  'Kütahya',
+  'Malatya',
+  'Manisa',
+  'Kahramanmaraş',
+  'Mardin',
+  'Muğla',
+  'Muş',
+  'Nevşehir',
+  'Niğde',
+  'Ordu',
+  'Rize',
+  'Sakarya',
+  'Samsun',
+  'Siirt',
+  'Sinop',
+  'Sivas',
+  'Tekirdağ',
+  'Tokat',
+  'Trabzon',
+  'Tunceli',
+  'Şanlıurfa',
+  'Uşak',
+  'Van',
+  'Yozgat',
+  'Zonguldak',
+  'Aksaray',
+  'Bayburt',
+  'Karaman',
+  'Kırıkkale',
+  'Batman',
+  'Şırnak',
+  'Bartın',
+  'Ardahan',
+  'Iğdır',
+  'Yalova',
+  'Karabük',
+  'Kilis',
+  'Osmaniye',
+  'Düzce',
+] as const;
 
 const GTIN_MAP: Record<string, number> = {
   '00763000655419': 23,
@@ -303,6 +388,11 @@ export default function Stock() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [transferring, setTransferring] = useState(false);
+  const [transferCity, setTransferCity] = useState('');
+  const [selectedTransferIds, setSelectedTransferIds] = useState<
+    string[]
+  >([]);
   const [barcode, setBarcode] = useState('');
   const [parsed, setParsed] = useState<ParsedBarcode | null>(null);
   const [scanResult, setScanResult] = useState<ScanResult | null>(
@@ -333,6 +423,14 @@ export default function Stock() {
     try {
       const rows = await fetchAllStockItems();
       setItems(rows);
+      setSelectedTransferIds(previous =>
+        previous.filter(selectedId =>
+          rows.some(
+            item =>
+              item.id === selectedId && item.durum === 'stokta'
+          )
+        )
+      );
     } catch (error: unknown) {
       setMessage(
         error instanceof Error
@@ -416,6 +514,89 @@ export default function Stock() {
     }),
     [auditEntries]
   );
+
+  function toggleTransferSelection(stockId: string) {
+    setSelectedTransferIds(previous =>
+      previous.includes(stockId)
+        ? previous.filter(id => id !== stockId)
+        : [...previous, stockId]
+    );
+  }
+
+  function selectAllVisibleForTransfer() {
+    const visibleIds = filteredItems.map(item => item.id);
+
+    setSelectedTransferIds(previous =>
+      Array.from(new Set([...previous, ...visibleIds]))
+    );
+  }
+
+  async function transferSelectedStock() {
+    if (transferring) return;
+
+    const destination = TURKEY_PROVINCES.find(
+      city =>
+        city.toLocaleLowerCase('tr-TR') ===
+        transferCity.trim().toLocaleLowerCase('tr-TR')
+    );
+
+    if (selectedTransferIds.length === 0) {
+      setMessage('Transfer edilecek kapakları seçin.');
+      return;
+    }
+
+    if (!destination) {
+      setMessage('Listeden geçerli bir hedef il seçin.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `${selectedTransferIds.length} kapak ${destination} iline transfer edilsin mi?`
+    );
+
+    if (!confirmed) return;
+
+    setTransferring(true);
+    setMessage('');
+
+    try {
+      const { data, error } = await supabase.rpc(
+        'transfer_stock_items',
+        {
+          p_stock_ids: selectedTransferIds,
+          p_hedef_il: destination,
+        }
+      );
+
+      if (error) throw error;
+
+      const result = data as {
+        success?: boolean;
+        transferred_count?: number;
+      } | null;
+
+      if (!result?.success) {
+        throw new Error(
+          'Transfer işlemi veritabanı tarafından doğrulanamadı.'
+        );
+      }
+
+      setSelectedTransferIds([]);
+      setTransferCity('');
+      await loadStock();
+      setMessage(
+        `${result.transferred_count || 0} kapak ${destination} iline transfer edildi.`
+      );
+    } catch (error: unknown) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Transfer işlemi tamamlanamadı.'
+      );
+    } finally {
+      setTransferring(false);
+    }
+  }
 
   function addOrUpdateAuditEntry(
     parsedBarcode: ParsedBarcode,
@@ -709,6 +890,88 @@ export default function Stock() {
           </button>
         </div>
       </header>
+
+      <section className="rounded-xl border border-violet-500/30 bg-violet-500/[0.06] p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <ArrowRightLeft className="h-4 w-4 text-violet-300" />
+              <h2 className="text-sm font-semibold text-white">
+                Stok Transferi
+              </h2>
+            </div>
+
+            <p className="mt-1 text-xs text-slate-400">
+              Aşağıdaki stok listesinden kapakları işaretleyin ve hedef
+              ili seçin.
+            </p>
+          </div>
+
+          <div className="w-full lg:w-64">
+            <label
+              htmlFor="transfer-city"
+              className="mb-1.5 block text-xs font-medium text-slate-300"
+            >
+              Hedef İl
+            </label>
+
+            <input
+              id="transfer-city"
+              type="search"
+              list="turkey-provinces"
+              value={transferCity}
+              onChange={event => setTransferCity(event.target.value)}
+              placeholder="İl yazarak ara..."
+              autoComplete="off"
+              className="min-h-11 w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
+            />
+
+            <datalist id="turkey-provinces">
+              {TURKEY_PROVINCES.map(city => (
+                <option key={city} value={city} />
+              ))}
+            </datalist>
+          </div>
+
+          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+            <button
+              type="button"
+              onClick={selectAllVisibleForTransfer}
+              disabled={filteredItems.length === 0 || transferring}
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-600 px-3 py-2.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 disabled:opacity-50"
+            >
+              Görünenleri Seç
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void transferSelectedStock()}
+              disabled={
+                selectedTransferIds.length === 0 || transferring
+              }
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ArrowRightLeft className="h-4 w-4" />
+              {transferring
+                ? 'Transfer ediliyor...'
+                : `${selectedTransferIds.length} Kapağı Transfer Et`}
+            </button>
+          </div>
+        </div>
+
+        {selectedTransferIds.length > 0 && (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-violet-500/20 bg-slate-950/30 px-3 py-2 text-xs text-violet-200">
+            <span>{selectedTransferIds.length} kapak seçildi.</span>
+            <button
+              type="button"
+              onClick={() => setSelectedTransferIds([])}
+              className="font-semibold text-slate-400 hover:text-white"
+            >
+              Seçimi Temizle
+            </button>
+          </div>
+        )}
+      </section>
 
       <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
         <label
@@ -1067,8 +1330,9 @@ export default function Stock() {
             <table className="w-full table-fixed">
               <thead className="border-b border-slate-700 bg-slate-900/50">
                 <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  <th className="w-[29%] px-4 py-3">Ürün</th>
-                  <th className="w-[12%] px-4 py-3">Ölçü</th>
+                  <th className="w-[7%] px-4 py-3">Seç</th>
+                  <th className="w-[23%] px-4 py-3">Ürün</th>
+                  <th className="w-[11%] px-4 py-3">Ölçü</th>
                   <th className="w-[23%] px-4 py-3">LOT</th>
                   <th className="w-[17%] px-4 py-3">SKT</th>
                   <th className="w-[19%] px-4 py-3">Durum</th>
@@ -1084,6 +1348,15 @@ export default function Stock() {
                       key={item.id}
                       className="text-sm text-slate-300 transition hover:bg-slate-700/30"
                     >
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedTransferIds.includes(item.id)}
+                          onChange={() => toggleTransferSelection(item.id)}
+                          className="h-4 w-4 cursor-pointer accent-violet-500"
+                          aria-label={`${item.lot_no || 'Kapak'} transfer için seç`}
+                        />
+                      </td>
                       <td className="truncate px-4 py-3 font-semibold text-white">
                         {productName(item)}
                       </td>
@@ -1135,13 +1408,25 @@ export default function Stock() {
                       </p>
                     </div>
 
-                    <span
-                      className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-medium ${expiryClass(
-                        days
-                      )}`}
-                    >
-                      {expiryText(days)}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span
+                        className={`rounded-md border px-2 py-1 text-[11px] font-medium ${expiryClass(
+                          days
+                        )}`}
+                      >
+                        {expiryText(days)}
+                      </span>
+
+                      <label className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-violet-500/30 bg-violet-500/10">
+                        <input
+                          type="checkbox"
+                          checked={selectedTransferIds.includes(item.id)}
+                          onChange={() => toggleTransferSelection(item.id)}
+                          className="h-4 w-4 cursor-pointer accent-violet-500"
+                          aria-label={`${item.lot_no || 'Kapak'} transfer için seç`}
+                        />
+                      </label>
+                    </div>
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-700/70 pt-3">
