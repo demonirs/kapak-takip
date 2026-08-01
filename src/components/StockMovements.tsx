@@ -112,6 +112,7 @@ function sizeText(size: number | null): string {
 function statusText(status: string | null): string {
   if (status === 'stokta') return 'Stokta';
   if (status === 'kullanildi') return 'Kullanıldı';
+  if (status === 'transfer_edildi') return 'Transfer Edildi';
 
   return status || 'Bilinmiyor';
 }
@@ -123,6 +124,10 @@ function statusClass(status: string | null): string {
 
   if (status === 'kullanildi') {
     return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300';
+  }
+
+  if (status === 'transfer_edildi') {
+    return 'border-violet-500/30 bg-violet-500/10 text-violet-300';
   }
 
   return 'border-slate-600 bg-slate-700/50 text-slate-300';
@@ -203,7 +208,7 @@ export default function StockMovements() {
         </button>
       </header>
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             Toplam Giriş
@@ -231,6 +236,19 @@ export default function StockMovements() {
 
           <div className="mt-1 text-2xl font-bold text-cyan-300">
             {items.filter(item => item.durum === 'kullanildi').length}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-violet-300/70">
+            Transfer Edildi
+          </div>
+
+          <div className="mt-1 text-2xl font-bold text-violet-300">
+            {
+              items.filter(item => item.durum === 'transfer_edildi')
+                .length
+            }
           </div>
         </div>
       </section>
