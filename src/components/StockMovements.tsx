@@ -5,7 +5,9 @@ import {
   useState,
 } from 'react';
 import {
+  ArrowRightLeft,
   CalendarClock,
+  MapPin,
   PackageOpen,
   RefreshCw,
   Search,
@@ -24,6 +26,17 @@ type StockItem = {
   son_kullanma_tarihi: string | null;
   durum: string | null;
   created_at: string | null;
+};
+
+type TransferItem = {
+  id: string;
+  kapak_stok_id: string;
+  hedef_il: string;
+  urun_adi: string | null;
+  kapak_boyutu: number | null;
+  lot_no: string | null;
+  son_kullanma_tarihi: string | null;
+  transfer_tarihi: string | null;
 };
 
 async function fetchAllStockEntries(): Promise<StockItem[]> {
@@ -58,6 +71,32 @@ async function fetchAllStockEntries(): Promise<StockItem[]> {
     if (rows.length < DATABASE_PAGE_SIZE) {
       break;
     }
+
+    from += DATABASE_PAGE_SIZE;
+  }
+
+  return allRows;
+}
+
+async function fetchAllTransfers(): Promise<TransferItem[]> {
+  const allRows: TransferItem[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('stok_transferleri')
+      .select(
+        'id, kapak_stok_id, hedef_il, urun_adi, kapak_boyutu, lot_no, son_kullanma_tarihi, transfer_tarihi'
+      )
+      .order('transfer_tarihi', { ascending: false })
+      .range(from, from + DATABASE_PAGE_SIZE - 1);
+
+    if (error) throw error;
+
+    const rows = (data || []) as TransferItem[];
+    allRows.push(...rows);
+
+    if (rows.length < DATABASE_PAGE_SIZE) break;
 
     from += DATABASE_PAGE_SIZE;
   }
@@ -135,6 +174,7 @@ function statusClass(status: string | null): string {
 
 export default function StockMovements() {
   const [items, setItems] = useState<StockItem[]>([]);
+  const [transfers, setTransfers] = useState<TransferItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -144,8 +184,13 @@ export default function StockMovements() {
     setMessage('');
 
     try {
-      const rows = await fetchAllStockEntries();
-      setItems(rows);
+      const [stockRows, transferRows] = await Promise.all([
+        fetchAllStockEntries(),
+        fetchAllTransfers(),
+      ]);
+
+      setItems(stockRows);
+      setTransfers(transferRows);
     } catch (error: unknown) {
       setMessage(
         error instanceof Error
@@ -181,6 +226,28 @@ export default function StockMovements() {
       return searchableText.includes(query);
     });
   }, [items, searchTerm]);
+
+  const filteredTransfers = useMemo(() => {
+    const query = normalize(searchTerm);
+
+    if (!query) return transfers;
+
+    return transfers.filter(item => {
+      const searchableText = [
+        item.hedef_il,
+        item.urun_adi,
+        item.kapak_boyutu,
+        item.lot_no,
+        item.son_kullanma_tarihi,
+        formatDateTime(item.transfer_tarihi),
+        'transfer edildi',
+      ]
+        .map(normalize)
+        .join(' ');
+
+      return searchableText.includes(query);
+    });
+  }, [searchTerm, transfers]);
 
   return (
     <div className="space-y-4 pb-24">
@@ -245,10 +312,7 @@ export default function StockMovements() {
           </div>
 
           <div className="mt-1 text-2xl font-bold text-violet-300">
-            {
-              items.filter(item => item.durum === 'transfer_edildi')
-                .length
-            }
+            {transfers.length}
           </div>
         </div>
       </section>
@@ -275,6 +339,79 @@ export default function StockMovements() {
           </button>
         )}
       </div>
+
+      <section className="overflow-hidden rounded-xl border border-violet-500/25 bg-violet-500/[0.045]">
+        <div className="flex items-center gap-2 border-b border-violet-500/15 px-4 py-3">
+          <ArrowRightLeft className="h-4 w-4 text-violet-300" />
+          <div>
+            <h2 className="text-sm font-semibold text-white">
+              Transfer Geçmişi
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-400">
+              Gönderilen kapaklar, hedef iller ve transfer zamanları
+            </p>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="px-4 py-8 text-center text-sm text-slate-400">
+            Transfer kayıtları yükleniyor...
+          </div>
+        ) : filteredTransfers.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-slate-400">
+            {searchTerm
+              ? 'Aramaya uygun transfer kaydı bulunamadı.'
+              : 'Henüz transfer kaydı bulunmuyor.'}
+          </div>
+        ) : (
+          <div className="grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
+            {filteredTransfers.map(item => (
+              <article
+                key={item.id}
+                className="rounded-xl border border-violet-500/20 bg-slate-950/30 p-3.5"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 text-sm font-semibold text-violet-200">
+                      <MapPin className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{item.hedef_il}</span>
+                    </div>
+
+                    <p className="mt-1.5 truncate text-sm font-medium text-white">
+                      {item.urun_adi || 'Kapak'}{' '}
+                      {sizeText(item.kapak_boyutu)}
+                    </p>
+                  </div>
+
+                  <span className="shrink-0 rounded-md border border-violet-500/25 bg-violet-500/10 px-2 py-1 text-[10px] font-semibold text-violet-200">
+                    Transfer
+                  </span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2 border-t border-violet-500/10 pt-3">
+                  <div>
+                    <div className="text-[10px] uppercase text-slate-500">
+                      LOT
+                    </div>
+                    <div className="mt-1 break-all font-mono text-xs font-semibold text-cyan-300">
+                      {item.lot_no || '-'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-[10px] uppercase text-slate-500">
+                      Transfer Zamanı
+                    </div>
+                    <div className="mt-1 text-xs text-slate-300">
+                      {formatDateTime(item.transfer_tarihi)}
+                    </div>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
 
       {message && (
         <div
