@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { downloadExcel } from '../lib/excel';
+import { useAuth } from '../contexts/AuthContext';
+import { notifyAdmins } from '../lib/notifications';
 
 const DATABASE_PAGE_SIZE = 1000;
 
@@ -382,6 +384,7 @@ function expiryText(days: number | null): string {
 }
 
 export default function Stock() {
+  const { profile } = useAuth();
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
 
   const [items, setItems] = useState<StockItem[]>([]);
@@ -581,11 +584,28 @@ export default function Stock() {
         );
       }
 
+      const transferredCount =
+        result.transferred_count || selectedTransferIds.length;
+
+      try {
+        await notifyAdmins({
+          title: 'Stok Transferi',
+          message: `${profile?.full_name || 'Bir kullanıcı'} ${transferredCount} kapağı ${destination} iline transfer etti`,
+          type: 'info',
+          related_table: 'stok_transferleri',
+        });
+      } catch (notificationError) {
+        console.error(
+          'Stok transferi tamamlandı ancak bildirim gönderilemedi:',
+          notificationError
+        );
+      }
+
       setSelectedTransferIds([]);
       setTransferCity('');
       await loadStock();
       setMessage(
-        `${result.transferred_count || 0} kapak ${destination} iline transfer edildi.`
+        `${transferredCount} kapak ${destination} iline transfer edildi.`
       );
     } catch (error: unknown) {
       setMessage(
@@ -787,6 +807,21 @@ export default function Stock() {
 
         throw new Error(
           `Hareket kaydı yazılamadı. Eksik kayıt oluşmaması için stok ekleme geri alındı: ${movementError.message}`
+        );
+      }
+
+      try {
+        await notifyAdmins({
+          title: 'Yeni Stok Girişi',
+          message: `${profile?.full_name || 'Bir kullanıcı'} ${parsed.kapak_boyutu} mm, ${lotNo} LOT numaralı kapağı stoka ekledi`,
+          type: 'success',
+          related_table: 'kapak_stok',
+          related_id: insertedStock.id,
+        });
+      } catch (notificationError) {
+        console.error(
+          'Stok girişi tamamlandı ancak bildirim gönderilemedi:',
+          notificationError
         );
       }
 
