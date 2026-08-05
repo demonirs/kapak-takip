@@ -1,504 +1,1448 @@
-import { useEffect, useState } from 'react';
+ChatGPT Plus
+
+
+
+
+Not aldım. ValveFlow’a döndüğümüzde ilk işimiz bildirim sistemini genişletmek olacak.
+
+Şu an yalnızca vaka eklenince bildirim gidiyor. Hedefimiz; vaka güncelleme/silme, stok girişi, stok transferi ve diğer önemli işlemlerde de bildirim gönderilmesi. Devam ederken önce mevcut bildirim kodunu inceleyip kapsamı netleştireceğiz.
+
+
+bugün 10:36
+hadi yapalım 
+
+13s düşündü
+Hazırım. Fakat çalışma alanında ValveFlow dosyaları yok.
+
+Güncel ValveFlow projesini ZIP olarak buraya yükle. GitHub’a bağlanmayacağım veya push yapmayacağım. ZIP sayesinde:
+
+Mevcut bildirim mekanizmasını bulacağım.
+
+Hangi işlemlerin bildirimsiz kaldığını çıkaracağım.
+
+İlk değiştireceğimiz dosyayı net söyleyeceğim.
+
+Her teslimatta tam dosya vereceğim.
+
+TypeScript, ESLint ve production build kontrollerini gerçekten çalıştıracağım.
+
+Benzersiz dosya adı, satır sayısı, ayırt edici metin, cmp ve SHA-256 doğrulaması sunacağım.
+
+Önce yalnızca inceleme yapacağız; dosyayı görmeden tahmini kod yazmayacağım.
+
+
+tamam hadi bağlan github a zip bulamadım 
+
+30s düşündü
+GitHub bağlantısı çalışıyor fakat bağlı erişimde ValveFlow adlı repo görünmüyor. Repo adı farklı olabilir veya GitHub bağlantısına bu repo için yetki verilmemiş olabilir.
+
+Bana GitHub’daki ValveFlow sayfasının bağlantısını gönder. Örnek:
+
+https://github.com/kullaniciadi/valveflow
+
+Bağlantıyı alınca güncel main dalını inceleyip bildirim kodunun bulunduğu ilk dosyayı belirleyeceğim. Push yapmayacağım.
+
+
+Kapak takip olarak geçiyor adı 
+
+4m 17s düşündü
+İlk dosya hazır: Stock_Tum_Islem_Bildirimleri_v1_2026-08-05.tsx
+
+GitHub’da src/components/Stock.tsx dosyasının tamamını bununla değiştir. Yeni dosya oluşturma.
+
+Satır sayısı: 1494
+
+SHA-256: 5f6b59e57be92995a13e91c742117d9510c33f5ebd239e0b0bc4f99795c8b1a3
+
+cmp: birebir aynı
+
+Ayırt edici metinler:
+
+Stok transferi tamamlandı ancak bildirim gönderilemedi:
+
+Stok girişi tamamlandı ancak bildirim gönderilemedi:
+
+Kontroller:
+
+TypeScript: geçti
+
+Değiştirilen dosya ESLint: geçti
+
+Production build: geçti
+
+Tam ESLint: Önceden bulunan ArchivedMovements.tsx satır 26’daki any hatası devam ediyor
+
+Bu dosyayla stok girişi ve stok transferinde yöneticilere bildirim gidecek. Kaydettikten sonra haber ver; sıradaki tek dosyaya geçelim. Deploy sonrasında Ctrl + F5 yap.
+
+
+Stock_Tum_Islem_Bildirimleri_v1_2026-08-05.tsx
+Kod
+
+
+Kitaplık
+/
+Stock_Tum_Islem_Bildirimleri_v1_2026-08-05.tsx
+
+
 import {
-  ArchiveX,
-  CalendarDays,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  AlertTriangle,
+  ArrowRightLeft,
+  CheckCircle2,
+  ClipboardCheck,
+  Download,
+  PackageOpen,
+  PackagePlus,
+  RefreshCw,
   RotateCcw,
-  Trash2,
+  Search,
+  SearchX,
+  X,
 } from 'lucide-react';
-import { Kapak, supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
+import { downloadExcel } from '../lib/excel';
 import { useAuth } from '../contexts/AuthContext';
+import { notifyAdmins } from '../lib/notifications';
 
-type ArchiveTab = 'cases' | 'movements';
+const DATABASE_PAGE_SIZE = 1000;
 
-type Movement = {
-  id: string;
-  islem: 'giris' | 'kullanildi' | 'iptal';
-  urun_adi: string;
-  lot_no: string;
-  kapak_boyutu: number | null;
-  son_kullanma_tarihi: string | null;
-  created_at: string;
-  arsivlendi: boolean | null;
+const TURKEY_PROVINCES = [
+  'Adana',
+  'Adıyaman',
+  'Afyonkarahisar',
+  'Ağrı',
+  'Amasya',
+  'Ankara',
+  'Antalya',
+  'Artvin',
+  'Aydın',
+  'Balıkesir',
+  'Bilecik',
+  'Bingöl',
+  'Bitlis',
+  'Bolu',
+  'Burdur',
+  'Bursa',
+  'Çanakkale',
+  'Çankırı',
+  'Çorum',
+  'Denizli',
+  'Diyarbakır',
+  'Edirne',
+  'Elazığ',
+  'Erzincan',
+  'Erzurum',
+  'Eskişehir',
+  'Gaziantep',
+  'Giresun',
+  'Gümüşhane',
+  'Hakkâri',
+  'Hatay',
+  'Isparta',
+  'Mersin',
+  'İstanbul',
+  'İzmir',
+  'Kars',
+  'Kastamonu',
+  'Kayseri',
+  'Kırklareli',
+  'Kırşehir',
+  'Kocaeli',
+  'Konya',
+  'Kütahya',
+  'Malatya',
+  'Manisa',
+  'Kahramanmaraş',
+  'Mardin',
+  'Muğla',
+  'Muş',
+  'Nevşehir',
+  'Niğde',
+  'Ordu',
+  'Rize',
+  'Sakarya',
+  'Samsun',
+  'Siirt',
+  'Sinop',
+  'Sivas',
+  'Tekirdağ',
+  'Tokat',
+  'Trabzon',
+  'Tunceli',
+  'Şanlıurfa',
+  'Uşak',
+  'Van',
+  'Yozgat',
+  'Zonguldak',
+  'Aksaray',
+  'Bayburt',
+  'Karaman',
+  'Kırıkkale',
+  'Batman',
+  'Şırnak',
+  'Bartın',
+  'Ardahan',
+  'Iğdır',
+  'Yalova',
+  'Karabük',
+  'Kilis',
+  'Osmaniye',
+  'Düzce',
+] as const;
+
+const GTIN_MAP: Record<string, number> = {
+  '00763000655419': 23,
+  '00763000655426': 26,
+  '00763000655433': 29,
+  '00763000655440': 34,
 };
 
-export default function ArchivedMovements() {
-  const { profile } = useAuth();
-  const currentProfile = profile as any;
+type SizeFilter = 'Tümü' | '23' | '26' | '29' | '34';
+type ScanStatus = 'found' | 'used' | 'not-found';
 
-  const isAdmin =
-    currentProfile?.role === 'admin' ||
-    currentProfile?.yetki === 'admin' ||
-    currentProfile?.is_admin === true;
+type StockItem = {
+  id: string;
+  urun_adi: string | null;
+  kapak_adi: string | null;
+  kapak_boyutu: number | null;
+  lot_no: string | null;
+  son_kullanma_tarihi: string | null;
+  durum: string | null;
+  created_at: string | null;
+};
 
-  const [archivedCases, setArchivedCases] = useState<Kapak[]>([]);
-  const [archivedMovements, setArchivedMovements] = useState<Movement[]>([]);
-  const [activeTab, setActiveTab] = useState<ArchiveTab>('cases');
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState('');
+type ParsedBarcode = {
+  gtin: string;
+  urun_adi: string;
+  kapak_boyutu: number;
+  lot_no: string;
+  son_kullanma_tarihi: string;
+  barkod_raw: string;
+};
 
-  useEffect(() => {
-    loadArchive();
-  }, []);
+type ScanResult = {
+  status: ScanStatus;
+  lotNo: string;
+  size: number;
+};
 
-  async function loadArchive() {
-    setLoading(true);
-    setMessage('');
+type AuditEntry = {
+  key: string;
+  status: ScanStatus;
+  lotNo: string;
+  size: number;
+  expirationDate: string;
+  scannedAt: string;
+  scanCount: number;
+};
 
-    const { data: casesData, error: casesError } = await supabase
-      .from('kapaklar')
-      .select('*')
-      .eq('arsivlendi', true)
-      .order('created_at', { ascending: false })
-      .limit(300);
+function normalizeLot(value: string): string {
+  return value
+    .trim()
+    .replace(/\s+/g, '')
+    .toUpperCase()
+    .replace(/\(20\)01$/i, '')
+    .replace(/2001$/i, '');
+}
 
-    const { data: movementsData, error: movementsError } = await supabase
-      .from('stok_hareketleri')
-      .select('*')
-      .eq('arsivlendi', true)
-      .order('created_at', { ascending: false })
-      .limit(300);
+function normalizeText(value: unknown): string {
+  return String(value ?? '')
+    .toLocaleLowerCase('tr-TR')
+    .trim();
+}
 
-    if (casesError || movementsError) {
-      setMessage(
-        casesError?.message ||
-          movementsError?.message ||
-          'Arşiv yüklenemedi.'
-      );
-    }
+function cleanBarcode(value: string): string {
+  return value
+    .split(String.fromCharCode(29))
+    .join('')
+    .trim()
+    .replace(/\s/g, '');
+}
 
-    setArchivedCases((casesData as Kapak[]) || []);
-    setArchivedMovements((movementsData as Movement[]) || []);
-    setLoading(false);
+function extractLotFromRaw(rawValue: string): string {
+  const raw = cleanBarcode(rawValue);
+
+  const parenthesizedSerialMatch = raw.match(
+    /\(21\)(.*?)(?=\(\d{2}\)|$)/
+  );
+
+  if (parenthesizedSerialMatch?.[1]) {
+    return normalizeLot(parenthesizedSerialMatch[1]);
   }
 
-  async function restoreCase(id: string) {
-    const ok = window.confirm('Bu vaka arşivden çıkarılsın mı?');
+  const compactGs1Match = raw.match(
+    /^01\d{14}17\d{6}21(.+)$/
+  );
 
-    if (!ok) return;
+  if (compactGs1Match?.[1]) {
+    return normalizeLot(compactGs1Match[1]);
+  }
 
-    const { error } = await supabase
-      .from('kapaklar')
-      .update({
-        arsivlendi: false,
-        arsivlenme_tarihi: null,
+  const flexibleCompactMatch = raw.match(
+    /01\d{14}17\d{6}21(.+)$/
+  );
+
+  if (flexibleCompactMatch?.[1]) {
+    return normalizeLot(flexibleCompactMatch[1]);
+  }
+
+  const fallbackMatch = raw.match(
+    /21([A-Za-z][A-Za-z0-9]*(?:\(20\)01|2001)?)$/
+  );
+
+  return fallbackMatch?.[1]
+    ? normalizeLot(fallbackMatch[1])
+    : '';
+}
+
+function extractGtinAndExpiry(rawValue: string): {
+  gtin: string;
+  expiry: string;
+} {
+  const raw = cleanBarcode(rawValue);
+  let gtin = raw.match(/\(01\)(\d{14})/)?.[1] || '';
+  let expiry = raw.match(/\(17\)(\d{6})/)?.[1] || '';
+
+  if (!gtin || !expiry) {
+    const compactMatch = raw.match(/01(\d{14})17(\d{6})/);
+
+    if (compactMatch) {
+      gtin = compactMatch[1];
+      expiry = compactMatch[2];
+    }
+  }
+
+  return { gtin, expiry };
+}
+
+function parseBarcodeValue(rawValue: string): ParsedBarcode {
+  const raw = cleanBarcode(rawValue);
+
+  if (!raw) {
+    throw new Error('Barkod alanı boş.');
+  }
+
+  const { gtin, expiry } = extractGtinAndExpiry(raw);
+  const lotNo = extractLotFromRaw(raw);
+
+  if (!gtin) {
+    throw new Error('GTIN / UBB bulunamadı.');
+  }
+
+  if (!expiry) {
+    throw new Error('Son kullanma tarihi bulunamadı.');
+  }
+
+  if (!lotNo) {
+    throw new Error('LOT numarası bulunamadı.');
+  }
+
+  const valveSize = GTIN_MAP[gtin];
+
+  if (!valveSize) {
+    throw new Error(`Tanımsız GTIN: ${gtin}`);
+  }
+
+  return {
+    gtin,
+    urun_adi: `EVPROPLUS-${valveSize}`,
+    kapak_boyutu: valveSize,
+    lot_no: normalizeLot(lotNo),
+    son_kullanma_tarihi: `20${expiry.slice(0, 2)}-${expiry.slice(
+      2,
+      4
+    )}-${expiry.slice(4, 6)}`,
+    barkod_raw: raw,
+  };
+}
+
+async function fetchAllStockItems(): Promise<StockItem[]> {
+  const allRows: StockItem[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('kapak_stok')
+      .select(
+        `
+          id,
+          urun_adi,
+          kapak_adi,
+          kapak_boyutu,
+          lot_no,
+          son_kullanma_tarihi,
+          durum,
+          created_at
+        `
+      )
+      .order('created_at', {
+        ascending: false,
       })
-      .eq('id', id);
+      .range(from, from + DATABASE_PAGE_SIZE - 1);
 
     if (error) {
-      alert(error.message);
-      return;
+      throw error;
     }
 
-    await loadArchive();
-  }
+    const rows = (data || []) as StockItem[];
+    allRows.push(...rows);
 
-  async function deleteCase(id: string) {
-    if (!isAdmin) {
-      alert('Bu işlemi sadece admin yapabilir.');
-      return;
+    if (rows.length < DATABASE_PAGE_SIZE) {
+      break;
     }
 
-    const ok = window.confirm(
-      'Bu arşivlenmiş vaka kalıcı olarak silinsin mi?'
-    );
-
-    if (!ok) return;
-
-    const { error } = await supabase
-      .from('kapaklar')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    await loadArchive();
+    from += DATABASE_PAGE_SIZE;
   }
 
-  async function restoreMovement(id: string) {
-    const ok = window.confirm(
-      'Bu stok hareketi arşivden çıkarılsın mı?'
-    );
+  return allRows;
+}
 
-    if (!ok) return;
+function parseDateOnly(value: string | null): Date | null {
+  if (!value) return null;
 
-    const { error } = await supabase
-      .from('stok_hareketleri')
-      .update({ arsivlendi: false })
-      .eq('id', id);
+  const datePart = value.split('T')[0];
+  const [year, month, day] = datePart.split('-').map(Number);
 
-    if (error) {
-      alert(error.message);
-      return;
-    }
+  if (!year || !month || !day) return null;
 
-    await loadArchive();
+  const date = new Date(year, month - 1, day);
+  date.setHours(0, 0, 0, 0);
+
+  return date;
+}
+
+function formatDate(value: string | null): string {
+  const date = parseDateOnly(value);
+
+  return date ? date.toLocaleDateString('tr-TR') : '-';
+}
+
+function remainingDays(value: string | null): number | null {
+  const expiryDate = parseDateOnly(value);
+
+  if (!expiryDate) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Math.ceil(
+    (expiryDate.getTime() - today.getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+}
+
+function productName(item: StockItem): string {
+  return item.urun_adi || item.kapak_adi || 'Kapak';
+}
+
+function expiryClass(days: number | null): string {
+  if (days === null) {
+    return 'border-slate-600 bg-slate-700/40 text-slate-300';
   }
 
-  async function deleteMovement(id: string) {
-    if (!isAdmin) {
-      alert('Bu işlemi sadece admin yapabilir.');
-      return;
-    }
-
-    const ok = window.confirm(
-      'Bu stok hareket arşiv kaydı kalıcı olarak silinsin mi?'
-    );
-
-    if (!ok) return;
-
-    const { error } = await supabase
-      .from('stok_hareketleri')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    await loadArchive();
-  }
-
-  function changeTab(tab: ArchiveTab) {
-    setActiveTab(tab);
-    setMessage('');
-  }
-
-  function formatDate(date: string | null | undefined) {
-    if (!date) return '-';
-
-    return new Date(date).toLocaleDateString('tr-TR');
-  }
-
-  function formatDateTime(date: string | null | undefined) {
-    if (!date) return '-';
-
-    return new Date(date).toLocaleString('tr-TR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  }
-
-  function islemText(islem: Movement['islem']) {
-    if (islem === 'giris') return 'Giriş';
-    if (islem === 'kullanildi') return 'Kullanım';
-
-    return 'İptal';
-  }
-
-  function islemClass(islem: Movement['islem']) {
-    if (islem === 'giris') {
-      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
-    }
-
-    if (islem === 'kullanildi') {
-      return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300';
-    }
-
+  if (days < 0) {
     return 'border-red-500/30 bg-red-500/10 text-red-300';
   }
 
-  function tabClass(tab: ArchiveTab) {
-    return activeTab === tab
-      ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-100 shadow-sm'
-      : 'border-transparent text-slate-400 hover:bg-slate-800 hover:text-slate-200';
+  if (days <= 30) {
+    return 'border-orange-500/30 bg-orange-500/10 text-orange-300';
   }
 
-  function caseProduct(item: Kapak) {
-    const product = [item.kapak_tipi, item.kapak_size]
-      .filter(Boolean)
-      .join(' ');
-
-    return product || 'Kapak bilgisi yok';
+  if (days <= 90) {
+    return 'border-amber-500/30 bg-amber-500/10 text-amber-300';
   }
+
+  return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+}
+
+function expiryText(days: number | null): string {
+  if (days === null) return 'SKT eksik';
+  if (days < 0) return `${Math.abs(days)} gün geçmiş`;
+  if (days === 0) return 'Bugün doluyor';
+
+  return `${days} gün kaldı`;
+}
+
+export default function Stock() {
+  const { profile } = useAuth();
+  const barcodeInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [items, setItems] = useState<StockItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [transferring, setTransferring] = useState(false);
+  const [transferCity, setTransferCity] = useState('');
+  const [selectedTransferIds, setSelectedTransferIds] = useState<
+    string[]
+  >([]);
+  const [barcode, setBarcode] = useState('');
+  const [parsed, setParsed] = useState<ParsedBarcode | null>(null);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(
+    null
+  );
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeFilter, setActiveFilter] =
+    useState<SizeFilter>('Tümü');
+  const [message, setMessage] = useState('');
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>(
+    () => {
+      try {
+        const stored = window.sessionStorage.getItem(
+          'valveflow-stock-audit'
+        );
+
+        return stored ? (JSON.parse(stored) as AuditEntry[]) : [];
+      } catch {
+        return [];
+      }
+    }
+  );
+
+  const loadStock = useCallback(async () => {
+    setLoading(true);
+    setMessage('');
+
+    try {
+      const rows = await fetchAllStockItems();
+      setItems(rows);
+      setSelectedTransferIds(previous =>
+        previous.filter(selectedId =>
+          rows.some(
+            item =>
+              item.id === selectedId && item.durum === 'stokta'
+          )
+        )
+      );
+    } catch (error: unknown) {
+      setMessage(
+        error instanceof Error
+          ? `Stok alınamadı: ${error.message}`
+          : 'Stok alınamadı.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadStock();
+  }, [loadStock]);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(
+        'valveflow-stock-audit',
+        JSON.stringify(auditEntries)
+      );
+    } catch {
+      // Tarayıcı depolaması kapalıysa liste mevcut oturumda kalır.
+    }
+  }, [auditEntries]);
+
+  const currentItems = useMemo(
+    () => items.filter(item => item.durum === 'stokta'),
+    [items]
+  );
+
+  const sizeCounts = useMemo(
+    () => ({
+      23: currentItems.filter(item => item.kapak_boyutu === 23)
+        .length,
+      26: currentItems.filter(item => item.kapak_boyutu === 26)
+        .length,
+      29: currentItems.filter(item => item.kapak_boyutu === 29)
+        .length,
+      34: currentItems.filter(item => item.kapak_boyutu === 34)
+        .length,
+    }),
+    [currentItems]
+  );
+
+  const filteredItems = useMemo(() => {
+    const query = normalizeText(searchTerm);
+
+    return currentItems.filter(item => {
+      if (
+        activeFilter !== 'Tümü' &&
+        item.kapak_boyutu !== Number(activeFilter)
+      ) {
+        return false;
+      }
+
+      if (!query) return true;
+
+      const searchableText = [
+        productName(item),
+        item.kapak_boyutu,
+        item.lot_no,
+        item.son_kullanma_tarihi,
+      ]
+        .map(normalizeText)
+        .join(' ');
+
+      return searchableText.includes(query);
+    });
+  }, [activeFilter, currentItems, searchTerm]);
+
+  const auditCounts = useMemo(
+    () => ({
+      found: auditEntries.filter(entry => entry.status === 'found')
+        .length,
+      used: auditEntries.filter(entry => entry.status === 'used')
+        .length,
+      missing: auditEntries.filter(
+        entry => entry.status === 'not-found'
+      ).length,
+    }),
+    [auditEntries]
+  );
+
+  function toggleTransferSelection(stockId: string) {
+    setSelectedTransferIds(previous =>
+      previous.includes(stockId)
+        ? previous.filter(id => id !== stockId)
+        : [...previous, stockId]
+    );
+  }
+
+  function selectAllVisibleForTransfer() {
+    const visibleIds = filteredItems.map(item => item.id);
+
+    setSelectedTransferIds(previous =>
+      Array.from(new Set([...previous, ...visibleIds]))
+    );
+  }
+
+  async function transferSelectedStock() {
+    if (transferring) return;
+
+    const destination = TURKEY_PROVINCES.find(
+      city =>
+        city.toLocaleLowerCase('tr-TR') ===
+        transferCity.trim().toLocaleLowerCase('tr-TR')
+    );
+
+    if (selectedTransferIds.length === 0) {
+      setMessage('Transfer edilecek kapakları seçin.');
+      return;
+    }
+
+    if (!destination) {
+      setMessage('Listeden geçerli bir hedef il seçin.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `${selectedTransferIds.length} kapak ${destination} iline transfer edilsin mi?`
+    );
+
+    if (!confirmed) return;
+
+    setTransferring(true);
+    setMessage('');
+
+    try {
+      const { data, error } = await supabase.rpc(
+        'transfer_stock_items',
+        {
+          p_stock_ids: selectedTransferIds,
+          p_hedef_il: destination,
+        }
+      );
+
+      if (error) throw error;
+
+      const result = data as {
+        success?: boolean;
+        transferred_count?: number;
+      } | null;
+
+      if (!result?.success) {
+        throw new Error(
+          'Transfer işlemi veritabanı tarafından doğrulanamadı.'
+        );
+      }
+
+      const transferredCount =
+        result.transferred_count || selectedTransferIds.length;
+
+      try {
+        await notifyAdmins({
+          title: 'Stok Transferi',
+          message: `${profile?.full_name || 'Bir kullanıcı'} ${transferredCount} kapağı ${destination} iline transfer etti`,
+          type: 'info',
+          related_table: 'stok_transferleri',
+        });
+      } catch (notificationError) {
+        console.error(
+          'Stok transferi tamamlandı ancak bildirim gönderilemedi:',
+          notificationError
+        );
+      }
+
+      setSelectedTransferIds([]);
+      setTransferCity('');
+      await loadStock();
+      setMessage(
+        `${transferredCount} kapak ${destination} iline transfer edildi.`
+      );
+    } catch (error: unknown) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Transfer işlemi tamamlanamadı.'
+      );
+    } finally {
+      setTransferring(false);
+    }
+  }
+
+  function addOrUpdateAuditEntry(
+    parsedBarcode: ParsedBarcode,
+    status: ScanStatus
+  ) {
+    const key = `${normalizeLot(parsedBarcode.lot_no)}-${
+      parsedBarcode.kapak_boyutu
+    }`;
+
+    setAuditEntries(previous => {
+      const existing = previous.find(entry => entry.key === key);
+
+      const nextEntry: AuditEntry = {
+        key,
+        status,
+        lotNo: normalizeLot(parsedBarcode.lot_no),
+        size: parsedBarcode.kapak_boyutu,
+        expirationDate: parsedBarcode.son_kullanma_tarihi,
+        scannedAt: new Date().toISOString(),
+        scanCount: existing ? existing.scanCount + 1 : 1,
+      };
+
+      return [
+        nextEntry,
+        ...previous.filter(entry => entry.key !== key),
+      ];
+    });
+  }
+
+  function markAuditEntryAsFound(parsedBarcode: ParsedBarcode) {
+    const key = `${normalizeLot(parsedBarcode.lot_no)}-${
+      parsedBarcode.kapak_boyutu
+    }`;
+
+    setAuditEntries(previous =>
+      previous.map(entry =>
+        entry.key === key
+          ? {
+              ...entry,
+              status: 'found',
+              scannedAt: new Date().toISOString(),
+            }
+          : entry
+      )
+    );
+  }
+
+  function removeAuditEntry(key: string) {
+    setAuditEntries(previous =>
+      previous.filter(entry => entry.key !== key)
+    );
+  }
+
+  function clearAuditEntries() {
+    if (auditEntries.length === 0) return;
+
+    const confirmed = window.confirm(
+      'Stok kontrol listesi temizlensin mi?'
+    );
+
+    if (!confirmed) return;
+
+    setAuditEntries([]);
+    setScanResult(null);
+    setParsed(null);
+    window.sessionStorage.removeItem('valveflow-stock-audit');
+  }
+
+  function solveBarcode() {
+    setMessage('');
+    setParsed(null);
+    setScanResult(null);
+
+    try {
+      const parsedBarcode = parseBarcodeValue(barcode);
+      const normalizedLot = normalizeLot(parsedBarcode.lot_no);
+
+      const existingItem = items.find(
+        item =>
+          normalizeLot(item.lot_no || '') === normalizedLot &&
+          Number(item.kapak_boyutu) === parsedBarcode.kapak_boyutu
+      );
+
+      setParsed(parsedBarcode);
+      setActiveFilter(
+        String(parsedBarcode.kapak_boyutu) as SizeFilter
+      );
+
+      if (existingItem?.durum === 'stokta') {
+        addOrUpdateAuditEntry(parsedBarcode, 'found');
+        setScanResult({
+          status: 'found',
+          lotNo: normalizedLot,
+          size: parsedBarcode.kapak_boyutu,
+        });
+        setMessage(
+          `${normalizedLot} LOT numaralı kapak mevcut stokta bulundu.`
+        );
+      } else if (existingItem) {
+        addOrUpdateAuditEntry(parsedBarcode, 'used');
+        setScanResult({
+          status: 'used',
+          lotNo: normalizedLot,
+          size: parsedBarcode.kapak_boyutu,
+        });
+        setMessage(
+          `${normalizedLot} LOT numaralı kapak daha önce kullanılmış. Tekrar stoka eklenemez.`
+        );
+      } else {
+        addOrUpdateAuditEntry(parsedBarcode, 'not-found');
+        setScanResult({
+          status: 'not-found',
+          lotNo: normalizedLot,
+          size: parsedBarcode.kapak_boyutu,
+        });
+        setMessage(
+          `${normalizedLot} LOT numaralı kapak sistemde bulunamadı. Stoka ekleyebilirsiniz.`
+        );
+      }
+    } catch (error: unknown) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Barkod çözümlenemedi.'
+      );
+    } finally {
+      setBarcode('');
+
+      window.setTimeout(() => {
+        barcodeInputRef.current?.focus();
+      }, 0);
+    }
+  }
+
+  async function addToStock() {
+    if (!parsed || scanResult?.status !== 'not-found' || saving) {
+      return;
+    }
+
+    setSaving(true);
+    setMessage('');
+
+    const lotNo = normalizeLot(parsed.lot_no);
+
+    try {
+      const { data: insertedStock, error: stockError } = await supabase
+        .from('kapak_stok')
+        .insert({
+          urun_adi: parsed.urun_adi,
+          gtin: parsed.gtin,
+          kapak_adi: 'EVPROPLUS',
+          kapak_boyutu: parsed.kapak_boyutu,
+          lot_no: lotNo,
+          son_kullanma_tarihi: parsed.son_kullanma_tarihi,
+          barkod_raw: parsed.barkod_raw,
+          durum: 'stokta',
+        })
+        .select('id')
+        .single();
+
+      if (stockError || !insertedStock?.id) {
+        throw stockError || new Error('Stok kaydı oluşturulamadı.');
+      }
+
+      const { error: movementError } = await supabase
+        .from('stok_hareketleri')
+        .insert({
+          kapak_stok_id: insertedStock.id,
+          islem: 'giris',
+          urun_adi: parsed.urun_adi,
+          lot_no: lotNo,
+          kapak_boyutu: parsed.kapak_boyutu,
+          son_kullanma_tarihi: parsed.son_kullanma_tarihi,
+          arsivlendi: false,
+        });
+
+      if (movementError) {
+        const { error: rollbackError } = await supabase
+          .from('kapak_stok')
+          .delete()
+          .eq('id', insertedStock.id);
+
+        if (rollbackError) {
+          throw new Error(
+            `Hareket kaydı yazılamadı ve stok geri alınamadı: ${movementError.message}`
+          );
+        }
+
+        throw new Error(
+          `Hareket kaydı yazılamadı. Eksik kayıt oluşmaması için stok ekleme geri alındı: ${movementError.message}`
+        );
+      }
+
+      try {
+        await notifyAdmins({
+          title: 'Yeni Stok Girişi',
+          message: `${profile?.full_name || 'Bir kullanıcı'} ${parsed.kapak_boyutu} mm, ${lotNo} LOT numaralı kapağı stoka ekledi`,
+          type: 'success',
+          related_table: 'kapak_stok',
+          related_id: insertedStock.id,
+        });
+      } catch (notificationError) {
+        console.error(
+          'Stok girişi tamamlandı ancak bildirim gönderilemedi:',
+          notificationError
+        );
+      }
+
+      setParsed(null);
+      setScanResult(null);
+      markAuditEntryAsFound(parsed);
+      setMessage(`${lotNo} LOT numaralı kapak stoka eklendi.`);
+      await loadStock();
+    } catch (error: unknown) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Kapak stoka eklenemedi.'
+      );
+    } finally {
+      setSaving(false);
+
+      window.setTimeout(() => {
+        barcodeInputRef.current?.focus();
+      }, 0);
+    }
+  }
+
+  async function exportCurrentStock() {
+    if (filteredItems.length === 0 || exporting) return;
+
+    setExporting(true);
+
+    try {
+      await downloadExcel({
+        rows: filteredItems.map((item, index) => ({
+          No: index + 1,
+          Ürün: productName(item),
+          Ölçü: item.kapak_boyutu
+            ? `${item.kapak_boyutu} mm`
+            : '',
+          LOT: item.lot_no || '',
+          SKT: formatDate(item.son_kullanma_tarihi),
+          'Kalan Gün': remainingDays(item.son_kullanma_tarihi) ?? '',
+        })),
+        widths: [8, 25, 12, 20, 16, 14],
+        sheetName: 'Mevcut Stok',
+        fileName: `ValveFlow_Mevcut_Stok_${new Date()
+          .toISOString()
+          .slice(0, 10)}.xlsx`,
+      });
+    } catch (error: unknown) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Excel dosyası hazırlanamadı.'
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const resultStyle =
+    scanResult?.status === 'found'
+      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
+      : scanResult?.status === 'used'
+        ? 'border-red-500/30 bg-red-500/10 text-red-100'
+        : scanResult?.status === 'not-found'
+          ? 'border-amber-500/30 bg-amber-500/10 text-amber-100'
+          : 'border-slate-700 bg-slate-800 text-slate-200';
 
   return (
-    <div className="space-y-4 pb-24">
-      <header>
-        <h1 className="text-xl font-bold text-white sm:text-2xl">
-          Arşiv
-        </h1>
+    <div className="mx-auto max-w-[1600px] space-y-4 pb-24">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-white sm:text-2xl">
+            Stok Takip
+          </h1>
 
-        <p className="mt-1 text-sm text-slate-400">
-          Arşivlenen vakaları ve stok hareketlerini yönetin.
-        </p>
+          <p className="mt-1 text-sm text-slate-400">
+            Yalnızca şu anda mevcut olan kapaklar.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => void loadStock()}
+            disabled={loading}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-700 disabled:opacity-50"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`}
+            />
+            Yenile
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void exportCurrentStock()}
+            disabled={loading || exporting || filteredItems.length === 0}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/5 px-3 py-2 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/10 disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            {exporting ? 'Hazırlanıyor...' : "Excel'e Aktar"}
+          </button>
+        </div>
       </header>
 
-      <div className="inline-flex w-full rounded-xl border border-slate-700 bg-slate-900/60 p-1 sm:w-auto">
-        <button
-          type="button"
-          onClick={() => changeTab('cases')}
-          aria-pressed={activeTab === 'cases'}
-          className={`flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition sm:flex-none ${tabClass(
-            'cases'
-          )}`}
+      <section className="rounded-xl border border-violet-500/30 bg-violet-500/[0.06] p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <ArrowRightLeft className="h-4 w-4 text-violet-300" />
+              <h2 className="text-sm font-semibold text-white">
+                Stok Transferi
+              </h2>
+            </div>
+
+            <p className="mt-1 text-xs text-slate-400">
+              Aşağıdaki stok listesinden kapakları işaretleyin ve hedef
+              ili seçin.
+            </p>
+          </div>
+
+          <div className="w-full lg:w-64">
+            <label
+              htmlFor="transfer-city"
+              className="mb-1.5 block text-xs font-medium text-slate-300"
+            >
+              Hedef İl
+            </label>
+
+            <input
+              id="transfer-city"
+              type="search"
+              list="turkey-provinces"
+              value={transferCity}
+              onChange={event => setTransferCity(event.target.value)}
+              placeholder="İl yazarak ara..."
+              autoComplete="off"
+              className="min-h-11 w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
+            />
+
+            <datalist id="turkey-provinces">
+              {TURKEY_PROVINCES.map(city => (
+                <option key={city} value={city} />
+              ))}
+            </datalist>
+          </div>
+
+          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+            <button
+              type="button"
+              onClick={selectAllVisibleForTransfer}
+              disabled={filteredItems.length === 0 || transferring}
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-600 px-3 py-2.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 disabled:opacity-50"
+            >
+              Görünenleri Seç
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void transferSelectedStock()}
+              disabled={
+                selectedTransferIds.length === 0 || transferring
+              }
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ArrowRightLeft className="h-4 w-4" />
+              {transferring
+                ? 'Transfer ediliyor...'
+                : `${selectedTransferIds.length} Kapağı Transfer Et`}
+            </button>
+          </div>
+        </div>
+
+        {selectedTransferIds.length > 0 && (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-violet-500/20 bg-slate-950/30 px-3 py-2 text-xs text-violet-200">
+            <span>{selectedTransferIds.length} kapak seçildi.</span>
+            <button
+              type="button"
+              onClick={() => setSelectedTransferIds([])}
+              className="font-semibold text-slate-400 hover:text-white"
+            >
+              Seçimi Temizle
+            </button>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+        <label
+          htmlFor="stock-barcode"
+          className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-400"
         >
-          <span>Vakalar</span>
+          Kapak Barkodu
+        </label>
 
-          <span
-            className={`rounded-md px-1.5 py-0.5 text-xs font-bold ${
-              activeTab === 'cases'
-                ? 'bg-cyan-400/20 text-cyan-100'
-                : 'bg-slate-700 text-slate-300'
-            }`}
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            ref={barcodeInputRef}
+            id="stock-barcode"
+            value={barcode}
+            onChange={event => setBarcode(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                solveBarcode();
+              }
+            }}
+            placeholder="Barkodu okut veya yapıştır"
+            autoComplete="off"
+            className="min-h-11 flex-1 rounded-xl border border-slate-700 bg-slate-900/70 px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+          />
+
+          <button
+            type="button"
+            onClick={solveBarcode}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cyan-500"
           >
-            {archivedCases.length}
-          </span>
-        </button>
+            <Search className="h-4 w-4" />
+            Kontrol Et
+          </button>
+        </div>
 
-        <button
-          type="button"
-          onClick={() => changeTab('movements')}
-          aria-pressed={activeTab === 'movements'}
-          className={`flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition sm:flex-none ${tabClass(
-            'movements'
-          )}`}
-        >
-          <span>Stok Hareketleri</span>
+        {parsed && (
+          <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-slate-700 bg-slate-900/50 p-3 sm:grid-cols-4">
+            <div>
+              <div className="text-[10px] font-semibold uppercase text-slate-500">
+                Ürün
+              </div>
+              <div className="mt-1 text-sm font-semibold text-white">
+                {parsed.urun_adi}
+              </div>
+            </div>
 
-          <span
-            className={`rounded-md px-1.5 py-0.5 text-xs font-bold ${
-              activeTab === 'movements'
-                ? 'bg-cyan-400/20 text-cyan-100'
-                : 'bg-slate-700 text-slate-300'
-            }`}
+            <div>
+              <div className="text-[10px] font-semibold uppercase text-slate-500">
+                Ölçü
+              </div>
+              <div className="mt-1 text-sm font-semibold text-white">
+                {parsed.kapak_boyutu} mm
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[10px] font-semibold uppercase text-slate-500">
+                LOT
+              </div>
+              <div className="mt-1 break-all font-mono text-sm font-semibold text-cyan-300">
+                {parsed.lot_no}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[10px] font-semibold uppercase text-slate-500">
+                SKT
+              </div>
+              <div className="mt-1 text-sm font-semibold text-white">
+                {formatDate(parsed.son_kullanma_tarihi)}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {scanResult && (
+          <div className={`mt-3 rounded-xl border p-3 ${resultStyle}`}>
+            <div className="flex items-start gap-2">
+              {scanResult.status === 'found' ? (
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+              ) : scanResult.status === 'used' ? (
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-300" />
+              ) : (
+                <SearchX className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
+              )}
+
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold">
+                  {scanResult.status === 'found'
+                    ? 'Mevcut stokta bulundu'
+                    : scanResult.status === 'used'
+                      ? 'Daha önce kullanılmış'
+                      : 'Stokta bulunamadı'}
+                </p>
+
+                <p className="mt-1 text-xs opacity-80">
+                  LOT: {scanResult.lotNo} • {scanResult.size} mm
+                </p>
+              </div>
+
+              {scanResult.status === 'not-found' && (
+                <button
+                  type="button"
+                  onClick={() => void addToStock()}
+                  disabled={saving}
+                  className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-3 py-2 text-xs font-bold text-slate-950 transition hover:bg-amber-400 disabled:opacity-50"
+                >
+                  <PackagePlus className="h-4 w-4" />
+                  {saving ? 'Ekleniyor...' : 'Stoka Ekle'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="overflow-hidden rounded-xl border border-slate-700 bg-slate-800/60">
+        <div className="flex flex-col gap-3 border-b border-slate-700 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <ClipboardCheck className="h-5 w-5 text-cyan-300" />
+              <h2 className="text-sm font-semibold text-white">
+                Stok Kontrol Listesi
+              </h2>
+            </div>
+
+            <p className="mt-1 text-xs text-slate-400">
+              Arka arkaya okuttuğunuz kapakların kontrol sonuçları.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={clearAuditEntries}
+            disabled={auditEntries.length === 0}
+            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-red-500/50 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {archivedMovements.length}
-          </span>
-        </button>
-      </div>
+            <RotateCcw className="h-4 w-4" />
+            Kontrolü Temizle
+          </button>
+        </div>
 
-      {message && (
+        <div className="grid grid-cols-4 border-b border-slate-700 bg-slate-900/40 text-center">
+          <div className="px-2 py-3">
+            <div className="text-lg font-bold text-white">
+              {auditEntries.length}
+            </div>
+            <div className="text-[10px] uppercase text-slate-500">
+              Okutulan
+            </div>
+          </div>
+
+          <div className="border-l border-slate-700 px-2 py-3">
+            <div className="text-lg font-bold text-emerald-300">
+              {auditCounts.found}
+            </div>
+            <div className="text-[10px] uppercase text-slate-500">
+              Stokta
+            </div>
+          </div>
+
+          <div className="border-l border-slate-700 px-2 py-3">
+            <div className="text-lg font-bold text-red-300">
+              {auditCounts.used}
+            </div>
+            <div className="text-[10px] uppercase text-slate-500">
+              Kullanılmış
+            </div>
+          </div>
+
+          <div className="border-l border-slate-700 px-2 py-3">
+            <div className="text-lg font-bold text-amber-300">
+              {auditCounts.missing}
+            </div>
+            <div className="text-[10px] uppercase text-slate-500">
+              Eksik
+            </div>
+          </div>
+        </div>
+
+        {auditEntries.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-slate-500">
+            Henüz stok kontrolü yapılmadı.
+          </div>
+        ) : (
+          <div className="max-h-80 divide-y divide-slate-700/70 overflow-y-auto">
+            {auditEntries.map(entry => (
+              <div
+                key={entry.key}
+                className="flex items-start justify-between gap-3 px-4 py-3"
+              >
+                <div className="flex min-w-0 items-start gap-3">
+                  <div
+                    className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                      entry.status === 'found'
+                        ? 'bg-emerald-500/15 text-emerald-300'
+                        : entry.status === 'used'
+                          ? 'bg-red-500/15 text-red-300'
+                          : 'bg-amber-500/15 text-amber-300'
+                    }`}
+                  >
+                    {entry.status === 'found'
+                      ? '✓'
+                      : entry.status === 'used'
+                        ? '!'
+                        : '×'}
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="break-all font-mono text-sm font-bold text-white">
+                        {entry.lotNo}
+                      </p>
+
+                      <span
+                        className={`rounded-md border px-2 py-0.5 text-[10px] font-bold ${
+                          entry.status === 'found'
+                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                            : entry.status === 'used'
+                              ? 'border-red-500/30 bg-red-500/10 text-red-300'
+                              : 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                        }`}
+                      >
+                        {entry.status === 'found'
+                          ? 'STOKTA'
+                          : entry.status === 'used'
+                            ? 'KULLANILMIŞ'
+                            : 'EKSİK'}
+                      </span>
+
+                      {entry.scanCount > 1 && (
+                        <span className="rounded-md bg-slate-700 px-2 py-0.5 text-[10px] text-slate-300">
+                          {entry.scanCount} kez
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="mt-1 text-xs text-slate-400">
+                      {entry.size} mm • SKT{' '}
+                      {formatDate(entry.expirationDate)}
+                    </p>
+
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Son kontrol:{' '}
+                      {new Date(entry.scannedAt).toLocaleTimeString(
+                        'tr-TR',
+                        {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                        }
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => removeAuditEntry(entry.key)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-700 hover:text-red-300"
+                  aria-label={`${entry.lotNo} kontrol kaydını kaldır`}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {message && !scanResult && (
         <div
-          role="alert"
-          className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+          role="status"
+          className={`rounded-xl border px-4 py-3 text-sm ${resultStyle}`}
         >
           {message}
         </div>
       )}
 
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <button
+          type="button"
+          onClick={() => setActiveFilter('Tümü')}
+          className={`rounded-xl border p-3 text-left transition ${
+            activeFilter === 'Tümü'
+              ? 'border-cyan-500/40 bg-cyan-500/10'
+              : 'border-slate-700 bg-slate-800/60 hover:bg-slate-800'
+          }`}
+        >
+          <div className="text-xs text-slate-400">Tüm Stok</div>
+          <div className="mt-1 text-xl font-bold text-white">
+            {currentItems.length}
+          </div>
+        </button>
+
+        {([23, 26, 29, 34] as const).map(size => (
+          <button
+            key={size}
+            type="button"
+            onClick={() => setActiveFilter(String(size) as SizeFilter)}
+            className={`rounded-xl border p-3 text-left transition ${
+              activeFilter === String(size)
+                ? 'border-cyan-500/40 bg-cyan-500/10'
+                : 'border-slate-700 bg-slate-800/60 hover:bg-slate-800'
+            }`}
+          >
+            <div className="text-xs text-slate-400">{size} mm</div>
+            <div className="mt-1 text-xl font-bold text-white">
+              {sizeCounts[size]}
+            </div>
+          </button>
+        ))}
+      </section>
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+
+        <input
+          type="search"
+          value={searchTerm}
+          onChange={event => setSearchTerm(event.target.value)}
+          placeholder="LOT, ürün, ölçü veya SKT ara..."
+          className="min-h-11 w-full rounded-xl border border-slate-700 bg-slate-900/70 py-2.5 pl-10 pr-11 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+        />
+
+        {searchTerm && (
+          <button
+            type="button"
+            onClick={() => setSearchTerm('')}
+            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white"
+            aria-label="Aramayı temizle"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
       {loading ? (
         <div className="rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-10 text-center text-sm text-slate-400">
-          Arşiv kayıtları yükleniyor...
+          Mevcut stok yükleniyor...
         </div>
-      ) : activeTab === 'cases' ? (
-        archivedCases.length === 0 ? (
-          <div className="flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-800/40 px-4 py-10 text-center">
-            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-700/60 text-slate-400">
-              <ArchiveX className="h-5 w-5" />
-            </div>
-
-            <h2 className="text-sm font-semibold text-slate-200">
-              Arşivlenmiş vaka yok
-            </h2>
-
-            <p className="mt-1 text-sm text-slate-400">
-              Arşivlenen vakalar burada görüntülenecek.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="hidden overflow-hidden rounded-xl border border-slate-700 bg-slate-800/70 md:block">
-              <table className="w-full table-fixed">
-                <thead className="border-b border-slate-700 bg-slate-900/50">
-                  <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    <th className="w-[18%] px-3 py-2.5">
-                      Vaka Tarihi
-                    </th>
-                    <th className="w-[20%] px-3 py-2.5">
-                      Hasta
-                    </th>
-                    <th className="w-[22%] px-3 py-2.5">
-                      Merkez / Doktor
-                    </th>
-                    <th className="w-[20%] px-3 py-2.5">
-                      Kapak
-                    </th>
-                    <th className="w-[12%] px-3 py-2.5">
-                      LOT
-                    </th>
-                    <th className="w-[8%] px-3 py-2.5 text-right">
-                      İşlem
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-slate-700/70">
-                  {archivedCases.map(item => (
-                    <tr
-                      key={item.id}
-                      className="text-sm text-slate-300 transition hover:bg-slate-700/30"
-                    >
-                      <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-400">
-                        {formatDate(item.vaka_tarihi)}
-                      </td>
-
-                      <td className="px-3 py-2.5">
-                        <div
-                          className="truncate font-medium text-slate-100"
-                          title={item.hasta_adi || '-'}
-                        >
-                          {item.hasta_adi || '-'}
-                        </div>
-                      </td>
-
-                      <td className="px-3 py-2.5">
-                        <div
-                          className="truncate text-xs text-slate-300"
-                          title={item.merkez_hastane || '-'}
-                        >
-                          {item.merkez_hastane || '-'}
-                        </div>
-
-                        <div
-                          className="mt-0.5 truncate text-xs text-slate-500"
-                          title={item.doktor || '-'}
-                        >
-                          {item.doktor || '-'}
-                        </div>
-                      </td>
-
-                      <td className="px-3 py-2.5">
-                        <div
-                          className="truncate text-xs text-slate-300"
-                          title={caseProduct(item)}
-                        >
-                          {caseProduct(item)}
-                        </div>
-                      </td>
-
-                      <td className="px-3 py-2.5">
-                        <span className="font-mono text-xs font-semibold text-cyan-300">
-                          {item.lot_no || '-'}
-                        </span>
-                      </td>
-
-                      <td className="px-3 py-2.5">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => restoreCase(item.id)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-cyan-300 transition hover:bg-cyan-500/10 hover:text-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-400/50"
-                            title="Vakayı geri al"
-                            aria-label={`${item.hasta_adi || 'Vaka'} kaydını arşivden geri al`}
-                          >
-                            <RotateCcw className="h-4 w-4" />
-                          </button>
-
-                          {isAdmin && (
-                            <button
-                              type="button"
-                              onClick={() => deleteCase(item.id)}
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-red-300 transition hover:bg-red-500/10 hover:text-red-200 focus:outline-none focus:ring-2 focus:ring-red-400/50"
-                              title="Vakayı kalıcı olarak sil"
-                              aria-label={`${item.hasta_adi || 'Vaka'} kaydını kalıcı olarak sil`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="space-y-3 md:hidden">
-              {archivedCases.map(item => (
-                <article
-                  key={item.id}
-                  className="rounded-xl border border-slate-700 bg-slate-800/70 p-3.5"
-                >
-                  <div className="flex min-w-0 items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="mb-1.5 inline-flex items-center gap-1 text-[11px] text-slate-500">
-                        <CalendarDays className="h-3.5 w-3.5" />
-                        {formatDate(item.vaka_tarihi)}
-                      </div>
-
-                      <h2 className="break-words text-sm font-semibold text-slate-100">
-                        {item.hasta_adi || 'Hasta bilgisi yok'}
-                      </h2>
-
-                      <p className="mt-1 break-words text-xs text-slate-400">
-                        {item.merkez_hastane || 'Merkez bilgisi yok'}
-                      </p>
-
-                      <p className="mt-0.5 break-words text-xs text-slate-500">
-                        {item.doktor || 'Doktor bilgisi yok'}
-                      </p>
-                    </div>
-
-                    <div className="flex shrink-0 items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => restoreCase(item.id)}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-cyan-300 transition hover:bg-cyan-500/10 focus:outline-none focus:ring-2 focus:ring-cyan-400/50"
-                        title="Vakayı geri al"
-                        aria-label={`${item.hasta_adi || 'Vaka'} kaydını arşivden geri al`}
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                      </button>
-
-                      {isAdmin && (
-                        <button
-                          type="button"
-                          onClick={() => deleteCase(item.id)}
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-red-300 transition hover:bg-red-500/10 focus:outline-none focus:ring-2 focus:ring-red-400/50"
-                          title="Vakayı kalıcı olarak sil"
-                          aria-label={`${item.hasta_adi || 'Vaka'} kaydını kalıcı olarak sil`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-700/70 pt-3">
-                    <div className="min-w-0 rounded-lg bg-slate-900/40 px-3 py-2">
-                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                        Kapak
-                      </div>
-
-                      <div className="mt-1 break-words text-xs font-medium text-slate-300">
-                        {caseProduct(item)}
-                      </div>
-                    </div>
-
-                    <div className="min-w-0 rounded-lg bg-slate-900/40 px-3 py-2">
-                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                        LOT
-                      </div>
-
-                      <div className="mt-1 break-all font-mono text-xs font-semibold text-cyan-300">
-                        {item.lot_no || '-'}
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </>
-        )
-      ) : archivedMovements.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <div className="flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-800/40 px-4 py-10 text-center">
-          <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-700/60 text-slate-400">
-            <ArchiveX className="h-5 w-5" />
-          </div>
-
-          <h2 className="text-sm font-semibold text-slate-200">
-            Arşivlenmiş stok hareketi yok
-          </h2>
-
-          <p className="mt-1 text-sm text-slate-400">
-            Arşivlenen stok hareketleri burada görüntülenecek.
+          <PackageOpen className="h-7 w-7 text-slate-600" />
+          <p className="mt-3 text-sm font-semibold text-slate-300">
+            Mevcut stok bulunamadı
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Filtreyi değiştirin veya yeni bir kapak ekleyin.
           </p>
         </div>
       ) : (
@@ -507,175 +1451,127 @@ export default function ArchivedMovements() {
             <table className="w-full table-fixed">
               <thead className="border-b border-slate-700 bg-slate-900/50">
                 <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  <th className="w-[19%] px-3 py-2.5">Tarih</th>
-                  <th className="w-[13%] px-3 py-2.5">Tür</th>
-                  <th className="w-[27%] px-3 py-2.5">Ürün</th>
-                  <th className="w-[18%] px-3 py-2.5">LOT</th>
-                  <th className="w-[15%] px-3 py-2.5">SKT</th>
-                  <th className="w-[8%] px-3 py-2.5 text-right">
-                    İşlem
-                  </th>
+                  <th className="w-[7%] px-4 py-3">Seç</th>
+                  <th className="w-[23%] px-4 py-3">Ürün</th>
+                  <th className="w-[11%] px-4 py-3">Ölçü</th>
+                  <th className="w-[23%] px-4 py-3">LOT</th>
+                  <th className="w-[17%] px-4 py-3">SKT</th>
+                  <th className="w-[19%] px-4 py-3">Durum</th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-700/70">
-                {archivedMovements.map(item => (
-                  <tr
-                    key={item.id}
-                    className="text-sm text-slate-300 transition hover:bg-slate-700/30"
-                  >
-                    <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-400">
-                      {formatDateTime(item.created_at)}
-                    </td>
+                {filteredItems.map(item => {
+                  const days = remainingDays(item.son_kullanma_tarihi);
 
-                    <td className="px-3 py-2.5">
-                      <span
-                        className={`inline-flex rounded-md border px-2 py-1 text-xs font-medium ${islemClass(
-                          item.islem
-                        )}`}
-                      >
-                        {islemText(item.islem)}
-                      </span>
-                    </td>
-
-                    <td className="px-3 py-2.5">
-                      <div
-                        className="truncate font-medium text-slate-200"
-                        title={`${item.urun_adi || 'Kapak'}${
-                          item.kapak_boyutu
-                            ? ` ${item.kapak_boyutu} mm`
-                            : ''
-                        }`}
-                      >
-                        {item.urun_adi || 'Kapak'}
-
+                  return (
+                    <tr
+                      key={item.id}
+                      className="text-sm text-slate-300 transition hover:bg-slate-700/30"
+                    >
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedTransferIds.includes(item.id)}
+                          onChange={() => toggleTransferSelection(item.id)}
+                          className="h-4 w-4 cursor-pointer accent-violet-500"
+                          aria-label={`${item.lot_no || 'Kapak'} transfer için seç`}
+                        />
+                      </td>
+                      <td className="truncate px-4 py-3 font-semibold text-white">
+                        {productName(item)}
+                      </td>
+                      <td className="px-4 py-3">
                         {item.kapak_boyutu
-                          ? ` ${item.kapak_boyutu} mm`
-                          : ''}
-                      </div>
-                    </td>
-
-                    <td className="px-3 py-2.5">
-                      <span className="font-mono text-xs font-semibold text-cyan-300">
+                          ? `${item.kapak_boyutu} mm`
+                          : '-'}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs font-semibold text-cyan-300">
                         {item.lot_no || '-'}
-                      </span>
-                    </td>
-
-                    <td className="whitespace-nowrap px-3 py-2.5 text-xs">
-                      {formatDate(item.son_kullanma_tarihi)}
-                    </td>
-
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => restoreMovement(item.id)}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-cyan-300 transition hover:bg-cyan-500/10 hover:text-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-400/50"
-                          title="Stok hareketini geri al"
-                          aria-label={`${item.lot_no || 'Stok'} hareketini arşivden geri al`}
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {formatDate(item.son_kullanma_tarihi)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex rounded-md border px-2 py-1 text-xs font-medium ${expiryClass(
+                            days
+                          )}`}
                         >
-                          <RotateCcw className="h-4 w-4" />
-                        </button>
-
-                        {isAdmin && (
-                          <button
-                            type="button"
-                            onClick={() => deleteMovement(item.id)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-red-300 transition hover:bg-red-500/10 hover:text-red-200 focus:outline-none focus:ring-2 focus:ring-red-400/50"
-                            title="Stok hareketini kalıcı olarak sil"
-                            aria-label={`${item.lot_no || 'Stok'} hareketini kalıcı olarak sil`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {expiryText(days)}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           <div className="space-y-3 md:hidden">
-            {archivedMovements.map(item => (
-              <article
-                key={item.id}
-                className="rounded-xl border border-slate-700 bg-slate-800/70 p-3.5"
-              >
-                <div className="flex min-w-0 items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            {filteredItems.map(item => {
+              const days = remainingDays(item.son_kullanma_tarihi);
+
+              return (
+                <article
+                  key={item.id}
+                  className="rounded-xl border border-slate-700 bg-slate-800/70 p-3.5"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="break-words text-sm font-semibold text-white">
+                        {productName(item)}
+                      </h2>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {item.kapak_boyutu
+                          ? `${item.kapak_boyutu} mm`
+                          : 'Ölçü yok'}
+                      </p>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-2">
                       <span
-                        className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-medium ${islemClass(
-                          item.islem
+                        className={`rounded-md border px-2 py-1 text-[11px] font-medium ${expiryClass(
+                          days
                         )}`}
                       >
-                        {islemText(item.islem)}
+                        {expiryText(days)}
                       </span>
 
-                      <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
-                        <CalendarDays className="h-3.5 w-3.5" />
-                        {formatDateTime(item.created_at)}
-                      </span>
-                    </div>
-
-                    <h2 className="break-words text-sm font-semibold text-slate-100">
-                      {item.urun_adi || 'Kapak'}
-
-                      {item.kapak_boyutu
-                        ? ` ${item.kapak_boyutu} mm`
-                        : ''}
-                    </h2>
-                  </div>
-
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => restoreMovement(item.id)}
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-cyan-300 transition hover:bg-cyan-500/10 focus:outline-none focus:ring-2 focus:ring-cyan-400/50"
-                      title="Stok hareketini geri al"
-                      aria-label={`${item.lot_no || 'Stok'} hareketini arşivden geri al`}
-                    >
-                      <RotateCcw className="h-4 w-4" />
-                    </button>
-
-                    {isAdmin && (
-                      <button
-                        type="button"
-                        onClick={() => deleteMovement(item.id)}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-red-300 transition hover:bg-red-500/10 focus:outline-none focus:ring-2 focus:ring-red-400/50"
-                        title="Stok hareketini kalıcı olarak sil"
-                        aria-label={`${item.lot_no || 'Stok'} hareketini kalıcı olarak sil`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-700/70 pt-3">
-                  <div className="min-w-0 rounded-lg bg-slate-900/40 px-3 py-2">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                      LOT
-                    </div>
-
-                    <div className="mt-1 break-all font-mono text-xs font-semibold text-cyan-300">
-                      {item.lot_no || '-'}
+                      <label className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-violet-500/30 bg-violet-500/10">
+                        <input
+                          type="checkbox"
+                          checked={selectedTransferIds.includes(item.id)}
+                          onChange={() => toggleTransferSelection(item.id)}
+                          className="h-4 w-4 cursor-pointer accent-violet-500"
+                          aria-label={`${item.lot_no || 'Kapak'} transfer için seç`}
+                        />
+                      </label>
                     </div>
                   </div>
 
-                  <div className="min-w-0 rounded-lg bg-slate-900/40 px-3 py-2">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                      Son Kullanma
+                  <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-700/70 pt-3">
+                    <div className="rounded-lg bg-slate-900/40 px-3 py-2">
+                      <div className="text-[10px] font-semibold uppercase text-slate-500">
+                        LOT
+                      </div>
+                      <div className="mt-1 break-all font-mono text-xs font-semibold text-cyan-300">
+                        {item.lot_no || '-'}
+                      </div>
                     </div>
 
-                    <div className="mt-1 text-xs font-medium text-slate-300">
-                      {formatDate(item.son_kullanma_tarihi)}
+                    <div className="rounded-lg bg-slate-900/40 px-3 py-2">
+                      <div className="text-[10px] font-semibold uppercase text-slate-500">
+                        SKT
+                      </div>
+                      <div className="mt-1 text-xs font-medium text-slate-300">
+                        {formatDate(item.son_kullanma_tarihi)}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         </>
       )}
