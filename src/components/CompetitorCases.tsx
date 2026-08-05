@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, Check, ChevronDown, Filter, Plus, Trash2, X } from 'lucide-react';
 import { supabase, timeout } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { notifyAdmins } from '../lib/notifications';
 
 const DATABASE_PAGE_SIZE = 1000;
 
@@ -167,6 +168,8 @@ function StatCard({ title, value }: { title: string; value: number }) {
 export default function CompetitorCases() {
   const { profile } = useAuth();
 
+  const currentUserName = profile?.full_name || 'Bir kullanıcı';
+
   const isAdmin =
     profile?.role === 'admin' ||
     profile?.yetki === 'admin' ||
@@ -245,6 +248,20 @@ export default function CompetitorCases() {
       return;
     }
 
+    try {
+      await notifyAdmins({
+        title: 'Yeni Rakip Vaka',
+        message: `${currentUserName} ${marka} marka rakip vaka kaydı ekledi`,
+        type: 'info',
+        related_table: 'rakip_vakalar',
+      });
+    } catch (notificationError) {
+      console.error(
+        'Rakip vaka eklendi ancak bildirim gönderilemedi:',
+        notificationError
+      );
+    }
+
     setMerkez('');
     setDoktor('');
     setVakaTarihi(new Date().toISOString().slice(0, 10));
@@ -274,6 +291,21 @@ export default function CompetitorCases() {
     if (error) {
       alert(error.message);
       return;
+    }
+
+    try {
+      await notifyAdmins({
+        title: 'Rakip Vaka Silindi',
+        message: `${currentUserName} rakip vaka kaydını sildi`,
+        type: 'warning',
+        related_table: 'rakip_vakalar',
+        related_id: id,
+      });
+    } catch (notificationError) {
+      console.error(
+        'Rakip vaka silindi ancak bildirim gönderilemedi:',
+        notificationError
+      );
     }
 
     await loadCases();
