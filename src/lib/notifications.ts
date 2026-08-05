@@ -6,7 +6,7 @@ export type NotificationType =
   | 'error'
   | 'info';
 
-type NotifyAdminsParams = {
+type NotifyUsersParams = {
   title: string;
   message: string;
   type?: NotificationType;
@@ -20,38 +20,15 @@ export async function notifyAdmins({
   type = 'info',
   related_table = null,
   related_id = null,
-}: NotifyAdminsParams) {
-  // Admin kullanıcıları al
-  const { data: admins, error: adminError } = await timeout(
-    supabase
-      .from('profiles')
-      .select('id')
-      .eq('role', 'admin'),
-    10000
-  );
-
-  if (adminError) throw adminError;
-
-  if (!admins || admins.length === 0) {
-    return;
-  }
-
-  // Bildirimleri hazırla
-  const notifications = admins.map((admin) => ({
-    user_id: admin.id,
-    title,
-    message,
-    type,
-    related_table,
-    related_id,
-    is_read: false,
-  }));
-
-  // Bildirimleri ekle
+}: NotifyUsersParams) {
   const { error } = await timeout(
-    supabase
-      .from('notifications')
-      .insert(notifications),
+    supabase.rpc('notify_all_users', {
+      p_title: title,
+      p_message: message,
+      p_type: type,
+      p_related_table: related_table,
+      p_related_id: related_id,
+    }),
     10000
   );
 
