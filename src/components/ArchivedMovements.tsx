@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Kapak, supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { notifyAdmins } from '../lib/notifications';
 
 type ArchiveTab = 'cases' | 'movements';
 
@@ -23,12 +24,13 @@ type Movement = {
 
 export default function ArchivedMovements() {
   const { profile } = useAuth();
-  const currentProfile = profile as any;
 
   const isAdmin =
-    currentProfile?.role === 'admin' ||
-    currentProfile?.yetki === 'admin' ||
-    currentProfile?.is_admin === true;
+    profile?.role === 'admin' ||
+    profile?.yetki === 'admin' ||
+    profile?.is_admin === true;
+
+  const currentUserName = profile?.full_name || 'Bir kullanıcı';
 
   const [archivedCases, setArchivedCases] = useState<Kapak[]>([]);
   const [archivedMovements, setArchivedMovements] = useState<Movement[]>([]);
@@ -89,6 +91,21 @@ export default function ArchivedMovements() {
       return;
     }
 
+    try {
+      await notifyAdmins({
+        title: 'Vaka Arşivden Çıkarıldı',
+        message: `${currentUserName} vaka kaydını arşivden geri yükledi`,
+        type: 'info',
+        related_table: 'kapaklar',
+        related_id: id,
+      });
+    } catch (notificationError) {
+      console.error(
+        'Vaka geri yüklendi ancak bildirim gönderilemedi:',
+        notificationError
+      );
+    }
+
     await loadArchive();
   }
 
@@ -114,6 +131,20 @@ export default function ArchivedMovements() {
       return;
     }
 
+    try {
+      await notifyAdmins({
+        title: 'Arşivlenmiş Vaka Silindi',
+        message: `${currentUserName} arşivlenmiş vaka kaydını kalıcı olarak sildi`,
+        type: 'warning',
+        related_table: 'kapaklar',
+      });
+    } catch (notificationError) {
+      console.error(
+        'Arşivlenmiş vaka silindi ancak bildirim gönderilemedi:',
+        notificationError
+      );
+    }
+
     await loadArchive();
   }
 
@@ -132,6 +163,21 @@ export default function ArchivedMovements() {
     if (error) {
       alert(error.message);
       return;
+    }
+
+    try {
+      await notifyAdmins({
+        title: 'Stok Hareketi Arşivden Çıkarıldı',
+        message: `${currentUserName} stok hareketini arşivden geri yükledi`,
+        type: 'info',
+        related_table: 'stok_hareketleri',
+        related_id: id,
+      });
+    } catch (notificationError) {
+      console.error(
+        'Stok hareketi geri yüklendi ancak bildirim gönderilemedi:',
+        notificationError
+      );
     }
 
     await loadArchive();
@@ -157,6 +203,21 @@ export default function ArchivedMovements() {
     if (error) {
       alert(error.message);
       return;
+    }
+
+    try {
+      await notifyAdmins({
+        title: 'Stok Hareketi Silindi',
+        message: `${currentUserName} arşivlenmiş stok hareketini kalıcı olarak sildi`,
+        type: 'warning',
+        related_table: 'stok_hareketleri',
+        related_id: id,
+      });
+    } catch (notificationError) {
+      console.error(
+        'Stok hareketi silindi ancak bildirim gönderilemedi:',
+        notificationError
+      );
     }
 
     await loadArchive();
