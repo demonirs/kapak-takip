@@ -633,21 +633,6 @@ export default function AddCase() {
         }
       }
 
-      try {
-        await notifyAdmins({
-          title: 'Yeni Vaka',
-          message: `${currentCrimpYapan} vaka ekledi`,
-          type: 'success',
-          related_table: 'kapaklar',
-          related_id: newCaseId,
-        });
-      } catch (notificationError) {
-        console.error(
-          'Vaka kaydedildi ancak bildirim gönderilemedi:',
-          notificationError
-        );
-      }
-
       if (hasFoc) {
         navigate(`/foc/${newCaseId}`);
         return;
