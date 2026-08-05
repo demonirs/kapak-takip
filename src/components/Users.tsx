@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { notifyAdmins } from '../lib/notifications';
 
 type UserRole = 'admin' | 'member';
 
@@ -136,6 +137,7 @@ function RoleSelect({
 
 export default function Users() {
   const { profile } = useAuth();
+  const currentUserName = profile?.full_name || 'Bir yönetici';
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -221,6 +223,24 @@ export default function Users() {
       setMessage(error.message);
       setUpdatingUserId(null);
       return;
+    }
+
+    const previousRoleText =
+      targetUser.role === 'admin' ? 'Admin' : 'Üye';
+
+    try {
+      await notifyAdmins({
+        title: 'Kullanıcı Yetkisi Güncellendi',
+        message: `${currentUserName}, ${targetUser.full_name || 'kullanıcı'} rolünü ${previousRoleText} → ${roleText} olarak değiştirdi`,
+        type: 'warning',
+        related_table: 'profiles',
+        related_id: userId,
+      });
+    } catch (notificationError) {
+      console.error(
+        'Kullanıcı rolü güncellendi ancak bildirim gönderilemedi:',
+        notificationError
+      );
     }
 
     setMessage(
