@@ -543,6 +543,21 @@ export default function AddCase() {
           throw updateError;
         }
 
+        try {
+          await notifyAdmins({
+            title: 'Vaka Güncellendi',
+            message: `${currentCrimpYapan} vaka kaydını güncelledi`,
+            type: 'info',
+            related_table: 'kapaklar',
+            related_id: id,
+          });
+        } catch (notificationError) {
+          console.error(
+            'Vaka güncellendi ancak bildirim gönderilemedi:',
+            notificationError
+          );
+        }
+
         if (hasFoc) {
           navigate(`/foc/${id}`);
           return;
