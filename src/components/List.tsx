@@ -21,6 +21,7 @@ import {
 import { supabase, timeout } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { downloadExcel } from '../lib/excel';
+import { notifyAdmins } from '../lib/notifications';
 import {
   fetchUnifiedCases,
   type UnifiedCase,
@@ -244,6 +245,20 @@ export default function List() {
       if (!result?.success) {
         throw new Error(
           'Vaka silme işlemi veritabanı tarafından doğrulanamadı.'
+        );
+      }
+
+      try {
+        await notifyAdmins({
+          title: 'Vaka Silindi',
+          message: `${profile?.full_name || 'Bir yönetici'} vaka kaydını kalıcı olarak sildi`,
+          type: 'warning',
+          related_table: 'kapaklar',
+        });
+      } catch (notificationError) {
+        console.error(
+          'Vaka silindi ancak bildirim gönderilemedi:',
+          notificationError
         );
       }
 
