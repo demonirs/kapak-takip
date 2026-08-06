@@ -8,6 +8,7 @@ import {
 import {
   AlertTriangle,
   ArrowRightLeft,
+  BellRing,
   CheckCircle2,
   ClipboardCheck,
   Download,
@@ -154,6 +155,9 @@ type AuditEntry = {
   expirationDate: string;
   scannedAt: string;
   scanCount: number;
+  addedToStock?: boolean;
+  notificationSent?: boolean;
+  stockId?: string;
 };
 
 function normalizeLot(value: string): string {
@@ -390,6 +394,8 @@ export default function Stock() {
   const [items, setItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [notifyingStockEntries, setNotifyingStockEntries] =
+    useState(false);
   const [exporting, setExporting] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [transferCity, setTransferCity] = useState('');
@@ -515,6 +521,16 @@ export default function Stock() {
         entry => entry.status === 'not-found'
       ).length,
     }),
+    [auditEntries]
+  );
+
+  const pendingStockEntries = useMemo(
+    () =>
+      auditEntries.filter(
+        entry =>
+          entry.addedToStock === true &&
+          entry.notificationSent !== true
+      ),
     [auditEntries]
   );
 
@@ -646,7 +662,10 @@ export default function Stock() {
     });
   }
 
-  function markAuditEntryAsFound(parsedBarcode: ParsedBarcode) {
+  function markAuditEntryAsFound(
+    parsedBarcode: ParsedBarcode,
+    stockId: string
+  ) {
     const key = `${normalizeLot(parsedBarcode.lot_no)}-${
       parsedBarcode.kapak_boyutu
     }`;
@@ -658,6 +677,9 @@ export default function Stock() {
               ...entry,
               status: 'found',
               scannedAt: new Date().toISOString(),
+              addedToStock: true,
+              notificationSent: false,
+              stockId,
             }
           : entry
       )
@@ -673,6 +695,13 @@ export default function Stock() {
   function clearAuditEntries() {
     if (auditEntries.length === 0) return;
 
+    if (pendingStockEntries.length > 0) {
+      setMessage(
+        `Önce ${pendingStockEntries.length} stok girişinin özet bildirimini gönderin.`
+      );
+      return;
+    }
+
     const confirmed = window.confirm(
       'Stok kontrol listesi temizlensin mi?'
     );
@@ -683,6 +712,75 @@ export default function Stock() {
     setScanResult(null);
     setParsed(null);
     window.sessionStorage.removeItem('valveflow-stock-audit');
+  }
+
+  async function notifyPendingStockEntries() {
+    if (
+      pendingStockEntries.length === 0 ||
+      notifyingStockEntries
+    ) {
+      return;
+    }
+
+    setNotifyingStockEntries(true);
+    setMessage('');
+
+    const sizeSummary = [23, 26, 29, 34]
+      .map(size => {
+        const count = pendingStockEntries.filter(
+          entry => entry.size === size
+        ).length;
+
+        return count > 0 ? `${count} adet ${size} mm` : null;
+      })
+      .filter(Boolean)
+      .join(', ');
+
+    try {
+      await notifyAdmins({
+        title: 'Yeni Stok Girişi',
+        message: `${profile?.full_name || 'Bir kullanıcı'} ${pendingStockEntries.length} adet kapağı stoka ekledi${
+          sizeSummary ? ` (${sizeSummary})` : ''
+        }`,
+        type: 'success',
+        related_table: 'kapak_stok',
+        related_id:
+          pendingStockEntries.find(entry => entry.stockId)?.stockId ||
+          null,
+      });
+
+      const notifiedKeys = new Set(
+        pendingStockEntries.map(entry => entry.key)
+      );
+
+      setAuditEntries(previous =>
+        previous.map(entry =>
+          notifiedKeys.has(entry.key)
+            ? {
+                ...entry,
+                notificationSent: true,
+              }
+            : entry
+        )
+      );
+
+      setMessage(
+        `${pendingStockEntries.length} stok girişi için tek özet bildirim gönderildi.`
+      );
+    } catch (notificationError) {
+      console.error(
+        'Stok girişleri tamamlandı ancak özet bildirim gönderilemedi:',
+        notificationError
+      );
+
+      setMessage(
+        notificationError instanceof Error
+          ? `Özet bildirim gönderilemedi: ${notificationError.message}`
+          : 'Özet bildirim gönderilemedi.'
+      );
+    } finally {
+      setNotifyingStockEntries(false);
+    }
   }
 
   function solveBarcode() {
@@ -810,25 +908,12 @@ export default function Stock() {
         );
       }
 
-      try {
-        await notifyAdmins({
-          title: 'Yeni Stok Girişi',
-          message: `${profile?.full_name || 'Bir kullanıcı'} ${parsed.kapak_boyutu} mm, ${lotNo} LOT numaralı kapağı stoka ekledi`,
-          type: 'success',
-          related_table: 'kapak_stok',
-          related_id: insertedStock.id,
-        });
-      } catch (notificationError) {
-        console.error(
-          'Stok girişi tamamlandı ancak bildirim gönderilemedi:',
-          notificationError
-        );
-      }
-
       setParsed(null);
       setScanResult(null);
-      markAuditEntryAsFound(parsed);
-      setMessage(`${lotNo} LOT numaralı kapak stoka eklendi.`);
+      markAuditEntryAsFound(parsed, insertedStock.id);
+      setMessage(
+        `${lotNo} LOT numaralı kapak stoka eklendi. Seri giriş tamamlanınca özet bildirimi gönderin.`
+      );
       await loadStock();
     } catch (error: unknown) {
       setMessage(
@@ -1139,15 +1224,31 @@ export default function Stock() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={clearAuditEntries}
-            disabled={auditEntries.length === 0}
-            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-red-500/50 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Kontrolü Temizle
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {pendingStockEntries.length > 0 && (
+              <button
+                type="button"
+                onClick={() => void notifyPendingStockEntries()}
+                disabled={notifyingStockEntries}
+                className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <BellRing className="h-4 w-4" />
+                {notifyingStockEntries
+                  ? 'Gönderiliyor...'
+                  : `${pendingStockEntries.length} Girişi Bildir`}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={clearAuditEntries}
+              disabled={auditEntries.length === 0}
+              className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-red-500/50 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Kontrolü Temizle
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-4 border-b border-slate-700 bg-slate-900/40 text-center">
