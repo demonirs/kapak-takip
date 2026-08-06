@@ -57,6 +57,11 @@ type CaseWithCrimp = Kapak & {
   crimp_yapan?: string | null;
 };
 
+type CrimperProfile = {
+  user_id: string;
+  full_name: string;
+};
+
 function Field({
   label,
   children,
@@ -162,6 +167,10 @@ export default function AddCase() {
   const [selectedStockId, setSelectedStockId] = useState('');
   const [selectedSize, setSelectedSize] = useState<number | null>(null);
   const [originalCrimpYapan, setOriginalCrimpYapan] = useState('');
+  const [crimperProfiles, setCrimperProfiles] = useState<
+    CrimperProfile[]
+  >([]);
+  const [selectedCrimper, setSelectedCrimper] = useState('');
   const [lockedValveFields, setLockedValveFields] =
     useState<LockedValveFields | null>(null);
   const [hasFoc, setHasFoc] = useState(false);
@@ -173,10 +182,22 @@ export default function AddCase() {
 
   const crimpYapan = isEdit
     ? originalCrimpYapan || currentCrimpYapan
-    : currentCrimpYapan;
+    : selectedCrimper || currentCrimpYapan;
+
+  const crimperOptions = useMemo(() => {
+    const names = [
+      currentCrimpYapan,
+      ...crimperProfiles.map(item => item.full_name.trim()),
+    ].filter(Boolean);
+
+    return Array.from(new Set(names)).sort((first, second) =>
+      first.localeCompare(second, 'tr')
+    );
+  }, [crimperProfiles, currentCrimpYapan]);
 
   useEffect(() => {
     void loadStockItems();
+    void loadCrimperProfiles();
 
     if (!id) {
       const lastHospital = localStorage.getItem('lastHospital') || '';
@@ -269,6 +290,27 @@ export default function AddCase() {
     }
 
     setStockItems((data as StockItem[]) || []);
+  }
+
+  async function loadCrimperProfiles() {
+    const { data, error: profileError } = await timeout(
+      supabase.rpc('list_crimper_profiles'),
+      10000
+    );
+
+    if (profileError) {
+      console.error(
+        'Crimper kullanıcı listesi yüklenemedi:',
+        profileError
+      );
+      return;
+    }
+
+    setCrimperProfiles(
+      ((data || []) as CrimperProfile[]).filter(
+        item => item.full_name?.trim()
+      )
+    );
   }
 
   const stockCounts = useMemo(() => {
@@ -587,7 +629,7 @@ export default function AddCase() {
           .insert({
             ...payload,
             user_id: user.id,
-            crimp_yapan: currentCrimpYapan,
+            crimp_yapan: crimpYapan,
           })
           .select('id')
           .single(),
@@ -1114,12 +1156,29 @@ export default function AddCase() {
           </div>
         </label>
 
-        <div className="flex min-w-0 items-center justify-between gap-3 border-t border-slate-700/70 pt-3 text-xs">
-          <span className="text-slate-500">Crimp yapan</span>
-          <b className="truncate text-right font-medium text-slate-300">
-            {crimpYapan}
-          </b>
-        </div>
+        {isEdit ? (
+          <div className="flex min-w-0 items-center justify-between gap-3 border-t border-slate-700/70 pt-3 text-xs">
+            <span className="text-slate-500">Crimp yapan</span>
+            <b className="truncate text-right font-medium text-slate-300">
+              {crimpYapan}
+            </b>
+          </div>
+        ) : (
+          <div className="border-t border-slate-700/70 pt-3">
+            <Field label="Crimp yapan">
+              <CompactSelect
+                value={crimpYapan}
+                onChange={setSelectedCrimper}
+                options={crimperOptions}
+              />
+            </Field>
+
+            <p className="mt-1.5 text-[11px] leading-4 text-slate-500">
+              Varsayılan olarak giriş yapan kullanıcı seçilir. Vaka başka
+              bir crimper adına giriliyorsa listeden değiştirebilirsiniz.
+            </p>
+          </div>
+        )}
 
         <button
           type="submit"
