@@ -468,67 +468,23 @@ export default function AddCase() {
     selected: StockItem,
     vakaId: string
   ) {
-    const stockId = selected.id;
-
-    const { data: updatedStock, error: stockUpdateError } =
+    const { data: consumedStockId, error: stockUseError } =
       await timeout(
-        supabase
-          .from('kapak_stok')
-          .update({
-            durum: 'kullanildi',
-            kullanilan_vaka_id: vakaId,
-          })
-          .eq('id', stockId)
-          .eq('durum', 'stokta')
-          .select('id')
-          .maybeSingle(),
+        supabase.rpc('consume_case_stock_item', {
+          p_case_id: vakaId,
+          p_stock_id: selected.id,
+        }),
         10000
       );
 
-    if (stockUpdateError) {
-      throw stockUpdateError;
+    if (stockUseError) {
+      throw stockUseError;
     }
 
-    if (!updatedStock) {
+    if (consumedStockId !== selected.id) {
       throw new Error(
-        'Kapak stoktan düşürülemedi. Kayıt başka bir işlemde kullanılmış olabilir.'
+        'Kapak stoktan düşürüldü ancak işlem doğrulanamadı. Yönetici kontrolü gerekli.'
       );
-    }
-
-    const { error: movementError } = await timeout(
-      supabase.from('stok_hareketleri').insert({
-        kapak_stok_id: stockId,
-        islem: 'kullanildi',
-        urun_adi: selected.urun_adi,
-        lot_no: normalizeLot(selected.lot_no),
-        kapak_boyutu: selected.kapak_boyutu,
-        son_kullanma_tarihi: selected.son_kullanma_tarihi,
-        vaka_id: vakaId,
-        created_by: user?.id,
-      }),
-      10000
-    );
-
-    if (movementError) {
-      const { error: rollbackError } = await timeout(
-        supabase
-          .from('kapak_stok')
-          .update({
-            durum: 'stokta',
-            kullanilan_vaka_id: null,
-          })
-          .eq('id', stockId)
-          .eq('kullanilan_vaka_id', vakaId),
-        10000
-      );
-
-      if (rollbackError) {
-        throw new Error(
-          `Stok hareketi yazılamadı ve stok geri alınamadı: ${movementError.message}. Yönetici kontrolü gerekli.`
-        );
-      }
-
-      throw movementError;
     }
   }
 
