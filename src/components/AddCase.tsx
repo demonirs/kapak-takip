@@ -428,66 +428,6 @@ export default function AddCase() {
     }));
   }
 
-  async function findCurrentStockMatch(
-    lotNo: string,
-    size: number
-  ): Promise<StockItem | null> {
-    const { data, error: stockError } = await timeout(
-      supabase
-        .from('kapak_stok')
-        .select(
-          'id, urun_adi, kapak_boyutu, lot_no, son_kullanma_tarihi'
-        )
-        .eq('durum', 'stokta')
-        .eq('kapak_boyutu', size),
-      10000
-    );
-
-    if (stockError) {
-      throw new Error(
-        `Güncel stok kontrol edilemedi: ${stockError.message}`
-      );
-    }
-
-    const normalizedLot = normalizeLot(lotNo);
-
-    const matches = ((data || []) as StockItem[]).filter(
-      item => normalizeLot(item.lot_no) === normalizedLot
-    );
-
-    if (matches.length > 1) {
-      throw new Error(
-        'Aynı LOT/SN ile birden fazla stok kaydı bulundu. Stok kayıtlarını kontrol edin.'
-      );
-    }
-
-    return matches[0] || null;
-  }
-
-  async function markStockAsUsed(
-    selected: StockItem,
-    vakaId: string
-  ) {
-    const { data: consumedStockId, error: stockUseError } =
-      await timeout(
-        supabase.rpc('consume_case_stock_item', {
-          p_case_id: vakaId,
-          p_stock_id: selected.id,
-        }),
-        10000
-      );
-
-    if (stockUseError) {
-      throw stockUseError;
-    }
-
-    if (consumedStockId !== selected.id) {
-      throw new Error(
-        'Kapak stoktan düşürüldü ancak işlem doğrulanamadı. Yönetici kontrolü gerekli.'
-      );
-    }
-  }
-
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -573,62 +513,34 @@ export default function AddCase() {
         );
       }
 
-      const currentStockMatch =
-        await findCurrentStockMatch(
-          payload.lot_no,
-          valveSize
-        );
-
-      const { data, error: insertError } = await timeout(
-        supabase
-          .from('kapaklar')
-          .insert({
-            ...payload,
-            user_id: user.id,
-            crimp_yapan: crimpYapan,
-          })
-          .select('id')
-          .single(),
+      const { data: newCaseId, error: createError } =
+        await timeout(
+          supabase.rpc('create_case_atomically', {
+            p_vaka_tarihi: payload.vaka_tarihi,
+            p_merkez_hastane: payload.merkez_hastane,
+            p_doktor: payload.doktor,
+            p_hasta_adi: payload.hasta_adi,
+            p_kapak_tipi: payload.kapak_tipi,
+            p_kapak_size: payload.kapak_size,
+            p_lot_no: payload.lot_no,
+            p_son_kul_tarihi: payload.son_kul_tarihi,
+            p_pre_balon: payload.pre_balon,
+            p_post_balon: payload.post_balon,
+            p_paravalvuler_ay: payload.paravalvuler_ay,
+            p_proglide_adedi: payload.proglide_adedi,
+            p_crimp_yapan: crimpYapan,
+          }),
         10000
       );
 
-      if (insertError) {
-        throw insertError;
+      if (createError) {
+        throw createError;
       }
 
-      if (!data?.id) {
+      if (!newCaseId || typeof newCaseId !== 'string') {
         throw new Error(
           'Vaka oluşturuldu ancak vaka kimliği alınamadı.'
         );
-      }
-
-      const newCaseId = data.id as string;
-
-      if (currentStockMatch) {
-        try {
-          await markStockAsUsed(
-            currentStockMatch,
-            newCaseId
-          );
-        } catch (stockUseError: unknown) {
-          const { error: rollbackCaseError } =
-            await timeout(
-              supabase
-                .from('kapaklar')
-                .delete()
-                .eq('id', newCaseId)
-                .eq('user_id', user.id),
-              10000
-            );
-
-          if (rollbackCaseError) {
-            throw new Error(
-              'Vaka kaydedildi ancak kapak stoktan düşürülemedi ve vaka kaydı geri alınamadı. Tekrar kayıt girmeyin; yönetici kontrolü gerekli.'
-            );
-          }
-
-          throw stockUseError;
-        }
       }
 
       if (hasFoc) {
