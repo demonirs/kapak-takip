@@ -250,30 +250,6 @@ export default function FocCase() {
     };
   }, [stockItems]);
 
-  const firstStock = useMemo(() => {
-    if (!caseItem) {
-      return null;
-    }
-
-    const caseSize = getSizeNumber(
-      caseItem.kapak_size
-    );
-
-    const caseLot = normalizeLot(
-      caseItem.lot_no
-    );
-
-    return (
-      stockItems.find(
-        stockItem =>
-          normalizeLot(stockItem.lot_no) ===
-            caseLot &&
-          Number(stockItem.kapak_boyutu) ===
-            Number(caseSize)
-      ) || null
-    );
-  }, [caseItem, stockItems]);
-
   const secondValveDetails = useMemo(() => {
     if (secondValveMode === 'stock') {
       return {
@@ -523,144 +499,6 @@ CRİMP: ${
     }));
   }
 
-  async function markFocStockAsUsed(
-    stockItem: StockItem,
-    currentVakaId: string
-  ) {
-    const {
-      data: updatedStock,
-      error: stockError,
-    } = await timeout(
-      supabase
-        .from('kapak_stok')
-        .update({
-          durum: 'kullanildi',
-          kullanilan_vaka_id:
-            currentVakaId,
-        })
-        .eq('id', stockItem.id)
-        .eq('durum', 'stokta')
-        .select('id')
-        .maybeSingle(),
-      10000
-    );
-
-    if (stockError) {
-      throw stockError;
-    }
-
-    if (!updatedStock) {
-      throw new Error(
-        'Seçilen FOC kapağı artık stokta değil. Stok listesini yenileyip tekrar deneyin.'
-      );
-    }
-
-    const { error: movementError } =
-      await timeout(
-        supabase
-          .from('stok_hareketleri')
-          .insert({
-            kapak_stok_id: stockItem.id,
-            islem: 'kullanildi',
-            urun_adi: stockItem.urun_adi,
-            lot_no: normalizeLot(
-              stockItem.lot_no
-            ),
-            kapak_boyutu:
-              stockItem.kapak_boyutu,
-            son_kullanma_tarihi:
-              stockItem.son_kullanma_tarihi,
-            vaka_id: currentVakaId,
-            created_by: user?.id,
-          }),
-        10000
-      );
-
-    if (movementError) {
-      const { error: rollbackError } =
-        await timeout(
-          supabase
-            .from('kapak_stok')
-            .update({
-              durum: 'stokta',
-              kullanilan_vaka_id: null,
-            })
-            .eq('id', stockItem.id)
-            .eq(
-              'kullanilan_vaka_id',
-              currentVakaId
-            ),
-          10000
-        );
-
-      if (rollbackError) {
-        throw new Error(
-          `Stok hareketi kaydedilemedi ve FOC kapağı stoka geri alınamadı: ${getErrorMessage(
-            rollbackError
-          )}`
-        );
-      }
-
-      throw movementError;
-    }
-  }
-
-  async function rollbackFocStockUsage(
-    stockItem: StockItem,
-    currentVakaId: string
-  ) {
-    const rollbackErrors: string[] = [];
-
-    const { error: movementDeleteError } =
-      await timeout(
-        supabase
-          .from('stok_hareketleri')
-          .delete()
-          .eq('kapak_stok_id', stockItem.id)
-          .eq('vaka_id', currentVakaId)
-          .eq('islem', 'kullanildi'),
-        10000
-      );
-
-    if (movementDeleteError) {
-      rollbackErrors.push(
-        `stok hareketi silinemedi: ${getErrorMessage(
-          movementDeleteError
-        )}`
-      );
-    }
-
-    const { error: stockRollbackError } =
-      await timeout(
-        supabase
-          .from('kapak_stok')
-          .update({
-            durum: 'stokta',
-            kullanilan_vaka_id: null,
-          })
-          .eq('id', stockItem.id)
-          .eq(
-            'kullanilan_vaka_id',
-            currentVakaId
-          ),
-        10000
-      );
-
-    if (stockRollbackError) {
-      rollbackErrors.push(
-        `kapak stoka alınamadı: ${getErrorMessage(
-          stockRollbackError
-        )}`
-      );
-    }
-
-    if (rollbackErrors.length > 0) {
-      throw new Error(
-        rollbackErrors.join(' | ')
-      );
-    }
-  }
-
   function validateSecondValve() {
     if (!caseItem) {
       return 'Vaka bilgileri bulunamadı.';
@@ -759,77 +597,42 @@ CRİMP: ${
     setSaving(true);
     setError(null);
 
-    let usedFocStock: StockItem | null =
-      null;
-
-    let focCreated = false;
-
     try {
-      if (
-        secondValveMode === 'stock' &&
-        selectedStock
-      ) {
-        await markFocStockAsUsed(
-          selectedStock,
-          vakaId
-        );
-
-        usedFocStock = selectedStock;
-      }
-
-      const { error: focInsertError } =
+      const {
+        data: createdFocId,
+        error: focCreateError,
+      } =
         await timeout(
-          supabase
-            .from('foc_kayitlari')
-            .insert({
-              vaka_id: vakaId,
-              user_id: user.id,
-              aciklama: description.trim(),
-
-              fatura_edilen_stok_id:
-                firstStock?.id || null,
-
-              fatura_edilen_urun_adi:
-                caseItem.kapak_tipi,
-
-              fatura_edilen_kapak_boyutu:
-                firstSize,
-
-              fatura_edilen_lot_no:
-                normalizeLot(
-                  caseItem.lot_no
-                ),
-
-              fatura_edilen_skt:
-                caseItem.son_kul_tarihi ||
-                null,
-
-              foc_stok_id:
-                secondValveDetails.stockId,
-
-              foc_urun_adi:
-                secondValveDetails.productName,
-
-              foc_kapak_boyutu:
-                secondValveDetails.size,
-
-              foc_lot_no:
-                secondValveDetails.lotNo,
-
-              foc_skt:
-                secondValveDetails.expirationDate ||
-                null,
-
-              mail_metni: mailText,
-            }),
+          supabase.rpc('create_foc_atomically', {
+            p_vaka_id: vakaId,
+            p_aciklama: description.trim(),
+            p_foc_stok_id:
+              secondValveDetails.stockId,
+            p_foc_urun_adi:
+              secondValveDetails.productName,
+            p_foc_kapak_boyutu:
+              secondValveDetails.size,
+            p_foc_lot_no:
+              secondValveDetails.lotNo,
+            p_foc_skt:
+              secondValveDetails.expirationDate,
+            p_mail_metni: mailText,
+          }),
           10000
         );
 
-      if (focInsertError) {
-        throw focInsertError;
+      if (focCreateError) {
+        throw focCreateError;
       }
 
-      focCreated = true;
+      if (
+        !createdFocId ||
+        typeof createdFocId !== 'string'
+      ) {
+        throw new Error(
+          'FOC oluşturuldu ancak kayıt kimliği alınamadı.'
+        );
+      }
 
       try {
         await notifyAdmins({
@@ -842,7 +645,7 @@ CRİMP: ${
           related_table:
             'foc_kayitlari',
 
-          related_id: vakaId,
+          related_id: createdFocId,
         });
       } catch (notificationError) {
         console.error(
@@ -853,32 +656,13 @@ CRİMP: ${
 
       navigate(`/view/${vakaId}`);
     } catch (caughtError: unknown) {
-      let finalError = caughtError;
-
-      if (usedFocStock && !focCreated) {
-        try {
-          await rollbackFocStockUsage(
-            usedFocStock,
-            vakaId
-          );
-        } catch (rollbackError: unknown) {
-          finalError = new Error(
-            `FOC kaydı oluşturulamadı ve stok geri alma tamamlanamadı. FOC kapağını stoktan kontrol edin. Kayıt hatası: ${getErrorMessage(
-              caughtError
-            )} | Geri alma hatası: ${getErrorMessage(
-              rollbackError
-            )}`
-          );
-        }
-      }
-
       console.error(
         'FOC kayıt hatası:',
-        finalError
+        caughtError
       );
 
       setError(
-        getErrorMessage(finalError) ||
+        getErrorMessage(caughtError) ||
           'FOC kaydı oluşturulamadı.'
       );
     } finally {
