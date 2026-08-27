@@ -27,6 +27,19 @@ import { notifyAdmins } from '../lib/notifications';
 
 const DATABASE_PAGE_SIZE = 1000;
 
+const DIYARBAKIR_STOCK_LOTS = new Set([
+  'K006244',
+  'K006384',
+  'K006254',
+  'K006362',
+  'K006377',
+  'J376433',
+  'J376430',
+  'J389281',
+  'J388910',
+  'J389288',
+]);
+
 const TURKEY_PROVINCES = [
   'Adana',
   'Adıyaman',
@@ -1501,8 +1514,19 @@ export default function Stock() {
                           ? `${item.kapak_boyutu} mm`
                           : '-'}
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs font-semibold text-cyan-300">
-                        {item.lot_no || '-'}
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-xs font-semibold text-cyan-300">
+                            {item.lot_no || '-'}
+                          </span>
+                          {DIYARBAKIR_STOCK_LOTS.has(
+                            normalizeLot(item.lot_no || '')
+                          ) && (
+                            <span className="inline-flex rounded-md border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-200">
+                              Diyarbakır
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-xs">
                         {formatDate(item.son_kullanma_tarihi)}
@@ -1570,8 +1594,17 @@ export default function Stock() {
                       <div className="text-[10px] font-semibold uppercase text-slate-500">
                         LOT
                       </div>
-                      <div className="mt-1 break-all font-mono text-xs font-semibold text-cyan-300">
-                        {item.lot_no || '-'}
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <span className="break-all font-mono text-xs font-semibold text-cyan-300">
+                          {item.lot_no || '-'}
+                        </span>
+                        {DIYARBAKIR_STOCK_LOTS.has(
+                          normalizeLot(item.lot_no || '')
+                        ) && (
+                          <span className="inline-flex rounded-md border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-200">
+                            Diyarbakır
+                          </span>
+                        )}
                       </div>
                     </div>
 
