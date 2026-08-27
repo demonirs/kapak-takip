@@ -155,6 +155,19 @@ function getSizeNumber(size: string) {
   return match ? Number(match[0]) : null;
 }
 
+const DIYARBAKIR_STOCK_LOTS = new Set([
+  'K006244',
+  'K006384',
+  'K006254',
+  'K006362',
+  'K006377',
+  'J376433',
+  'J376430',
+  'J389281',
+  'J388910',
+  'J389288',
+]);
+
 export default function AddCase() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
@@ -368,6 +381,9 @@ export default function AddCase() {
     selectedStockId,
     isEdit,
   ]);
+
+  const isDiyarbakirStock =
+    !isEdit && DIYARBAKIR_STOCK_LOTS.has(normalizeLot(form.lot_no));
 
   const set = (
     name: keyof FormState,
@@ -610,6 +626,25 @@ export default function AddCase() {
           <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300 md:text-sm">
             {error}
           </p>
+        )}
+
+        {isDiyarbakirStock && (
+          <div className="rounded-xl border border-amber-400/50 bg-amber-500/10 p-3 text-amber-100">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+              <div>
+                <p className="text-sm font-bold">
+                  Diyarbakır stok
+                </p>
+                <p className="mt-0.5 text-xs font-semibold text-amber-200">
+                  Bildir Fatih Demir
+                </p>
+                <p className="mt-1 font-mono text-[11px] text-amber-100/80">
+                  LOT: {normalizeLot(form.lot_no)}
+                </p>
+              </div>
+            </div>
+          </div>
         )}
 
         {!isEdit && (
