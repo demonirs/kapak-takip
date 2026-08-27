@@ -189,6 +189,7 @@ export default function AddCase() {
   const [hasFoc, setHasFoc] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dismissedDiyarbakirLot, setDismissedDiyarbakirLot] = useState('');
 
   const currentCrimpYapan =
     profile?.full_name || user?.email?.split('@')[0] || 'Kullanıcı';
@@ -382,8 +383,11 @@ export default function AddCase() {
     isEdit,
   ]);
 
+  const normalizedCurrentLot = normalizeLot(form.lot_no);
   const isDiyarbakirStock =
-    !isEdit && DIYARBAKIR_STOCK_LOTS.has(normalizeLot(form.lot_no));
+    !isEdit && DIYARBAKIR_STOCK_LOTS.has(normalizedCurrentLot);
+  const showDiyarbakirWarning =
+    isDiyarbakirStock && dismissedDiyarbakirLot !== normalizedCurrentLot;
 
   const set = (
     name: keyof FormState,
@@ -628,24 +632,6 @@ export default function AddCase() {
           </p>
         )}
 
-        {isDiyarbakirStock && (
-          <div className="rounded-xl border border-amber-400/50 bg-amber-500/10 p-3 text-amber-100">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-              <div>
-                <p className="text-sm font-bold">
-                  Diyarbakır stok
-                </p>
-                <p className="mt-0.5 text-xs font-semibold text-amber-200">
-                  Bildir Fatih Demir
-                </p>
-                <p className="mt-1 font-mono text-[11px] text-amber-100/80">
-                  LOT: {normalizeLot(form.lot_no)}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
 
         {!isEdit && (
           <section className="space-y-3 rounded-xl border border-cyan-500/25 bg-cyan-500/[0.06] p-3 sm:p-4">
@@ -1103,6 +1089,54 @@ export default function AddCase() {
               : 'Kaydet'}
         </button>
       </form>
+
+      {showDiyarbakirWarning && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="diyarbakir-stock-warning-title"
+        >
+          <div className="w-full max-w-md rounded-2xl border-2 border-amber-400/70 bg-slate-900 p-5 shadow-2xl shadow-amber-500/20">
+            <div className="flex flex-col items-center text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full border border-amber-400/50 bg-amber-500/15">
+                <AlertTriangle className="h-9 w-9 text-amber-300" />
+              </div>
+
+              <p className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-amber-300">
+                Dikkat
+              </p>
+
+              <h2
+                id="diyarbakir-stock-warning-title"
+                className="mt-1 text-2xl font-black text-white"
+              >
+                Diyarbakır Stok
+              </h2>
+
+              <p className="mt-2 text-base font-bold text-amber-200">
+                Bildir Fatih Demir
+              </p>
+
+              <p className="mt-3 rounded-lg bg-slate-950/60 px-3 py-2 font-mono text-sm font-semibold text-cyan-300">
+                LOT: {normalizedCurrentLot}
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setDismissedDiyarbakirLot(normalizedCurrentLot)}
+                className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-2 focus:ring-offset-slate-900"
+                aria-label="Diyarbakır stok uyarısını kapat"
+              >
+                Tamam, gördüm
+                <span aria-hidden="true" className="text-xl leading-none">
+                  →
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
