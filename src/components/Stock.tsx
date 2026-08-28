@@ -18,6 +18,7 @@ import {
   RotateCcw,
   Search,
   SearchX,
+  Sparkles,
   X,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -171,6 +172,15 @@ type AuditEntry = {
   addedToStock?: boolean;
   notificationSent?: boolean;
   stockId?: string;
+};
+
+type StockEntrySuccess = {
+  stockId: string;
+  urunAdi: string;
+  size: number;
+  lotNo: string;
+  expirationDate: string;
+  notificationStatus: 'pending' | 'sent' | 'failed';
 };
 
 function normalizeLot(value: string): string {
@@ -424,6 +434,8 @@ export default function Stock() {
   const [activeFilter, setActiveFilter] =
     useState<SizeFilter>('Tümü');
   const [message, setMessage] = useState('');
+  const [stockEntrySuccess, setStockEntrySuccess] =
+    useState<StockEntrySuccess | null>(null);
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>(
     () => {
       try {
@@ -727,6 +739,14 @@ export default function Stock() {
     window.sessionStorage.removeItem('valveflow-stock-audit');
   }
 
+  function closeStockEntrySuccessAndFocus() {
+    setStockEntrySuccess(null);
+
+    window.setTimeout(() => {
+      barcodeInputRef.current?.focus();
+    }, 0);
+  }
+
   async function notifyPendingStockEntries() {
     if (
       pendingStockEntries.length === 0 ||
@@ -777,6 +797,15 @@ export default function Stock() {
         )
       );
 
+      setStockEntrySuccess(previous =>
+        previous
+          ? {
+              ...previous,
+              notificationStatus: 'sent',
+            }
+          : previous
+      );
+
       setMessage(
         `${pendingStockEntries.length} stok girişi için tek özet bildirim gönderildi.`
       );
@@ -784,6 +813,15 @@ export default function Stock() {
       console.error(
         'Stok girişleri tamamlandı ancak özet bildirim gönderilemedi:',
         notificationError
+      );
+
+      setStockEntrySuccess(previous =>
+        previous
+          ? {
+              ...previous,
+              notificationStatus: 'failed',
+            }
+          : previous
       );
 
       setMessage(
@@ -921,9 +959,19 @@ export default function Stock() {
         );
       }
 
+      const successSnapshot: StockEntrySuccess = {
+        stockId: insertedStock.id,
+        urunAdi: parsed.urun_adi,
+        size: parsed.kapak_boyutu,
+        lotNo,
+        expirationDate: parsed.son_kullanma_tarihi,
+        notificationStatus: 'pending',
+      };
+
       setParsed(null);
       setScanResult(null);
       markAuditEntryAsFound(parsed, insertedStock.id);
+      setStockEntrySuccess(successSnapshot);
       setMessage(
         `${lotNo} LOT numaralı kapak stoka eklendi. Seri giriş tamamlanınca özet bildirimi gönderin.`
       );
@@ -988,6 +1036,180 @@ export default function Stock() {
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-4 pb-24">
+      {stockEntrySuccess && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-slate-950/85 px-4 py-6 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="stock-entry-success-title"
+        >
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-emerald-400/40 bg-slate-900 shadow-2xl shadow-emerald-500/15">
+            <div className="border-b border-emerald-400/20 bg-emerald-500/[0.07] px-5 py-5 sm:px-6">
+              <div className="flex items-start gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/15">
+                  <PackagePlus className="h-7 w-7 text-emerald-300" />
+                </div>
+
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-3.5 w-3.5 text-emerald-300" />
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">
+                      Stok işlemi tamamlandı
+                    </p>
+                  </div>
+
+                  <h2
+                    id="stock-entry-success-title"
+                    className="mt-1 text-2xl font-black text-white"
+                  >
+                    Kapak stoka eklendi
+                  </h2>
+
+                  <p className="mt-1 text-sm text-slate-400">
+                    Stok kaydı ve giriş hareketi başarıyla oluşturuldu.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 p-5 sm:p-6">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-700 bg-slate-950/45 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    Ürün
+                  </p>
+                  <p className="mt-1 break-words text-sm font-semibold text-white">
+                    {stockEntrySuccess.urunAdi}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-700 bg-slate-950/45 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    Ölçü
+                  </p>
+                  <p className="mt-1 text-sm font-bold text-cyan-200">
+                    {stockEntrySuccess.size} mm
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-700 bg-slate-950/45 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    LOT / SN
+                  </p>
+                  <p className="mt-1 break-all font-mono text-sm font-bold text-cyan-300">
+                    {stockEntrySuccess.lotNo}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-700 bg-slate-950/45 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    Son kullanma tarihi
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-white">
+                    {formatDate(stockEntrySuccess.expirationDate)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.07] p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    Stok durumu
+                  </p>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                    <p className="text-sm font-bold text-emerald-200">
+                      Mevcut stoğa eklendi
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  className={`rounded-xl border p-3 ${
+                    stockEntrySuccess.notificationStatus === 'sent'
+                      ? 'border-emerald-500/30 bg-emerald-500/[0.07]'
+                      : stockEntrySuccess.notificationStatus === 'failed'
+                        ? 'border-red-500/30 bg-red-500/[0.07]'
+                        : 'border-amber-500/30 bg-amber-500/[0.07]'
+                  }`}
+                >
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    Bildirim
+                  </p>
+
+                  <div className="mt-1.5 flex items-center gap-2">
+                    {stockEntrySuccess.notificationStatus === 'sent' ? (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                    ) : stockEntrySuccess.notificationStatus === 'failed' ? (
+                      <AlertTriangle className="h-4 w-4 text-red-300" />
+                    ) : (
+                      <BellRing className="h-4 w-4 text-amber-300" />
+                    )}
+
+                    <p
+                      className={`text-sm font-bold ${
+                        stockEntrySuccess.notificationStatus === 'sent'
+                          ? 'text-emerald-200'
+                          : stockEntrySuccess.notificationStatus === 'failed'
+                            ? 'text-red-200'
+                            : 'text-amber-200'
+                      }`}
+                    >
+                      {stockEntrySuccess.notificationStatus === 'sent'
+                        ? 'Özet bildirim gönderildi'
+                        : stockEntrySuccess.notificationStatus === 'failed'
+                          ? 'Bildirim gönderilemedi'
+                          : 'Özet bildirim bekliyor'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {stockEntrySuccess.notificationStatus === 'pending' && (
+                <p className="rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2 text-xs leading-5 text-amber-100/80">
+                  Seri stok girişine devam edebilirsiniz. Bildirimler tek tek
+                  değil, bekleyen tüm girişler için tek özet olarak gönderilir.
+                </p>
+              )}
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={closeStockEntrySuccessAndFocus}
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400"
+                >
+                  <PackagePlus className="h-4 w-4" />
+                  Yeni Kapak Tara
+                </button>
+
+                {pendingStockEntries.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => void notifyPendingStockEntries()}
+                    disabled={notifyingStockEntries}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-3 text-sm font-bold text-cyan-200 transition hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <BellRing className="h-4 w-4" />
+                    {notifyingStockEntries
+                      ? 'Gönderiliyor...'
+                      : `${pendingStockEntries.length} Girişi Bildir`}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={closeStockEntrySuccessAndFocus}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm font-bold text-slate-200 transition hover:bg-slate-700"
+                  >
+                    <X className="h-4 w-4" />
+                    Kapat
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-white sm:text-2xl">
