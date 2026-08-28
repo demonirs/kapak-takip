@@ -1715,10 +1715,11 @@ export default function Stock() {
               setCameraError('');
               setCameraOpen(true);
             }}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-sm font-bold text-emerald-200 transition hover:bg-emerald-500/15"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 transition hover:bg-emerald-500/15"
+            aria-label="Kamera ile tara"
+            title="Kamera ile tara"
           >
-            <Camera className="h-4 w-4" />
-            Kamera ile Tara
+            <Camera className="h-5 w-5" />
           </button>
 
           <button
@@ -1732,8 +1733,8 @@ export default function Stock() {
         </div>
 
         <p className="mt-2 text-[11px] leading-4 text-slate-500">
-          Telefonda <span className="font-semibold text-slate-300">Kamera ile Tara</span>{' '}
-          seçeneğini kullanabilirsiniz. Kamera erişimi için ValveFlow'un HTTPS/PWA
+          Telefonda <span className="font-semibold text-slate-300">kamera ikonunu</span>{' '}
+          kullanabilirsiniz. Kamera erişimi için ValveFlow'un HTTPS/PWA
           üzerinden açık olması ve kamera izninin verilmesi gerekir.
         </p>
 
