@@ -4,7 +4,11 @@ import {
   AlertTriangle,
   ArrowLeft,
   Check,
+  CheckCircle2,
   ChevronDown,
+  Eye,
+  Home,
+  Plus,
   Save,
 } from 'lucide-react';
 import {
@@ -60,6 +64,16 @@ type CaseWithCrimp = Kapak & {
 type CrimperProfile = {
   user_id: string;
   full_name: string;
+};
+
+type SuccessSummary = {
+  caseId: string;
+  merkez: string;
+  kapak: string;
+  lotNo: string;
+  vakaTarihi: string;
+  stockStatus: 'consumed' | 'not-matched';
+  notificationStatus: 'sent' | 'failed';
 };
 
 function Field({
@@ -190,6 +204,8 @@ export default function AddCase() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dismissedDiyarbakirLot, setDismissedDiyarbakirLot] = useState('');
+  const [successSummary, setSuccessSummary] =
+    useState<SuccessSummary | null>(null);
 
   const currentCrimpYapan =
     profile?.full_name || user?.email?.split('@')[0] || 'Kullanıcı';
@@ -448,6 +464,25 @@ export default function AddCase() {
     }));
   }
 
+  function startNewCase() {
+    const lastHospital = localStorage.getItem('lastHospital') || '';
+    const lastDoctor = localStorage.getItem('lastDoctor') || '';
+
+    setForm({
+      ...initial,
+      merkez_hastane: lastHospital,
+      doktor: lastDoctor,
+    });
+    setSelectedStockId('');
+    setSelectedSize(null);
+    setSelectedCrimper('');
+    setHasFoc(false);
+    setDismissedDiyarbakirLot('');
+    setError(null);
+    setSuccessSummary(null);
+    void loadStockItems();
+  }
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -563,12 +598,42 @@ export default function AddCase() {
         );
       }
 
+      let notificationStatus: SuccessSummary['notificationStatus'] =
+        'sent';
+
+      try {
+        await notifyAdmins({
+          title: 'Yeni Vaka Kaydı',
+          message: `${crimpYapan} yeni vaka kaydı oluşturdu`,
+          type: 'success',
+          related_table: 'kapaklar',
+          related_id: newCaseId,
+        });
+      } catch (notificationError) {
+        notificationStatus = 'failed';
+        console.error(
+          'Vaka kaydedildi ancak bildirim gönderilemedi:',
+          notificationError
+        );
+      }
+
       if (hasFoc) {
         navigate(`/foc/${newCaseId}`);
         return;
       }
 
-      navigate('/list');
+      setSuccessSummary({
+        caseId: newCaseId,
+        merkez: payload.merkez_hastane,
+        kapak: `${payload.kapak_tipi} • ${payload.kapak_size}`,
+        lotNo: payload.lot_no,
+        vakaTarihi: payload.vaka_tarihi,
+        stockStatus:
+          selectedStock || manualMatchedStock
+            ? 'consumed'
+            : 'not-matched',
+        notificationStatus,
+      });
     } catch (caughtError: unknown) {
       console.error('Kayıt hatası:', caughtError);
 
@@ -1089,6 +1154,175 @@ export default function AddCase() {
               : 'Kaydet'}
         </button>
       </form>
+
+      {successSummary && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center overflow-y-auto bg-slate-950/85 px-4 py-6 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="case-success-title"
+        >
+          <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-emerald-400/40 bg-slate-900 shadow-2xl shadow-emerald-500/15">
+            <div className="border-b border-emerald-400/20 bg-emerald-500/[0.07] px-5 py-5 sm:px-6">
+              <div className="flex items-start gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/15">
+                  <CheckCircle2 className="h-8 w-8 text-emerald-300" />
+                </div>
+
+                <div className="min-w-0">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">
+                    İşlem tamamlandı
+                  </p>
+                  <h2
+                    id="case-success-title"
+                    className="mt-1 text-2xl font-black text-white"
+                  >
+                    Vaka başarıyla kaydedildi
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Vaka kaydı ve stok işlemi tamamlandı.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 p-5 sm:p-6">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-700 bg-slate-950/45 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    Merkez
+                  </p>
+                  <p className="mt-1 break-words text-sm font-semibold text-white">
+                    {successSummary.merkez || '-'}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-700 bg-slate-950/45 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    Kapak
+                  </p>
+                  <p className="mt-1 break-words text-sm font-semibold text-cyan-200">
+                    {successSummary.kapak}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-700 bg-slate-950/45 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    LOT / SN
+                  </p>
+                  <p className="mt-1 break-all font-mono text-sm font-bold text-cyan-300">
+                    {successSummary.lotNo || '-'}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-700 bg-slate-950/45 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    Vaka tarihi
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-white">
+                    {formatDate(successSummary.vakaTarihi)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div
+                  className={`rounded-xl border p-3 ${
+                    successSummary.stockStatus === 'consumed'
+                      ? 'border-emerald-500/30 bg-emerald-500/[0.07]'
+                      : 'border-slate-700 bg-slate-950/45'
+                  }`}
+                >
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    Stoktan düşüm
+                  </p>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <Check
+                      className={`h-4 w-4 ${
+                        successSummary.stockStatus === 'consumed'
+                          ? 'text-emerald-300'
+                          : 'text-slate-500'
+                      }`}
+                    />
+                    <p
+                      className={`text-sm font-bold ${
+                        successSummary.stockStatus === 'consumed'
+                          ? 'text-emerald-200'
+                          : 'text-slate-300'
+                      }`}
+                    >
+                      {successSummary.stockStatus === 'consumed'
+                        ? 'Stoktan düşüldü'
+                        : 'Stok eşleşmesi yok'}
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  className={`rounded-xl border p-3 ${
+                    successSummary.notificationStatus === 'sent'
+                      ? 'border-emerald-500/30 bg-emerald-500/[0.07]'
+                      : 'border-amber-500/30 bg-amber-500/[0.07]'
+                  }`}
+                >
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    Bildirim
+                  </p>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    {successSummary.notificationStatus === 'sent' ? (
+                      <Check className="h-4 w-4 text-emerald-300" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4 text-amber-300" />
+                    )}
+                    <p
+                      className={`text-sm font-bold ${
+                        successSummary.notificationStatus === 'sent'
+                          ? 'text-emerald-200'
+                          : 'text-amber-200'
+                      }`}
+                    >
+                      {successSummary.notificationStatus === 'sent'
+                        ? 'Bildirim gönderildi'
+                        : 'Bildirim gönderilemedi'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(`/view/${successSummary.caseId}`)
+                  }
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400"
+                >
+                  <Eye className="h-4 w-4" />
+                  Vakayı Görüntüle
+                </button>
+
+                <button
+                  type="button"
+                  onClick={startNewCase}
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-3 text-sm font-bold text-cyan-200 transition hover:bg-cyan-500/15"
+                >
+                  <Plus className="h-4 w-4" />
+                  Yeni Vaka Ekle
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm font-bold text-slate-200 transition hover:bg-slate-700"
+                >
+                  <Home className="h-4 w-4" />
+                  Ana Sayfaya Dön
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showDiyarbakirWarning && (
         <div
