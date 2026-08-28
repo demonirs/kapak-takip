@@ -443,6 +443,7 @@ export default function Stock() {
     useState(false);
   const [exporting, setExporting] = useState(false);
   const [transferring, setTransferring] = useState(false);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [transferCity, setTransferCity] = useState('');
   const [selectedTransferIds, setSelectedTransferIds] = useState<
     string[]
@@ -673,6 +674,7 @@ export default function Stock() {
 
       setSelectedTransferIds([]);
       setTransferCity('');
+      setTransferModalOpen(false);
       await loadStock();
       setMessage(
         `${transferredCount} kapak ${destination} iline transfer edildi.`
@@ -1262,6 +1264,143 @@ export default function Stock() {
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-4 pb-24">
+      {transferModalOpen && (
+        <div
+          className="fixed inset-0 z-[135] flex items-center justify-center overflow-y-auto bg-slate-950/85 px-3 py-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="stock-transfer-modal-title"
+        >
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-violet-400/30 bg-slate-900 shadow-2xl shadow-violet-500/10">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-700 px-4 py-4 sm:px-5">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-violet-300">
+                  <ArrowRightLeft className="h-4 w-4" />
+                  <span className="text-xs font-bold uppercase tracking-[0.16em]">
+                    Stok İşlemi
+                  </span>
+                </div>
+
+                <h2
+                  id="stock-transfer-modal-title"
+                  className="mt-1 text-xl font-black text-white"
+                >
+                  Stok Transferi
+                </h2>
+
+                <p className="mt-1 text-xs leading-5 text-slate-400">
+                  Transfer edilecek kapakları stok listesinden seçin ve hedef ili belirleyin.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setTransferModalOpen(false)}
+                disabled={transferring}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-slate-300 transition hover:bg-slate-700 hover:text-white disabled:opacity-50"
+                aria-label="Stok transferini kapat"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 p-4 sm:p-5">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-slate-700 bg-slate-950/40 p-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    Seçili Kapak
+                  </div>
+                  <div className="mt-1 text-2xl font-black text-white">
+                    {selectedTransferIds.length}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-700 bg-slate-950/40 p-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    Görünen Kapak
+                  </div>
+                  <div className="mt-1 text-2xl font-black text-white">
+                    {filteredItems.length}
+                  </div>
+                </div>
+              </div>
+
+              {activeFilter === 'Kapalı' && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-xs leading-5 text-amber-100">
+                  Önce aşağıdaki stok kartlarından Tüm Stok veya bir ölçü seçin. Ardından transfer edilecek kapakları işaretleyebilirsiniz.
+                </div>
+              )}
+
+              <div>
+                <label
+                  htmlFor="transfer-city"
+                  className="mb-1.5 block text-xs font-semibold text-slate-300"
+                >
+                  Hedef İl
+                </label>
+
+                <input
+                  id="transfer-city"
+                  type="search"
+                  list="turkey-provinces"
+                  value={transferCity}
+                  onChange={event => setTransferCity(event.target.value)}
+                  placeholder="İl yazarak ara..."
+                  autoComplete="off"
+                  className="min-h-11 w-full rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
+                />
+
+                <datalist id="turkey-provinces">
+                  {TURKEY_PROVINCES.map(city => (
+                    <option key={city} value={city} />
+                  ))}
+                </datalist>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={selectAllVisibleForTransfer}
+                  disabled={filteredItems.length === 0 || transferring}
+                  className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl border border-slate-600 bg-slate-800 px-3 py-2.5 text-sm font-semibold text-slate-300 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Görünenleri Seç
+                </button>
+
+                {selectedTransferIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTransferIds([])}
+                    disabled={transferring}
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-700 px-3 py-2.5 text-sm font-semibold text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:opacity-40"
+                  >
+                    Seçimi Temizle
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void transferSelectedStock()}
+                disabled={selectedTransferIds.length === 0 || transferring}
+                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ArrowRightLeft className="h-4 w-4" />
+                {transferring
+                  ? 'Transfer ediliyor...'
+                  : selectedTransferIds.length > 0
+                    ? `${selectedTransferIds.length} Kapağı Transfer Et`
+                    : 'Transfer İçin Kapak Seçin'}
+              </button>
+
+              <p className="text-center text-[11px] leading-4 text-slate-500">
+                Transfer yalnızca seçili kapaklara uygulanır. Mevcut transfer RPC akışı değiştirilmedi.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {cameraOpen && (
         <div
           className="fixed inset-0 z-[140] flex items-center justify-center overflow-y-auto bg-slate-950/95 px-3 py-4 backdrop-blur-sm"
@@ -1584,6 +1723,17 @@ export default function Stock() {
         <div className="flex flex-col gap-2 sm:flex-row">
           <button
             type="button"
+            onClick={() => setTransferModalOpen(true)}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-sm font-medium text-violet-200 transition hover:bg-violet-500/15"
+            title="Stok transferini aç"
+            aria-label="Stok transferini aç"
+          >
+            <ArrowRightLeft className="h-4 w-4" />
+            <span className="sm:hidden">Stok Transferi</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => void loadStock()}
             disabled={loading}
             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-700 disabled:opacity-50"
@@ -1605,88 +1755,6 @@ export default function Stock() {
           </button>
         </div>
       </header>
-
-      <section className="rounded-xl border border-violet-500/30 bg-violet-500/[0.06] p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <ArrowRightLeft className="h-4 w-4 text-violet-300" />
-              <h2 className="text-sm font-semibold text-white">
-                Stok Transferi
-              </h2>
-            </div>
-
-            <p className="mt-1 text-xs text-slate-400">
-              Aşağıdaki stok listesinden kapakları işaretleyin ve hedef
-              ili seçin.
-            </p>
-          </div>
-
-          <div className="w-full lg:w-64">
-            <label
-              htmlFor="transfer-city"
-              className="mb-1.5 block text-xs font-medium text-slate-300"
-            >
-              Hedef İl
-            </label>
-
-            <input
-              id="transfer-city"
-              type="search"
-              list="turkey-provinces"
-              value={transferCity}
-              onChange={event => setTransferCity(event.target.value)}
-              placeholder="İl yazarak ara..."
-              autoComplete="off"
-              className="min-h-11 w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
-            />
-
-            <datalist id="turkey-provinces">
-              {TURKEY_PROVINCES.map(city => (
-                <option key={city} value={city} />
-              ))}
-            </datalist>
-          </div>
-
-          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-            <button
-              type="button"
-              onClick={selectAllVisibleForTransfer}
-              disabled={filteredItems.length === 0 || transferring}
-              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-600 px-3 py-2.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 disabled:opacity-50"
-            >
-              Görünenleri Seç
-            </button>
-
-            <button
-              type="button"
-              onClick={() => void transferSelectedStock()}
-              disabled={
-                selectedTransferIds.length === 0 || transferring
-              }
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <ArrowRightLeft className="h-4 w-4" />
-              {transferring
-                ? 'Transfer ediliyor...'
-                : `${selectedTransferIds.length} Kapağı Transfer Et`}
-            </button>
-          </div>
-        </div>
-
-        {selectedTransferIds.length > 0 && (
-          <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-violet-500/20 bg-slate-950/30 px-3 py-2 text-xs text-violet-200">
-            <span>{selectedTransferIds.length} kapak seçildi.</span>
-            <button
-              type="button"
-              onClick={() => setSelectedTransferIds([])}
-              className="font-semibold text-slate-400 hover:text-white"
-            >
-              Seçimi Temizle
-            </button>
-          </div>
-        )}
-      </section>
 
       <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
         <label
