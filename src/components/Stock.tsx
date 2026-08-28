@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   ArrowRightLeft,
   BellRing,
+  Camera,
   CheckCircle2,
   ClipboardCheck,
   Download,
@@ -18,6 +19,7 @@ import {
   RotateCcw,
   Search,
   SearchX,
+  ScanLine,
   Sparkles,
   X,
 } from 'lucide-react';
@@ -181,6 +183,22 @@ type StockEntrySuccess = {
   lotNo: string;
   expirationDate: string;
   notificationStatus: 'pending' | 'sent' | 'failed';
+};
+
+type DetectedBarcode = {
+  rawValue?: string;
+  format?: string;
+};
+
+type BarcodeDetectorInstance = {
+  detect: (
+    source: HTMLVideoElement
+  ) => Promise<DetectedBarcode[]>;
+};
+
+type BarcodeDetectorConstructor = {
+  new (options?: { formats?: string[] }): BarcodeDetectorInstance;
+  getSupportedFormats?: () => Promise<string[]>;
 };
 
 function normalizeLot(value: string): string {
@@ -413,6 +431,10 @@ function expiryText(days: number | null): string {
 export default function Stock() {
   const { profile } = useAuth();
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const cameraScanTimerRef = useRef<number | null>(null);
+  const cameraDetectingRef = useRef(false);
 
   const [items, setItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -426,6 +448,9 @@ export default function Stock() {
     string[]
   >([]);
   const [barcode, setBarcode] = useState('');
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
+  const [cameraError, setCameraError] = useState('');
   const [parsed, setParsed] = useState<ParsedBarcode | null>(null);
   const [scanResult, setScanResult] = useState<ScanResult | null>(
     null
@@ -834,13 +859,13 @@ export default function Stock() {
     }
   }
 
-  function solveBarcode() {
+  function processBarcodeValue(rawBarcode: string) {
     setMessage('');
     setParsed(null);
     setScanResult(null);
 
     try {
-      const parsedBarcode = parseBarcodeValue(barcode);
+      const parsedBarcode = parseBarcodeValue(rawBarcode);
       const normalizedLot = normalizeLot(parsedBarcode.lot_no);
 
       const existingItem = items.find(
@@ -899,6 +924,203 @@ export default function Stock() {
       }, 0);
     }
   }
+
+  function solveBarcode() {
+    processBarcodeValue(barcode);
+  }
+
+  function stopCamera() {
+    if (cameraScanTimerRef.current !== null) {
+      window.clearInterval(cameraScanTimerRef.current);
+      cameraScanTimerRef.current = null;
+    }
+
+    cameraDetectingRef.current = false;
+
+    cameraStreamRef.current?.getTracks().forEach(track => {
+      track.stop();
+    });
+
+    cameraStreamRef.current = null;
+
+    if (cameraVideoRef.current) {
+      cameraVideoRef.current.srcObject = null;
+    }
+  }
+
+  function closeCamera() {
+    stopCamera();
+    setCameraOpen(false);
+    setCameraStarting(false);
+    setCameraError('');
+  }
+
+  useEffect(() => {
+    if (!cameraOpen) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function startPhoneCameraScanner() {
+      setCameraStarting(true);
+      setCameraError('');
+
+      try {
+        const BarcodeDetectorApi = (
+          window as Window & {
+            BarcodeDetector?: BarcodeDetectorConstructor;
+          }
+        ).BarcodeDetector;
+
+        if (!BarcodeDetectorApi) {
+          throw new Error(
+            'Bu tarayıcı kamera barkod çözümlemeyi desteklemiyor. Android Chrome veya ValveFlow PWA ile tekrar deneyin.'
+          );
+        }
+
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error(
+            'Kamera erişimi bu tarayıcıda kullanılamıyor.'
+          );
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: {
+              ideal: 'environment',
+            },
+            width: {
+              ideal: 1920,
+            },
+            height: {
+              ideal: 1080,
+            },
+          },
+        });
+
+        if (cancelled) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+
+        cameraStreamRef.current = stream;
+
+        const video = cameraVideoRef.current;
+
+        if (!video) {
+          throw new Error('Kamera görüntüsü başlatılamadı.');
+        }
+
+        video.srcObject = stream;
+        await video.play();
+
+        let detector: BarcodeDetectorInstance;
+
+        if (BarcodeDetectorApi.getSupportedFormats) {
+          const supportedFormats =
+            await BarcodeDetectorApi.getSupportedFormats();
+
+          const preferredFormats = [
+            'data_matrix',
+            'code_128',
+            'qr_code',
+            'ean_13',
+          ].filter(format => supportedFormats.includes(format));
+
+          detector =
+            preferredFormats.length > 0
+              ? new BarcodeDetectorApi({
+                  formats: preferredFormats,
+                })
+              : new BarcodeDetectorApi();
+        } else {
+          detector = new BarcodeDetectorApi();
+        }
+
+        if (cancelled) {
+          stopCamera();
+          return;
+        }
+
+        setCameraStarting(false);
+
+        cameraScanTimerRef.current = window.setInterval(
+          async () => {
+            const activeVideo = cameraVideoRef.current;
+
+            if (
+              !activeVideo ||
+              activeVideo.readyState < 2 ||
+              cameraDetectingRef.current
+            ) {
+              return;
+            }
+
+            cameraDetectingRef.current = true;
+
+            try {
+              const detected = await detector.detect(activeVideo);
+              const rawValue = detected
+                .map(result => result.rawValue?.trim() || '')
+                .find(Boolean);
+
+              if (!rawValue || cancelled) {
+                return;
+              }
+
+              stopCamera();
+              setCameraOpen(false);
+              setCameraStarting(false);
+              setCameraError('');
+              processBarcodeValue(rawValue);
+            } catch (detectError) {
+              console.warn(
+                'Kamera barkod tarama karesi çözümlenemedi:',
+                detectError
+              );
+            } finally {
+              cameraDetectingRef.current = false;
+            }
+          },
+          250
+        );
+      } catch (error: unknown) {
+        stopCamera();
+
+        if (cancelled) {
+          return;
+        }
+
+        setCameraStarting(false);
+
+        if (
+          error instanceof DOMException &&
+          (error.name === 'NotAllowedError' ||
+            error.name === 'PermissionDeniedError')
+        ) {
+          setCameraError(
+            'Kamera izni verilmedi. Tarayıcı/site ayarlarından ValveFlow için kamera iznini açın.'
+          );
+          return;
+        }
+
+        setCameraError(
+          error instanceof Error
+            ? error.message
+            : 'Telefon kamerası başlatılamadı.'
+        );
+      }
+    }
+
+    void startPhoneCameraScanner();
+
+    return () => {
+      cancelled = true;
+      stopCamera();
+    };
+  }, [cameraOpen]);
 
   async function addToStock() {
     if (!parsed || scanResult?.status !== 'not-found' || saving) {
@@ -1036,6 +1258,140 @@ export default function Stock() {
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-4 pb-24">
+      {cameraOpen && (
+        <div
+          className="fixed inset-0 z-[140] flex items-center justify-center overflow-y-auto bg-slate-950/95 px-3 py-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="camera-stock-scanner-title"
+        >
+          <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-cyan-400/30 bg-slate-900 shadow-2xl shadow-cyan-500/10">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-700 px-4 py-4 sm:px-5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Camera className="h-4 w-4 text-cyan-300" />
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">
+                    Telefon Kamerası
+                  </p>
+                </div>
+
+                <h2
+                  id="camera-stock-scanner-title"
+                  className="mt-1 text-xl font-black text-white"
+                >
+                  Kapak barkodunu tara
+                </h2>
+
+                <p className="mt-1 text-xs leading-5 text-slate-400">
+                  Arka kamerayı etiketteki DataMatrix / barkoda yaklaştırın.
+                  Kod algılanınca ValveFlow otomatik kontrol eder.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeCamera}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-slate-300 transition hover:bg-slate-700 hover:text-white"
+                aria-label="Kamerayı kapat"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-3 sm:p-5">
+              <div className="relative aspect-[3/4] max-h-[68vh] w-full overflow-hidden rounded-2xl border border-slate-700 bg-black sm:aspect-[4/3]">
+                <video
+                  ref={cameraVideoRef}
+                  className="h-full w-full object-cover"
+                  playsInline
+                  muted
+                  autoPlay
+                />
+
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-8">
+                  <div className="relative h-[46%] w-full max-w-sm rounded-2xl border-2 border-cyan-300/80 shadow-[0_0_0_9999px_rgba(2,6,23,0.45)]">
+                    <span className="absolute -left-0.5 -top-0.5 h-7 w-7 rounded-tl-xl border-l-4 border-t-4 border-cyan-300" />
+                    <span className="absolute -right-0.5 -top-0.5 h-7 w-7 rounded-tr-xl border-r-4 border-t-4 border-cyan-300" />
+                    <span className="absolute -bottom-0.5 -left-0.5 h-7 w-7 rounded-bl-xl border-b-4 border-l-4 border-cyan-300" />
+                    <span className="absolute -bottom-0.5 -right-0.5 h-7 w-7 rounded-br-xl border-b-4 border-r-4 border-cyan-300" />
+
+                    {!cameraError && (
+                      <div className="absolute inset-x-5 top-1/2 h-px bg-cyan-300/90 shadow-[0_0_12px_rgba(103,232,249,0.9)]" />
+                    )}
+                  </div>
+                </div>
+
+                {cameraStarting && !cameraError && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-950/70 text-center">
+                    <RefreshCw className="h-7 w-7 animate-spin text-cyan-300" />
+                    <p className="text-sm font-bold text-white">
+                      Kamera hazırlanıyor...
+                    </p>
+                  </div>
+                )}
+
+                {cameraError && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-slate-950/90 p-5">
+                    <div className="max-w-sm text-center">
+                      <AlertTriangle className="mx-auto h-9 w-9 text-amber-300" />
+                      <p className="mt-3 text-sm font-bold text-white">
+                        Kamera taraması başlatılamadı
+                      </p>
+                      <p className="mt-2 text-xs leading-5 text-slate-400">
+                        {cameraError}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {!cameraStarting && !cameraError && (
+                  <div className="pointer-events-none absolute inset-x-0 bottom-5 flex justify-center">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-slate-950/80 px-3 py-2 text-xs font-bold text-cyan-100 backdrop-blur">
+                      <ScanLine className="h-4 w-4 text-cyan-300" />
+                      Barkodu çerçevenin içine alın
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {cameraError ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopCamera();
+                      setCameraError('');
+                      setCameraOpen(false);
+
+                      window.setTimeout(() => {
+                        setCameraOpen(true);
+                      }, 50);
+                    }}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-cyan-500"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Tekrar Dene
+                  </button>
+                ) : (
+                  <div className="flex min-h-11 items-center justify-center rounded-xl border border-slate-700 bg-slate-950/40 px-3 text-center text-xs leading-5 text-slate-400">
+                    İyi ışıkta, etikete 10–25 cm mesafeden tutun.
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={closeCamera}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-200 transition hover:bg-slate-700"
+                >
+                  <X className="h-4 w-4" />
+                  Kamerayı Kapat
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {stockEntrySuccess && (
         <div
           className="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-slate-950/85 px-4 py-6 backdrop-blur-sm"
@@ -1355,6 +1711,18 @@ export default function Stock() {
 
           <button
             type="button"
+            onClick={() => {
+              setCameraError('');
+              setCameraOpen(true);
+            }}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-sm font-bold text-emerald-200 transition hover:bg-emerald-500/15"
+          >
+            <Camera className="h-4 w-4" />
+            Kamera ile Tara
+          </button>
+
+          <button
+            type="button"
             onClick={solveBarcode}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cyan-500"
           >
@@ -1362,6 +1730,12 @@ export default function Stock() {
             Kontrol Et
           </button>
         </div>
+
+        <p className="mt-2 text-[11px] leading-4 text-slate-500">
+          Telefonda <span className="font-semibold text-slate-300">Kamera ile Tara</span>{' '}
+          seçeneğini kullanabilirsiniz. Kamera erişimi için ValveFlow'un HTTPS/PWA
+          üzerinden açık olması ve kamera izninin verilmesi gerekir.
+        </p>
 
         {parsed && (
           <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-slate-700 bg-slate-900/50 p-3 sm:grid-cols-4">
