@@ -134,7 +134,7 @@ const GTIN_MAP: Record<string, number> = {
   '00763000655440': 34,
 };
 
-type SizeFilter = 'Tümü' | '23' | '26' | '29' | '34';
+type SizeFilter = 'Kapalı' | 'Tümü' | '23' | '26' | '29' | '34';
 type ScanStatus = 'found' | 'used' | 'not-found';
 
 type StockItem = {
@@ -457,7 +457,7 @@ export default function Stock() {
   );
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] =
-    useState<SizeFilter>('Tümü');
+    useState<SizeFilter>('Kapalı');
   const [message, setMessage] = useState('');
   const [stockEntrySuccess, setStockEntrySuccess] =
     useState<StockEntrySuccess | null>(null);
@@ -536,6 +536,10 @@ export default function Stock() {
   );
 
   const filteredItems = useMemo(() => {
+    if (activeFilter === 'Kapalı') {
+      return [];
+    }
+
     const query = normalizeText(searchTerm);
 
     return currentItems.filter(item => {
@@ -2002,7 +2006,11 @@ export default function Stock() {
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <button
           type="button"
-          onClick={() => setActiveFilter('Tümü')}
+          onClick={() =>
+            setActiveFilter(current =>
+              current === 'Tümü' ? 'Kapalı' : 'Tümü'
+            )
+          }
           className={`rounded-xl border p-3 text-left transition ${
             activeFilter === 'Tümü'
               ? 'border-cyan-500/40 bg-cyan-500/10'
@@ -2019,7 +2027,13 @@ export default function Stock() {
           <button
             key={size}
             type="button"
-            onClick={() => setActiveFilter(String(size) as SizeFilter)}
+            onClick={() =>
+              setActiveFilter(current =>
+                current === String(size)
+                  ? 'Kapalı'
+                  : (String(size) as SizeFilter)
+              )
+            }
             className={`rounded-xl border p-3 text-left transition ${
               activeFilter === String(size)
                 ? 'border-cyan-500/40 bg-cyan-500/10'
@@ -2033,6 +2047,20 @@ export default function Stock() {
           </button>
         ))}
       </section>
+      {activeFilter === 'Kapalı' && (
+        <div className="rounded-xl border border-dashed border-slate-700 bg-slate-800/30 px-4 py-5 text-center">
+          <p className="text-sm font-semibold text-slate-300">
+            Stok listesini görmek için bir kart seçin
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Tüm Stok veya 23 / 26 / 29 / 34 mm kartlarından birine dokunun.
+          </p>
+        </div>
+      )}
+
+      {activeFilter !== 'Kapalı' && (
+        <>
+
 
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -2221,6 +2249,9 @@ export default function Stock() {
           </div>
         </>
       )}
+        </>
+      )}
+
     </div>
   );
 }
