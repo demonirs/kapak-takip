@@ -1712,30 +1712,31 @@ export default function Stock() {
           <button
             type="button"
             onClick={() => {
+              if (barcode.trim()) {
+                solveBarcode();
+                return;
+              }
+
               setCameraError('');
               setCameraOpen(true);
             }}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 transition hover:bg-emerald-500/15"
-            aria-label="Kamera ile tara"
-            title="Kamera ile tara"
-          >
-            <Camera className="h-5 w-5" />
-          </button>
-
-          <button
-            type="button"
-            onClick={solveBarcode}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cyan-500"
+            title={
+              barcode.trim()
+                ? 'Barkodu kontrol et'
+                : 'Telefon kamerası ile tara'
+            }
           >
+            <Camera className="h-4 w-4" />
             <Search className="h-4 w-4" />
             Kontrol Et
           </button>
         </div>
 
         <p className="mt-2 text-[11px] leading-4 text-slate-500">
-          Telefonda <span className="font-semibold text-slate-300">kamera ikonunu</span>{' '}
-          kullanabilirsiniz. Kamera erişimi için ValveFlow'un HTTPS/PWA
-          üzerinden açık olması ve kamera izninin verilmesi gerekir.
+          Barkod alanı boşken <span className="font-semibold text-slate-300">Kontrol Et</span>{' '}
+          düğmesindeki kamera ikonu telefon kamerasını açar. Barkod girilmişse
+          aynı düğme mevcut kodu kontrol eder.
         </p>
 
         {parsed && (
