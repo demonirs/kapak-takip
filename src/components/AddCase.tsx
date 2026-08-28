@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -75,6 +76,19 @@ type SuccessSummary = {
   stockStatus: 'consumed' | 'not-matched';
   notificationStatus: 'sent' | 'failed';
 };
+
+type WizardStep = 1 | 2 | 3 | 4;
+
+const WIZARD_STEPS: Array<{
+  id: WizardStep;
+  title: string;
+  shortTitle: string;
+}> = [
+  { id: 1, title: 'Merkez ve Vaka', shortTitle: 'Vaka' },
+  { id: 2, title: 'Kapak Seçimi', shortTitle: 'Kapak' },
+  { id: 3, title: 'İşlem Bilgileri', shortTitle: 'İşlem' },
+  { id: 4, title: 'Kontrol ve Kaydet', shortTitle: 'Kontrol' },
+];
 
 function Field({
   label,
@@ -206,6 +220,10 @@ export default function AddCase() {
   const [dismissedDiyarbakirLot, setDismissedDiyarbakirLot] = useState('');
   const [successSummary, setSuccessSummary] =
     useState<SuccessSummary | null>(null);
+  const [currentStep, setCurrentStep] = useState<WizardStep>(1);
+  const [attemptedSteps, setAttemptedSteps] = useState<Set<WizardStep>>(
+    () => new Set()
+  );
 
   const currentCrimpYapan =
     profile?.full_name || user?.email?.split('@')[0] || 'Kullanıcı';
@@ -226,6 +244,8 @@ export default function AddCase() {
   }, [crimperProfiles, currentCrimpYapan]);
 
   useEffect(() => {
+    setCurrentStep(1);
+    setAttemptedSteps(new Set());
     void loadStockItems();
     void loadCrimperProfiles();
 
@@ -480,11 +500,103 @@ export default function AddCase() {
     setDismissedDiyarbakirLot('');
     setError(null);
     setSuccessSummary(null);
+    setCurrentStep(1);
+    setAttemptedSteps(new Set());
     void loadStockItems();
+  }
+
+  function getStepErrors(step: WizardStep) {
+    const errors: string[] = [];
+
+    if (step === 1) {
+      if (!form.vaka_tarihi) errors.push('Vaka tarihi');
+      if (!form.merkez_hastane.trim()) errors.push('Merkez hastane');
+      if (!form.doktor.trim()) errors.push('Doktor');
+      if (!form.hasta_adi.trim()) errors.push('Hasta adı');
+    }
+
+    if (step === 2) {
+      if (!form.kapak_tipi.trim()) errors.push('Kapak tipi');
+      if (!getSizeNumber(form.kapak_size)) errors.push('Kapak ölçüsü');
+      if (!normalizeLot(form.lot_no)) errors.push('LOT / SN');
+      if (!form.son_kul_tarihi) errors.push('Son kullanma tarihi');
+    }
+
+    return errors;
+  }
+
+  function markStepAttempted(step: WizardStep) {
+    setAttemptedSteps(previous => {
+      const next = new Set(previous);
+      next.add(step);
+      return next;
+    });
+  }
+
+  function goNextStep() {
+    const errors = getStepErrors(currentStep);
+    markStepAttempted(currentStep);
+
+    if (errors.length > 0) {
+      setError(
+        `Bu adımı tamamlamak için: ${errors.join(', ')} alanlarını kontrol edin.`
+      );
+      return;
+    }
+
+    setError(null);
+    setCurrentStep(previous =>
+      Math.min(previous + 1, 4) as WizardStep
+    );
+  }
+
+  function goPreviousStep() {
+    setError(null);
+    setCurrentStep(previous =>
+      Math.max(previous - 1, 1) as WizardStep
+    );
+  }
+
+  function goToStep(targetStep: WizardStep) {
+    if (targetStep <= currentStep) {
+      setError(null);
+      setCurrentStep(targetStep);
+      return;
+    }
+
+    for (let step = currentStep; step < targetStep; step += 1) {
+      const typedStep = step as WizardStep;
+      const errors = getStepErrors(typedStep);
+      markStepAttempted(typedStep);
+
+      if (errors.length > 0) {
+        setError(
+          `Önce ${WIZARD_STEPS[typedStep - 1].title} adımını tamamlayın: ${errors.join(', ')}.`
+        );
+        setCurrentStep(typedStep);
+        return;
+      }
+    }
+
+    setError(null);
+    setCurrentStep(targetStep);
   }
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+
+    const invalidStep = ([1, 2] as WizardStep[]).find(
+      step => getStepErrors(step).length > 0
+    );
+
+    if (invalidStep) {
+      markStepAttempted(invalidStep);
+      setCurrentStep(invalidStep);
+      setError(
+        `Kayıt öncesi ${WIZARD_STEPS[invalidStep - 1].title} adımındaki eksik alanları tamamlayın: ${getStepErrors(invalidStep).join(', ')}.`
+      );
+      return;
+    }
 
     if (!user?.id) {
       setError('Oturum yok. Tekrar giriş yap.');
@@ -691,6 +803,88 @@ export default function AddCase() {
           </p>
         </div>
 
+        <div className="rounded-xl border border-slate-700 bg-slate-950/35 p-3 sm:p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold text-white">
+                Adım {currentStep} / {WIZARD_STEPS.length}
+              </p>
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                {WIZARD_STEPS[currentStep - 1].title}
+              </p>
+            </div>
+
+            <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-bold text-cyan-200">
+              %{Math.round((currentStep / WIZARD_STEPS.length) * 100)}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+            {WIZARD_STEPS.map(step => {
+              const stepErrors = getStepErrors(step.id);
+              const isCurrent = currentStep === step.id;
+              const isCompleted =
+                step.id < currentStep && stepErrors.length === 0;
+              const hasError =
+                attemptedSteps.has(step.id) && stepErrors.length > 0;
+
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => goToStep(step.id)}
+                  className={`min-w-0 rounded-lg border px-1.5 py-2 text-center transition sm:px-2 ${
+                    isCurrent
+                      ? 'border-cyan-400 bg-cyan-500/15 text-cyan-100'
+                      : hasError
+                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+                        : isCompleted
+                          ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200'
+                          : 'border-slate-700 bg-slate-900/70 text-slate-500'
+                  }`}
+                  aria-current={isCurrent ? 'step' : undefined}
+                >
+                  <span
+                    className={`mx-auto flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black ${
+                      isCurrent
+                        ? 'bg-cyan-400 text-slate-950'
+                        : hasError
+                          ? 'bg-amber-400 text-slate-950'
+                          : isCompleted
+                            ? 'bg-emerald-500 text-slate-950'
+                            : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {isCompleted ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : hasError ? (
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                    ) : (
+                      step.id
+                    )}
+                  </span>
+
+                  <span className="mt-1.5 block truncate text-[9px] font-bold sm:hidden">
+                    {step.shortTitle}
+                  </span>
+                  <span className="mt-1.5 hidden truncate text-[10px] font-bold sm:block">
+                    {step.title}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800">
+            <div
+              className="h-full rounded-full bg-cyan-400 transition-all duration-300"
+              style={{
+                width: `${(currentStep / WIZARD_STEPS.length) * 100}%`,
+              }}
+            />
+          </div>
+        </div>
+
         {error && (
           <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300 md:text-sm">
             {error}
@@ -698,7 +892,73 @@ export default function AddCase() {
         )}
 
 
-        {!isEdit && (
+        {currentStep === 1 && (
+          <div className="space-y-4">
+            <section className="space-y-3 border-t border-slate-700/70 pt-4">
+          <div>
+            <h2 className="text-sm font-semibold text-white">
+              Vaka Bilgileri
+            </h2>
+            <p className="mt-0.5 text-[11px] text-slate-500">
+              Tarih, merkez, doktor ve hasta bilgileri
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Vaka Tarihi">
+            <input
+              className={inputClass}
+              type="date"
+              value={form.vaka_tarihi}
+              onChange={event =>
+                set('vaka_tarihi', event.target.value)
+              }
+              required
+            />
+          </Field>
+
+          <Field label="Merkez Hastane">
+            <input
+              className={inputClass}
+              value={form.merkez_hastane}
+              onChange={event =>
+                set('merkez_hastane', event.target.value)
+              }
+              required
+            />
+          </Field>
+
+          <Field label="Doktor">
+            <input
+              className={inputClass}
+              value={form.doktor}
+              onChange={event =>
+                set('doktor', event.target.value)
+              }
+              required
+            />
+          </Field>
+
+          <Field label="Hasta Adı">
+            <input
+              className={inputClass}
+              value={form.hasta_adi}
+              onChange={event =>
+                set('hasta_adi', event.target.value)
+              }
+              required
+            />
+          </Field>
+
+          </div>
+        </section>
+
+          </div>
+        )}
+
+        {currentStep === 2 && (
+          <div className="space-y-4">
+            {!isEdit && (
           <section className="space-y-3 rounded-xl border border-cyan-500/25 bg-cyan-500/[0.06] p-3 sm:p-4">
             <div>
               <span className="mb-2 block text-sm font-semibold text-cyan-200">
@@ -859,68 +1119,8 @@ export default function AddCase() {
               </div>
             )}
           </section>
-        )}
-
-        <section className="space-y-3 border-t border-slate-700/70 pt-4">
-          <div>
-            <h2 className="text-sm font-semibold text-white">
-              Vaka Bilgileri
-            </h2>
-            <p className="mt-0.5 text-[11px] text-slate-500">
-              Tarih, merkez, doktor ve hasta bilgileri
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Vaka Tarihi">
-            <input
-              className={inputClass}
-              type="date"
-              value={form.vaka_tarihi}
-              onChange={event =>
-                set('vaka_tarihi', event.target.value)
-              }
-              required
-            />
-          </Field>
-
-          <Field label="Merkez Hastane">
-            <input
-              className={inputClass}
-              value={form.merkez_hastane}
-              onChange={event =>
-                set('merkez_hastane', event.target.value)
-              }
-              required
-            />
-          </Field>
-
-          <Field label="Doktor">
-            <input
-              className={inputClass}
-              value={form.doktor}
-              onChange={event =>
-                set('doktor', event.target.value)
-              }
-              required
-            />
-          </Field>
-
-          <Field label="Hasta Adı">
-            <input
-              className={inputClass}
-              value={form.hasta_adi}
-              onChange={event =>
-                set('hasta_adi', event.target.value)
-              }
-              required
-            />
-          </Field>
-
-          </div>
-        </section>
-
-        <section className="space-y-3 border-t border-slate-700/70 pt-4">
+            )}
+            <section className="space-y-3 border-t border-slate-700/70 pt-4">
           <div>
             <h2 className="text-sm font-semibold text-white">
               Kapak Bilgileri
@@ -1013,7 +1213,12 @@ export default function AddCase() {
           </div>
         </section>
 
-        <section className="space-y-3 border-t border-slate-700/70 pt-4">
+          </div>
+        )}
+
+        {currentStep === 3 && (
+          <div className="space-y-4">
+            <section className="space-y-3 border-t border-slate-700/70 pt-4">
           <div>
             <h2 className="text-sm font-semibold text-white">
               İşlem Malzemeleri
@@ -1062,8 +1267,7 @@ export default function AddCase() {
           </Field>
           </div>
         </section>
-
-        <label
+            <label
           className={`block cursor-pointer rounded-xl border p-3 transition ${
             hasFoc
               ? 'border-red-400/60 bg-red-500/10'
@@ -1134,7 +1338,181 @@ export default function AddCase() {
           </div>
         )}
 
-        <button
+          </div>
+        )}
+
+        {currentStep === 4 && (
+          <section className="space-y-4 rounded-xl border border-cyan-500/20 bg-slate-950/30 p-3 sm:p-4">
+            <div>
+              <h2 className="text-base font-bold text-white">
+                Kontrol ve Kaydet
+              </h2>
+              <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                Kaydetmeden önce vaka özetini son kez kontrol edin.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="rounded-lg border border-slate-700 bg-slate-900/70 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  Merkez
+                </p>
+                <p className="mt-1 text-sm font-semibold text-white">
+                  {form.merkez_hastane || '-'}
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-slate-700 bg-slate-900/70 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  Vaka tarihi
+                </p>
+                <p className="mt-1 text-sm font-semibold text-white">
+                  {formatDate(form.vaka_tarihi)}
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-slate-700 bg-slate-900/70 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  Doktor
+                </p>
+                <p className="mt-1 text-sm font-semibold text-white">
+                  {form.doktor || '-'}
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-slate-700 bg-slate-900/70 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  Hasta
+                </p>
+                <p className="mt-1 text-sm font-semibold text-white">
+                  {form.hasta_adi || '-'}
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-cyan-500/25 bg-cyan-500/[0.06] p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  Kapak
+                </p>
+                <p className="mt-1 text-sm font-semibold text-cyan-200">
+                  {form.kapak_tipi} • {form.kapak_size}
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-cyan-500/25 bg-cyan-500/[0.06] p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  LOT / SN
+                </p>
+                <p className="mt-1 break-all font-mono text-sm font-bold text-cyan-300">
+                  {normalizeLot(form.lot_no) || '-'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-2.5">
+                <p className="text-[9px] uppercase text-slate-500">Pre Balon</p>
+                <p className="mt-1 text-xs font-semibold text-slate-200">
+                  {form.pre_balon}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-2.5">
+                <p className="text-[9px] uppercase text-slate-500">Post Balon</p>
+                <p className="mt-1 text-xs font-semibold text-slate-200">
+                  {form.post_balon}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-2.5">
+                <p className="text-[9px] uppercase text-slate-500">Paravalvüler AY</p>
+                <p className="mt-1 text-xs font-semibold text-slate-200">
+                  {form.paravalvuler_ay}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-2.5">
+                <p className="text-[9px] uppercase text-slate-500">Proglide</p>
+                <p className="mt-1 text-xs font-semibold text-slate-200">
+                  {form.proglide_adedi} adet
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  Crimp yapan
+                </p>
+                <p className="mt-1 text-sm font-semibold text-slate-200">
+                  {crimpYapan}
+                </p>
+              </div>
+
+              <div
+                className={`rounded-lg border p-3 ${
+                  selectedStock || manualMatchedStock
+                    ? 'border-emerald-500/30 bg-emerald-500/[0.07]'
+                    : 'border-slate-700 bg-slate-900/60'
+                }`}
+              >
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  Stok durumu
+                </p>
+                <p
+                  className={`mt-1 text-sm font-semibold ${
+                    selectedStock || manualMatchedStock
+                      ? 'text-emerald-200'
+                      : 'text-slate-300'
+                  }`}
+                >
+                  {selectedStock || manualMatchedStock
+                    ? 'Stoktan düşecek'
+                    : 'Manuel vaka'}
+                </p>
+              </div>
+
+              <div
+                className={`rounded-lg border p-3 ${
+                  hasFoc
+                    ? 'border-red-500/30 bg-red-500/[0.07]'
+                    : 'border-slate-700 bg-slate-900/60'
+                }`}
+              >
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  FOC
+                </p>
+                <p
+                  className={`mt-1 text-sm font-semibold ${
+                    hasFoc ? 'text-red-200' : 'text-slate-300'
+                  }`}
+                >
+                  {hasFoc ? 'FOC ekranına geçilecek' : 'FOC yok'}
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        <div className="flex flex-col-reverse gap-2 border-t border-slate-700/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <button
+            type="button"
+            onClick={goPreviousStep}
+            disabled={currentStep === 1 || loading}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-4 text-sm font-semibold text-slate-300 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Önceki
+          </button>
+
+          {currentStep < 4 ? (
+            <button
+              type="button"
+              onClick={goNextStep}
+              disabled={loading}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-cyan-600 px-5 text-sm font-bold text-white transition hover:bg-cyan-500 disabled:opacity-60"
+            >
+              Devam Et
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          ) : (
+            <button
           type="submit"
           disabled={loading}
           className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 sm:ml-auto sm:w-auto ${
@@ -1153,6 +1531,9 @@ export default function AddCase() {
                 : 'Vakayı Kaydet ve FOC Ekranına Geç'
               : 'Kaydet'}
         </button>
+          )}
+        </div>
+
       </form>
 
       {successSummary && (
