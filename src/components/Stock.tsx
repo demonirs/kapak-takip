@@ -27,6 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import {
+  BarcodeFormat,
   BrowserMultiFormatReader,
   type IScannerControls,
 } from '@zxing/browser';
@@ -223,6 +224,27 @@ type CameraAdvancedConstraint = MediaTrackConstraintSet & {
   torch?: boolean;
   zoom?: number;
 };
+
+const VALVE_BARCODE_FORMATS = [
+  BarcodeFormat.CODE_128,
+  BarcodeFormat.DATA_MATRIX,
+  BarcodeFormat.CODE_39,
+  BarcodeFormat.CODE_93,
+  BarcodeFormat.ITF,
+  BarcodeFormat.EAN_13,
+  BarcodeFormat.EAN_8,
+  BarcodeFormat.QR_CODE,
+];
+
+function createValveBarcodeReader(): BrowserMultiFormatReader {
+  const reader = new BrowserMultiFormatReader(undefined, {
+    delayBetweenScanAttempts: 120,
+    delayBetweenScanSuccess: 500,
+  });
+
+  reader.possibleFormats = VALVE_BARCODE_FORMATS;
+  return reader;
+}
 
 function normalizeLot(value: string): string {
   return value
@@ -479,7 +501,7 @@ export default function Stock() {
   const [cameraStarting, setCameraStarting] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [cameraMode, setCameraMode] = useState<
-    'native' | 'zxing' | ''
+    'native' | 'zxing' | 'hybrid' | ''
   >('');
   const [cameraPhotoScanning, setCameraPhotoScanning] =
     useState(false);
@@ -1166,7 +1188,7 @@ export default function Stock() {
       image.src = imageUrl;
       await image.decode();
 
-      const reader = new BrowserMultiFormatReader();
+      const reader = createValveBarcodeReader();
       const result = await reader.decodeFromImageElement(image);
       processDetectedCameraCode(result.getText());
     } catch (photoError) {
@@ -1274,27 +1296,51 @@ export default function Stock() {
           }
         ).BarcodeDetector;
 
-        if (!BarcodeDetectorApi) {
-          setCameraMode('zxing');
-          const reader = new BrowserMultiFormatReader();
-          const controls = await reader.decodeFromVideoElement(
-            video,
-            result => {
-              const rawValue = result?.getText().trim();
+        async function startValveZxingScanner(): Promise<boolean> {
+          try {
+            const reader = createValveBarcodeReader();
+            const controls = await reader.decodeFromVideoElement(
+              video as HTMLVideoElement,
+              result => {
+                const rawValue = result?.getText().trim();
 
-              if (rawValue && !cancelled) {
-                processDetectedCameraCode(rawValue);
+                if (rawValue && !cancelled) {
+                  processDetectedCameraCode(rawValue);
+                }
               }
-            }
-          );
+            );
 
-          if (cancelled) {
-            controls.stop();
-            stopCamera();
-            return;
+            if (cancelled || !cameraStreamRef.current) {
+              controls.stop();
+              return false;
+            }
+
+            cameraZxingControlsRef.current = controls;
+            return true;
+          } catch (zxingError) {
+            console.warn(
+              'GS1-128 uyumlu ZXing taraması başlatılamadı:',
+              zxingError
+            );
+            return false;
+          }
+        }
+
+        const zxingStarted = await startValveZxingScanner();
+
+        if (cancelled || !cameraStreamRef.current) {
+          stopCamera();
+          return;
+        }
+
+        if (!BarcodeDetectorApi) {
+          if (!zxingStarted) {
+            throw new Error(
+              'Bu tarayıcıda uyumlu barkod çözümleyici başlatılamadı.'
+            );
           }
 
-          cameraZxingControlsRef.current = controls;
+          setCameraMode('zxing');
           setCameraStarting(false);
           return;
         }
@@ -1322,7 +1368,7 @@ export default function Stock() {
           detector = new BarcodeDetectorApi();
         }
 
-        setCameraMode('native');
+        setCameraMode(zxingStarted ? 'hybrid' : 'native');
         if (cancelled) {
           stopCamera();
           return;
@@ -1728,14 +1774,14 @@ export default function Stock() {
               <div className="relative aspect-[3/4] max-h-[68vh] w-full overflow-hidden rounded-2xl border border-slate-700 bg-black sm:aspect-[4/3]">
                 <video
                   ref={cameraVideoRef}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-contain"
                   playsInline
                   muted
                   autoPlay
                 />
 
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-8">
-                  <div className="relative h-[46%] w-full max-w-sm rounded-2xl border-2 border-cyan-300/80 shadow-[0_0_0_9999px_rgba(2,6,23,0.45)]">
+                  <div className="relative h-[28%] w-full max-w-lg rounded-2xl border-2 border-cyan-300/80 shadow-[0_0_0_9999px_rgba(2,6,23,0.45)]">
                     <span className="absolute -left-0.5 -top-0.5 h-7 w-7 rounded-tl-xl border-l-4 border-t-4 border-cyan-300" />
                     <span className="absolute -right-0.5 -top-0.5 h-7 w-7 rounded-tr-xl border-r-4 border-t-4 border-cyan-300" />
                     <span className="absolute -bottom-0.5 -left-0.5 h-7 w-7 rounded-bl-xl border-b-4 border-l-4 border-cyan-300" />
@@ -1785,7 +1831,9 @@ export default function Stock() {
                   <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-bold text-cyan-200">
                     {cameraMode === 'native'
                       ? 'Hızlı Tarama'
-                      : 'Uyumlu ZXing Tarama'}
+                      : cameraMode === 'hybrid'
+                        ? 'GS1-128 Hibrit Tarama'
+                        : 'Uyumlu ZXing Tarama'}
                   </span>
 
                   {cameraTorchAvailable && (
