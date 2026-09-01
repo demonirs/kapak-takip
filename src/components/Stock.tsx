@@ -210,6 +210,11 @@ type BarcodeDetectorConstructor = {
 };
 
 type CameraTrackCapabilities = MediaTrackCapabilities & {
+  focusDistance?: {
+    max: number;
+    min: number;
+    step?: number;
+  };
   focusMode?: string[];
   torch?: boolean;
   zoom?: {
@@ -220,6 +225,7 @@ type CameraTrackCapabilities = MediaTrackCapabilities & {
 };
 
 type CameraAdvancedConstraint = MediaTrackConstraintSet & {
+  focusDistance?: number;
   focusMode?: string;
   torch?: boolean;
   zoom?: number;
@@ -244,6 +250,103 @@ function createValveBarcodeReader(): BrowserMultiFormatReader {
 
   reader.possibleFormats = VALVE_BARCODE_FORMATS;
   return reader;
+}
+
+async function decodeValveBarcodePhoto(
+  image: HTMLImageElement
+): Promise<string> {
+  const directReader = createValveBarcodeReader();
+
+  try {
+    return (await directReader.decodeFromImageElement(image)).getText();
+  } catch {
+    // Yüksek çözünürlüklü tıbbi etiketler aşağıdaki kırpma ve
+    // kontrast denemeleriyle tekrar çözümlenir.
+  }
+
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  const maxDimension = 2800;
+  const scale = Math.min(
+    1,
+    maxDimension / Math.max(sourceWidth, sourceHeight)
+  );
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
+  const bands = [
+    { y: 0, height: 1 },
+    { y: 0, height: 0.6 },
+    { y: 0.2, height: 0.6 },
+    { y: 0.4, height: 0.6 },
+  ];
+
+  for (const band of bands) {
+    const sourceY = Math.round(sourceHeight * band.y);
+    const sourceBandHeight = Math.max(
+      1,
+      Math.round(sourceHeight * band.height)
+    );
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = Math.max(1, Math.round(height * band.height));
+    const context = canvas.getContext('2d', {
+      willReadFrequently: true,
+    });
+
+    if (!context) continue;
+
+    context.drawImage(
+      image,
+      0,
+      sourceY,
+      sourceWidth,
+      sourceBandHeight,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+
+    try {
+      return createValveBarcodeReader()
+        .decodeFromCanvas(canvas)
+        .getText();
+    } catch {
+      const imageData = context.getImageData(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+      const pixels = imageData.data;
+
+      for (let index = 0; index < pixels.length; index += 4) {
+        const luminance =
+          pixels[index] * 0.299 +
+          pixels[index + 1] * 0.587 +
+          pixels[index + 2] * 0.114;
+        const contrasted = Math.max(
+          0,
+          Math.min(255, (luminance - 128) * 1.45 + 128)
+        );
+        pixels[index] = contrasted;
+        pixels[index + 1] = contrasted;
+        pixels[index + 2] = contrasted;
+      }
+
+      context.putImageData(imageData, 0, 0);
+
+      try {
+        return createValveBarcodeReader()
+          .decodeFromCanvas(canvas)
+          .getText();
+      } catch {
+        // Sonraki yatay bant denenir.
+      }
+    }
+  }
+
+  throw new Error('GS1-128 barkodu fotoğraftan çözümlenemedi.');
 }
 
 function normalizeLot(value: string): string {
@@ -514,6 +617,20 @@ export default function Stock() {
     max: number;
     step: number;
   } | null>(null);
+  const [cameraDevices, setCameraDevices] = useState<
+    MediaDeviceInfo[]
+  >([]);
+  const [cameraSelectedDeviceId, setCameraSelectedDeviceId] =
+    useState('');
+  const [cameraActiveDeviceId, setCameraActiveDeviceId] =
+    useState('');
+  const [cameraFocusRange, setCameraFocusRange] = useState<{
+    min: number;
+    max: number;
+    step: number;
+  } | null>(null);
+  const [cameraFocusDistance, setCameraFocusDistance] = useState(0);
+  const [cameraRefocusing, setCameraRefocusing] = useState(false);
   const [parsed, setParsed] = useState<ParsedBarcode | null>(null);
   const [scanResult, setScanResult] = useState<ScanResult | null>(
     null
@@ -1022,6 +1139,10 @@ export default function Stock() {
     setCameraTorchOn(false);
     setCameraZoomRange(null);
     setCameraZoom(1);
+    setCameraFocusRange(null);
+    setCameraFocusDistance(0);
+    setCameraRefocusing(false);
+    setCameraActiveDeviceId('');
   }
 
   function closeCamera() {
@@ -1071,8 +1192,14 @@ export default function Stock() {
         device => device.kind === 'videoinput'
       );
       const undesirableLens =
-        /ultra|wide|macro|tele|geniş|makro/i;
+        /ultra|macro|tele|geniş açı|makro/i;
       const rearLens = /back|rear|environment|arka/i;
+      const rearCameras = cameras.filter(camera =>
+        rearLens.test(camera.label)
+      );
+      setCameraDevices(
+        rearCameras.length > 0 ? rearCameras : cameras
+      );
       const preferred =
         cameras.find(
           camera =>
@@ -1098,6 +1225,8 @@ export default function Stock() {
 
     if (capabilities?.focusMode?.includes('continuous')) {
       advanced.push({ focusMode: 'continuous' });
+    } else if (capabilities?.focusMode?.includes('single-shot')) {
+      advanced.push({ focusMode: 'single-shot' });
     }
 
     if (advanced.length > 0) {
@@ -1112,6 +1241,21 @@ export default function Stock() {
     }
 
     setCameraTorchAvailable(Boolean(capabilities?.torch));
+
+    if (capabilities?.focusDistance) {
+      const min = Number(capabilities.focusDistance.min);
+      const max = Number(capabilities.focusDistance.max);
+      const step = Number(capabilities.focusDistance.step) || 0.01;
+      const settings = track.getSettings() as MediaTrackSettings & {
+        focusDistance?: number;
+      };
+      const currentFocus = Number(settings.focusDistance) || min;
+
+      setCameraFocusRange({ min, max, step });
+      setCameraFocusDistance(
+        Math.min(max, Math.max(min, currentFocus))
+      );
+    }
 
     if (capabilities?.zoom) {
       const min = Number(capabilities.zoom.min);
@@ -1170,6 +1314,98 @@ export default function Stock() {
     }
   }
 
+  async function refocusCamera() {
+    const track = cameraStreamRef.current?.getVideoTracks()[0];
+
+    if (!track || cameraRefocusing) return;
+
+    setCameraRefocusing(true);
+
+    try {
+      const capabilities =
+        track.getCapabilities?.() as CameraTrackCapabilities;
+      const focusMode = capabilities?.focusMode?.includes('single-shot')
+        ? 'single-shot'
+        : capabilities?.focusMode?.includes('continuous')
+          ? 'continuous'
+          : null;
+
+      if (!focusMode) {
+        throw new Error('Odak kontrolü bu kamerada sunulmuyor.');
+      }
+
+      await track.applyConstraints({
+        advanced: [
+          { focusMode } as CameraAdvancedConstraint,
+        ],
+      });
+
+      if (
+        focusMode === 'single-shot' &&
+        capabilities?.focusMode?.includes('continuous')
+      ) {
+        window.setTimeout(() => {
+          void track
+            .applyConstraints({
+              advanced: [
+                {
+                  focusMode: 'continuous',
+                } as CameraAdvancedConstraint,
+              ],
+            })
+            .catch(() => undefined);
+        }, 700);
+      }
+    } catch (focusError) {
+      console.warn('Kamera yeniden odaklanamadı:', focusError);
+    } finally {
+      window.setTimeout(() => setCameraRefocusing(false), 500);
+    }
+  }
+
+  async function applyCameraFocusDistance(nextDistance: number) {
+    const track = cameraStreamRef.current?.getVideoTracks()[0];
+
+    if (!track || !cameraFocusRange) return;
+
+    const safeDistance = Math.min(
+      cameraFocusRange.max,
+      Math.max(cameraFocusRange.min, nextDistance)
+    );
+
+    try {
+      await track.applyConstraints({
+        advanced: [
+          {
+            focusMode: 'manual',
+            focusDistance: safeDistance,
+          } as CameraAdvancedConstraint,
+        ],
+      });
+      setCameraFocusDistance(safeDistance);
+    } catch (focusError) {
+      console.warn('Manuel odak mesafesi uygulanamadı:', focusError);
+    }
+  }
+
+  function switchToNextCamera() {
+    if (cameraDevices.length < 2) return;
+
+    const currentDeviceId =
+      cameraSelectedDeviceId || cameraActiveDeviceId;
+    const currentIndex = cameraDevices.findIndex(
+      device => device.deviceId === currentDeviceId
+    );
+    const nextIndex =
+      currentIndex >= 0
+        ? (currentIndex + 1) % cameraDevices.length
+        : 0;
+
+    setCameraSelectedDeviceId(
+      cameraDevices[nextIndex].deviceId
+    );
+  }
+
   async function scanBarcodePhoto(
     event: ChangeEvent<HTMLInputElement>
   ) {
@@ -1188,14 +1424,15 @@ export default function Stock() {
       image.src = imageUrl;
       await image.decode();
 
-      const reader = createValveBarcodeReader();
-      const result = await reader.decodeFromImageElement(image);
-      processDetectedCameraCode(result.getText());
+      const rawValue = await decodeValveBarcodePhoto(image);
+      processDetectedCameraCode(rawValue);
     } catch (photoError) {
       console.warn('Fotoğraftaki barkod çözümlenemedi:', photoError);
-      setCameraError(
-        'Fotoğraftaki çizgisel barkod okunamadı. Etiketi iyi ışıkta, kameraya paralel ve net biçimde yeniden çekin veya LOT/SN bilgisini manuel girin.'
+      setMessage(
+        'Fotoğraf otomatik çözümlenemedi. Canlı tarama açıldı; isterseniz yeniden fotoğraf çekebilir veya LOT/SN bilgisini manuel girebilirsiniz.'
       );
+      setCameraError('');
+      setCameraOpen(true);
     } finally {
       URL.revokeObjectURL(imageUrl);
       setCameraPhotoScanning(false);
@@ -1222,24 +1459,25 @@ export default function Stock() {
 
         let stream = await navigator.mediaDevices.getUserMedia({
           audio: false,
-          video: {
-            facingMode: {
-              ideal: 'environment',
-            },
-            width: {
-              ideal: 2560,
-            },
-            height: {
-              ideal: 1440,
-            },
-            frameRate: { ideal: 30 },
-          },
+          video: cameraSelectedDeviceId
+            ? {
+                deviceId: { exact: cameraSelectedDeviceId },
+                width: { ideal: 2560 },
+                height: { ideal: 1440 },
+                frameRate: { ideal: 30 },
+              }
+            : {
+                facingMode: { ideal: 'environment' },
+                width: { ideal: 2560 },
+                height: { ideal: 1440 },
+                frameRate: { ideal: 30 },
+              },
         });
 
         const preferredRearCameraId =
           await selectPreferredRearCameraId(stream);
 
-        if (preferredRearCameraId) {
+        if (!cameraSelectedDeviceId && preferredRearCameraId) {
           stream.getTracks().forEach(track => track.stop());
 
           try {
@@ -1274,6 +1512,9 @@ export default function Stock() {
         }
 
         cameraStreamRef.current = stream;
+        setCameraActiveDeviceId(
+          stream.getVideoTracks()[0]?.getSettings().deviceId || ''
+        );
 
         const video = cameraVideoRef.current;
 
@@ -1446,7 +1687,7 @@ export default function Stock() {
       cancelled = true;
       stopCamera();
     };
-  }, [cameraOpen]);
+  }, [cameraOpen, cameraSelectedDeviceId]);
 
   async function addToStock() {
     if (!parsed || scanResult?.status !== 'not-found' || saving) {
@@ -1584,6 +1825,15 @@ export default function Stock() {
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-4 pb-24">
+      <input
+        ref={cameraPhotoInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={scanBarcodePhoto}
+      />
+
       {transferModalOpen && (
         <div
           className="fixed inset-0 z-[135] flex items-center justify-center overflow-y-auto bg-slate-950/85 px-3 py-4 backdrop-blur-sm"
@@ -1762,15 +2012,6 @@ export default function Stock() {
             </div>
 
             <div className="p-3 sm:p-5">
-              <input
-                ref={cameraPhotoInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={scanBarcodePhoto}
-              />
-
               <div className="relative aspect-[3/4] max-h-[68vh] w-full overflow-hidden rounded-2xl border border-slate-700 bg-black sm:aspect-[4/3]">
                 <video
                   ref={cameraVideoRef}
@@ -1836,6 +2077,61 @@ export default function Stock() {
                         : 'Uyumlu ZXing Tarama'}
                   </span>
 
+                  {cameraDevices.length > 1 && (
+                    <>
+                      <label className="flex min-w-[220px] flex-1 items-center gap-2 text-xs font-bold text-slate-300">
+                        Kamera
+                        <select
+                          value={
+                            cameraSelectedDeviceId ||
+                            cameraActiveDeviceId
+                          }
+                          onChange={event =>
+                            setCameraSelectedDeviceId(
+                              event.target.value
+                            )
+                          }
+                          className="min-h-9 min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-800 px-2 text-xs text-white outline-none focus:border-cyan-400"
+                          aria-label="Kullanılacak kamera"
+                        >
+                          {cameraDevices.map((device, index) => (
+                            <option
+                              key={device.deviceId}
+                              value={device.deviceId}
+                            >
+                              {device.label || `Kamera ${index + 1}`}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={switchToNextCamera}
+                        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-cyan-400/40 bg-cyan-500/10 px-3 text-xs font-bold text-cyan-100 transition hover:bg-cyan-500/20"
+                      >
+                        <Camera className="h-4 w-4" />
+                        Sonraki Kamera
+                      </button>
+                    </>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => void refocusCamera()}
+                    disabled={cameraRefocusing}
+                    className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-3 text-xs font-bold text-slate-200 transition hover:bg-slate-700 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <RefreshCw
+                      className={`h-4 w-4 ${
+                        cameraRefocusing ? 'animate-spin' : ''
+                      }`}
+                    />
+                    {cameraRefocusing
+                      ? 'Odaklanıyor...'
+                      : 'Yeniden Odakla'}
+                  </button>
+
                   {cameraTorchAvailable && (
                     <button
                       type="button"
@@ -1871,6 +2167,26 @@ export default function Stock() {
                       <span className="w-9 text-right text-cyan-200">
                         {cameraZoom.toFixed(1)}×
                       </span>
+                    </label>
+                  )}
+
+                  {cameraFocusRange && (
+                    <label className="flex min-w-[220px] flex-1 items-center gap-2 text-xs font-bold text-slate-300">
+                      Manuel Odak
+                      <input
+                        type="range"
+                        min={cameraFocusRange.min}
+                        max={cameraFocusRange.max}
+                        step={cameraFocusRange.step}
+                        value={cameraFocusDistance}
+                        onChange={event =>
+                          void applyCameraFocusDistance(
+                            Number(event.target.value)
+                          )
+                        }
+                        className="min-w-0 flex-1 accent-violet-400"
+                        aria-label="Kamera manuel odak mesafesi"
+                      />
                     </label>
                   )}
                 </div>
@@ -2188,26 +2504,31 @@ export default function Stock() {
                 return;
               }
 
-              setCameraError('');
-              setCameraOpen(true);
+              cameraPhotoInputRef.current?.click();
             }}
+            disabled={cameraPhotoScanning}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cyan-500"
             title={
               barcode.trim()
                 ? 'Barkodu kontrol et'
-                : 'Telefon kamerası ile tara'
+                : 'Telefon kamerasıyla fotoğraf çek ve tara'
             }
           >
-            <Camera className="h-4 w-4" />
+            {cameraPhotoScanning ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <Camera className="h-4 w-4" />
+            )}
             <Search className="h-4 w-4" />
-            Kontrol Et
+            {cameraPhotoScanning ? 'Taranıyor...' : 'Kontrol Et'}
           </button>
         </div>
 
         <p className="mt-2 text-[11px] leading-4 text-slate-500">
           Barkod alanı boşken <span className="font-semibold text-slate-300">Kontrol Et</span>{' '}
-          düğmesindeki kamera ikonu telefon kamerasını açar. Barkod girilmişse
-          aynı düğme mevcut kodu kontrol eder.
+          telefonun kendi yüksek çözünürlüklü kamerasını açar. Barkod girilmişse
+          aynı düğme mevcut kodu kontrol eder. Fotoğraf çözülemezse canlı tarama
+          otomatik açılır.
         </p>
 
         {parsed && (
