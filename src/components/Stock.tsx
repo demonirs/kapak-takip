@@ -1,4 +1,5 @@
 import {
+  type ChangeEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -13,6 +14,8 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Download,
+  Flashlight,
+  ImagePlus,
   PackageOpen,
   PackagePlus,
   RefreshCw,
@@ -23,6 +26,10 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import {
+  BrowserMultiFormatReader,
+  type IScannerControls,
+} from '@zxing/browser';
 import { supabase } from '../lib/supabase';
 import { downloadExcel } from '../lib/excel';
 import { useAuth } from '../contexts/AuthContext';
@@ -199,6 +206,22 @@ type BarcodeDetectorInstance = {
 type BarcodeDetectorConstructor = {
   new (options?: { formats?: string[] }): BarcodeDetectorInstance;
   getSupportedFormats?: () => Promise<string[]>;
+};
+
+type CameraTrackCapabilities = MediaTrackCapabilities & {
+  focusMode?: string[];
+  torch?: boolean;
+  zoom?: {
+    max: number;
+    min: number;
+    step?: number;
+  };
+};
+
+type CameraAdvancedConstraint = MediaTrackConstraintSet & {
+  focusMode?: string;
+  torch?: boolean;
+  zoom?: number;
 };
 
 function normalizeLot(value: string): string {
@@ -432,9 +455,12 @@ export default function Stock() {
   const { profile } = useAuth();
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraPhotoInputRef = useRef<HTMLInputElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const cameraScanTimerRef = useRef<number | null>(null);
+  const cameraZxingControlsRef = useRef<IScannerControls | null>(null);
   const cameraDetectingRef = useRef(false);
+  const lastCameraCodeRef = useRef({ value: '', detectedAt: 0 });
 
   const [items, setItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -452,6 +478,20 @@ export default function Stock() {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraStarting, setCameraStarting] = useState(false);
   const [cameraError, setCameraError] = useState('');
+  const [cameraMode, setCameraMode] = useState<
+    'native' | 'zxing' | ''
+  >('');
+  const [cameraPhotoScanning, setCameraPhotoScanning] =
+    useState(false);
+  const [cameraTorchAvailable, setCameraTorchAvailable] =
+    useState(false);
+  const [cameraTorchOn, setCameraTorchOn] = useState(false);
+  const [cameraZoom, setCameraZoom] = useState(1);
+  const [cameraZoomRange, setCameraZoomRange] = useState<{
+    min: number;
+    max: number;
+    step: number;
+  } | null>(null);
   const [parsed, setParsed] = useState<ParsedBarcode | null>(null);
   const [scanResult, setScanResult] = useState<ScanResult | null>(
     null
@@ -941,6 +981,8 @@ export default function Stock() {
       cameraScanTimerRef.current = null;
     }
 
+    cameraZxingControlsRef.current?.stop();
+    cameraZxingControlsRef.current = null;
     cameraDetectingRef.current = false;
 
     cameraStreamRef.current?.getTracks().forEach(track => {
@@ -952,6 +994,12 @@ export default function Stock() {
     if (cameraVideoRef.current) {
       cameraVideoRef.current.srcObject = null;
     }
+
+    setCameraMode('');
+    setCameraTorchAvailable(false);
+    setCameraTorchOn(false);
+    setCameraZoomRange(null);
+    setCameraZoom(1);
   }
 
   function closeCamera() {
@@ -959,6 +1007,177 @@ export default function Stock() {
     setCameraOpen(false);
     setCameraStarting(false);
     setCameraError('');
+    setCameraPhotoScanning(false);
+  }
+
+  function processDetectedCameraCode(rawValue: string) {
+    const normalizedValue = rawValue.trim();
+
+    if (!normalizedValue) return;
+
+    const now = Date.now();
+    const previous = lastCameraCodeRef.current;
+
+    if (
+      previous.value === normalizedValue &&
+      now - previous.detectedAt < 2500
+    ) {
+      return;
+    }
+
+    lastCameraCodeRef.current = {
+      value: normalizedValue,
+      detectedAt: now,
+    };
+
+    stopCamera();
+    setCameraOpen(false);
+    setCameraStarting(false);
+    setCameraError('');
+    setCameraPhotoScanning(false);
+    processBarcodeValue(normalizedValue);
+  }
+
+  async function selectPreferredRearCameraId(
+    currentStream: MediaStream
+  ): Promise<string | null> {
+    try {
+      const currentDeviceId =
+        currentStream.getVideoTracks()[0]?.getSettings().deviceId;
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter(
+        device => device.kind === 'videoinput'
+      );
+      const undesirableLens =
+        /ultra|wide|macro|tele|geniş|makro/i;
+      const rearLens = /back|rear|environment|arka/i;
+      const preferred =
+        cameras.find(
+          camera =>
+            rearLens.test(camera.label) &&
+            !undesirableLens.test(camera.label)
+        );
+
+      if (!preferred?.deviceId || preferred.deviceId === currentDeviceId) {
+        return null;
+      }
+
+      return preferred.deviceId;
+    } catch (deviceError) {
+      console.warn('Arka kamera seçimi yapılamadı:', deviceError);
+      return null;
+    }
+  }
+
+  async function configureCameraTrack(track: MediaStreamTrack) {
+    const capabilities =
+      track.getCapabilities?.() as CameraTrackCapabilities;
+    const advanced: CameraAdvancedConstraint[] = [];
+
+    if (capabilities?.focusMode?.includes('continuous')) {
+      advanced.push({ focusMode: 'continuous' });
+    }
+
+    if (advanced.length > 0) {
+      try {
+        await track.applyConstraints({ advanced });
+      } catch (constraintError) {
+        console.warn(
+          'Kamera otomatik odak ayarı uygulanamadı:',
+          constraintError
+        );
+      }
+    }
+
+    setCameraTorchAvailable(Boolean(capabilities?.torch));
+
+    if (capabilities?.zoom) {
+      const min = Number(capabilities.zoom.min);
+      const max = Number(capabilities.zoom.max);
+      const step = Number(capabilities.zoom.step) || 0.1;
+      const currentZoom = Number(
+        (track.getSettings() as MediaTrackSettings & { zoom?: number })
+          .zoom
+      ) || min;
+
+      setCameraZoomRange({ min, max, step });
+      setCameraZoom(
+        Math.min(max, Math.max(min, currentZoom))
+      );
+    }
+  }
+
+  async function applyCameraZoom(nextZoom: number) {
+    const track = cameraStreamRef.current?.getVideoTracks()[0];
+
+    if (!track || !cameraZoomRange) return;
+
+    const safeZoom = Math.min(
+      cameraZoomRange.max,
+      Math.max(cameraZoomRange.min, nextZoom)
+    );
+
+    try {
+      await track.applyConstraints({
+        advanced: [
+          { zoom: safeZoom } as CameraAdvancedConstraint,
+        ],
+      });
+      setCameraZoom(safeZoom);
+    } catch (zoomError) {
+      console.warn('Kamera zoom ayarı uygulanamadı:', zoomError);
+    }
+  }
+
+  async function toggleCameraTorch() {
+    const track = cameraStreamRef.current?.getVideoTracks()[0];
+
+    if (!track || !cameraTorchAvailable) return;
+
+    const nextTorchState = !cameraTorchOn;
+
+    try {
+      await track.applyConstraints({
+        advanced: [
+          { torch: nextTorchState } as CameraAdvancedConstraint,
+        ],
+      });
+      setCameraTorchOn(nextTorchState);
+    } catch (torchError) {
+      console.warn('Kamera fener ayarı uygulanamadı:', torchError);
+    }
+  }
+
+  async function scanBarcodePhoto(
+    event: ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file || cameraPhotoScanning) return;
+
+    setCameraPhotoScanning(true);
+    setCameraError('');
+
+    const imageUrl = URL.createObjectURL(file);
+
+    try {
+      const image = new Image();
+      image.src = imageUrl;
+      await image.decode();
+
+      const reader = new BrowserMultiFormatReader();
+      const result = await reader.decodeFromImageElement(image);
+      processDetectedCameraCode(result.getText());
+    } catch (photoError) {
+      console.warn('Fotoğraftaki barkod çözümlenemedi:', photoError);
+      setCameraError(
+        'Fotoğraftaki çizgisel barkod okunamadı. Etiketi iyi ışıkta, kameraya paralel ve net biçimde yeniden çekin veya LOT/SN bilgisini manuel girin.'
+      );
+    } finally {
+      URL.revokeObjectURL(imageUrl);
+      setCameraPhotoScanning(false);
+    }
   }
 
   useEffect(() => {
@@ -973,38 +1192,59 @@ export default function Stock() {
       setCameraError('');
 
       try {
-        const BarcodeDetectorApi = (
-          window as Window & {
-            BarcodeDetector?: BarcodeDetectorConstructor;
-          }
-        ).BarcodeDetector;
-
-        if (!BarcodeDetectorApi) {
-          throw new Error(
-            'Bu tarayıcı kamera barkod çözümlemeyi desteklemiyor. Android Chrome veya ValveFlow PWA ile tekrar deneyin.'
-          );
-        }
-
         if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error(
             'Kamera erişimi bu tarayıcıda kullanılamıyor.'
           );
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({
+        let stream = await navigator.mediaDevices.getUserMedia({
           audio: false,
           video: {
             facingMode: {
               ideal: 'environment',
             },
             width: {
-              ideal: 1920,
+              ideal: 2560,
             },
             height: {
-              ideal: 1080,
+              ideal: 1440,
             },
+            frameRate: { ideal: 30 },
           },
         });
+
+        const preferredRearCameraId =
+          await selectPreferredRearCameraId(stream);
+
+        if (preferredRearCameraId) {
+          stream.getTracks().forEach(track => track.stop());
+
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: {
+                deviceId: { exact: preferredRearCameraId },
+                width: { ideal: 2560 },
+                height: { ideal: 1440 },
+                frameRate: { ideal: 30 },
+              },
+            });
+          } catch (preferredCameraError) {
+            console.warn(
+              'Ana arka kamera açılamadı, standart arka kameraya dönülüyor:',
+              preferredCameraError
+            );
+            stream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: {
+                facingMode: { ideal: 'environment' },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 },
+              },
+            });
+          }
+        }
 
         if (cancelled) {
           stream.getTracks().forEach(track => track.stop());
@@ -1022,6 +1262,43 @@ export default function Stock() {
         video.srcObject = stream;
         await video.play();
 
+        const videoTrack = stream.getVideoTracks()[0];
+
+        if (videoTrack) {
+          await configureCameraTrack(videoTrack);
+        }
+
+        const BarcodeDetectorApi = (
+          window as Window & {
+            BarcodeDetector?: BarcodeDetectorConstructor;
+          }
+        ).BarcodeDetector;
+
+        if (!BarcodeDetectorApi) {
+          setCameraMode('zxing');
+          const reader = new BrowserMultiFormatReader();
+          const controls = await reader.decodeFromVideoElement(
+            video,
+            result => {
+              const rawValue = result?.getText().trim();
+
+              if (rawValue && !cancelled) {
+                processDetectedCameraCode(rawValue);
+              }
+            }
+          );
+
+          if (cancelled) {
+            controls.stop();
+            stopCamera();
+            return;
+          }
+
+          cameraZxingControlsRef.current = controls;
+          setCameraStarting(false);
+          return;
+        }
+
         let detector: BarcodeDetectorInstance;
 
         if (BarcodeDetectorApi.getSupportedFormats) {
@@ -1029,10 +1306,10 @@ export default function Stock() {
             await BarcodeDetectorApi.getSupportedFormats();
 
           const preferredFormats = [
-            'data_matrix',
             'code_128',
-            'qr_code',
             'ean_13',
+            'data_matrix',
+            'qr_code',
           ].filter(format => supportedFormats.includes(format));
 
           detector =
@@ -1045,6 +1322,7 @@ export default function Stock() {
           detector = new BarcodeDetectorApi();
         }
 
+        setCameraMode('native');
         if (cancelled) {
           stopCamera();
           return;
@@ -1076,11 +1354,7 @@ export default function Stock() {
                 return;
               }
 
-              stopCamera();
-              setCameraOpen(false);
-              setCameraStarting(false);
-              setCameraError('');
-              processBarcodeValue(rawValue);
+              processDetectedCameraCode(rawValue);
             } catch (detectError) {
               console.warn(
                 'Kamera barkod tarama karesi çözümlenemedi:',
@@ -1426,8 +1700,8 @@ export default function Stock() {
                 </h2>
 
                 <p className="mt-1 text-xs leading-5 text-slate-400">
-                  Arka kamerayı etiketteki DataMatrix / barkoda yaklaştırın.
-                  Kod algılanınca ValveFlow otomatik kontrol eder.
+                  Öncelikle etiketteki yan yana çizgili barkodu çerçeveye
+                  alın. Kod algılanınca ValveFlow otomatik kontrol eder.
                 </p>
               </div>
 
@@ -1442,6 +1716,15 @@ export default function Stock() {
             </div>
 
             <div className="p-3 sm:p-5">
+              <input
+                ref={cameraPhotoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={scanBarcodePhoto}
+              />
+
               <div className="relative aspect-[3/4] max-h-[68vh] w-full overflow-hidden rounded-2xl border border-slate-700 bg-black sm:aspect-[4/3]">
                 <video
                   ref={cameraVideoRef}
@@ -1491,13 +1774,77 @@ export default function Stock() {
                   <div className="pointer-events-none absolute inset-x-0 bottom-5 flex justify-center">
                     <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-slate-950/80 px-3 py-2 text-xs font-bold text-cyan-100 backdrop-blur">
                       <ScanLine className="h-4 w-4 text-cyan-300" />
-                      Barkodu çerçevenin içine alın
+                      Çizgisel barkodu çerçevenin içine alın
                     </div>
                   </div>
                 )}
               </div>
 
+              {!cameraStarting && !cameraError && (
+                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/40 p-3">
+                  <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-bold text-cyan-200">
+                    {cameraMode === 'native'
+                      ? 'Hızlı Tarama'
+                      : 'Uyumlu ZXing Tarama'}
+                  </span>
+
+                  {cameraTorchAvailable && (
+                    <button
+                      type="button"
+                      onClick={() => void toggleCameraTorch()}
+                      className={`inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-bold transition ${
+                        cameraTorchOn
+                          ? 'border-amber-300/50 bg-amber-400/20 text-amber-100'
+                          : 'border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700'
+                      }`}
+                    >
+                      <Flashlight className="h-4 w-4" />
+                      {cameraTorchOn ? 'Fener Açık' : 'Fener'}
+                    </button>
+                  )}
+
+                  {cameraZoomRange && (
+                    <label className="flex min-w-[180px] flex-1 items-center gap-2 text-xs font-bold text-slate-300">
+                      Zoom
+                      <input
+                        type="range"
+                        min={cameraZoomRange.min}
+                        max={cameraZoomRange.max}
+                        step={cameraZoomRange.step}
+                        value={cameraZoom}
+                        onChange={event =>
+                          void applyCameraZoom(
+                            Number(event.target.value)
+                          )
+                        }
+                        className="min-w-0 flex-1 accent-cyan-400"
+                        aria-label="Kamera zoom seviyesi"
+                      />
+                      <span className="w-9 text-right text-cyan-200">
+                        {cameraZoom.toFixed(1)}×
+                      </span>
+                    </label>
+                  )}
+                </div>
+              )}
+
               <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => cameraPhotoInputRef.current?.click()}
+                  disabled={cameraPhotoScanning}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-violet-500 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {cameraPhotoScanning ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ImagePlus className="h-4 w-4" />
+                  )}
+                  {cameraPhotoScanning
+                    ? 'Fotoğraf Taranıyor...'
+                    : 'Fotoğraf Çek ve Tara'}
+                </button>
+
                 {cameraError ? (
                   <button
                     type="button"
@@ -1517,7 +1864,7 @@ export default function Stock() {
                   </button>
                 ) : (
                   <div className="flex min-h-11 items-center justify-center rounded-xl border border-slate-700 bg-slate-950/40 px-3 text-center text-xs leading-5 text-slate-400">
-                    İyi ışıkta, etikete 10–25 cm mesafeden tutun.
+                    İyi ışıkta, etikete 15–30 cm mesafeden tutun.
                   </div>
                 )}
 
@@ -1529,6 +1876,10 @@ export default function Stock() {
                   <X className="h-4 w-4" />
                   Kamerayı Kapat
                 </button>
+
+                <div className="flex min-h-11 items-center justify-center rounded-xl border border-slate-700 bg-slate-950/40 px-3 text-center text-xs leading-5 text-slate-400">
+                  Okunmazsa LOT/SN bilgisini barkod alanına manuel girebilirsiniz.
+                </div>
               </div>
             </div>
           </div>
