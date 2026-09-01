@@ -1,5 +1,6 @@
 import {
   type ChangeEvent,
+  type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -231,16 +232,57 @@ type CameraAdvancedConstraint = MediaTrackConstraintSet & {
   zoom?: number;
 };
 
-const VALVE_BARCODE_FORMATS = [
+type BarcodeCropRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type BarcodeCropSession = {
+  imageUrl: string;
+  naturalWidth: number;
+  naturalHeight: number;
+};
+
+type BarcodeCropDragMode =
+  | 'move'
+  | 'north-west'
+  | 'north-east'
+  | 'south-west'
+  | 'south-east';
+
+type BarcodeCropInteraction = {
+  mode: BarcodeCropDragMode;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startCrop: BarcodeCropRect;
+};
+
+const GS1_CODE_128_HINTS = new Map<number, unknown>([
+  [2, [BarcodeFormat.CODE_128]],
+  [3, true],
+  [8, true],
+]);
+
+const LIVE_FALLBACK_FORMATS = [
   BarcodeFormat.CODE_128,
   BarcodeFormat.DATA_MATRIX,
-  BarcodeFormat.CODE_39,
-  BarcodeFormat.CODE_93,
-  BarcodeFormat.ITF,
-  BarcodeFormat.EAN_13,
-  BarcodeFormat.EAN_8,
   BarcodeFormat.QR_CODE,
 ];
+
+function createGs1Code128Reader(): BrowserMultiFormatReader {
+  return new BrowserMultiFormatReader(
+    GS1_CODE_128_HINTS as ConstructorParameters<
+      typeof BrowserMultiFormatReader
+    >[0],
+    {
+      delayBetweenScanAttempts: 100,
+      delayBetweenScanSuccess: 500,
+    }
+  );
+}
 
 function createValveBarcodeReader(): BrowserMultiFormatReader {
   const reader = new BrowserMultiFormatReader(undefined, {
@@ -248,100 +290,262 @@ function createValveBarcodeReader(): BrowserMultiFormatReader {
     delayBetweenScanSuccess: 500,
   });
 
-  reader.possibleFormats = VALVE_BARCODE_FORMATS;
+  reader.possibleFormats = LIVE_FALLBACK_FORMATS;
   return reader;
 }
 
-async function decodeValveBarcodePhoto(
-  image: HTMLImageElement
-): Promise<string> {
-  const directReader = createValveBarcodeReader();
+function isValidGs1Code128(rawValue: string): boolean {
+  const compact = rawValue
+    .replace(/\]C1/g, '')
+    .replaceAll(String.fromCharCode(29), '')
+    .replace(/\s/g, '');
 
-  try {
-    return (await directReader.decodeFromImageElement(image)).getText();
-  } catch {
-    // Yüksek çözünürlüklü tıbbi etiketler aşağıdaki kırpma ve
-    // kontrast denemeleriyle tekrar çözümlenir.
+  const gtinIndex = compact.search(/(?:\(01\)|01)\d{14}/);
+  const expiryIndex = compact.search(/(?:\(17\)|17)\d{6}/);
+  const serialIndex = compact.search(/(?:\(21\)|21)[A-Za-z0-9]/);
+
+  return (
+    rawValue.trim().length >= 24 &&
+    gtinIndex >= 0 &&
+    expiryIndex > gtinIndex &&
+    serialIndex > expiryIndex
+  );
+}
+
+function yieldBarcodeWork(): Promise<void> {
+  return new Promise(resolve => {
+    window.setTimeout(resolve, 0);
+  });
+}
+
+function rotateBarcodeCanvas(
+  source: HTMLCanvasElement,
+  degrees: number
+): HTMLCanvasElement {
+  if (degrees === 0) return source;
+
+  const rotated = document.createElement('canvas');
+  const swapDimensions = degrees === 90 || degrees === 270;
+  rotated.width = swapDimensions ? source.height : source.width;
+  rotated.height = swapDimensions ? source.width : source.height;
+  const context = rotated.getContext('2d');
+
+  if (!context) return source;
+
+  context.translate(rotated.width / 2, rotated.height / 2);
+  context.rotate((degrees * Math.PI) / 180);
+  context.drawImage(source, -source.width / 2, -source.height / 2);
+  return rotated;
+}
+
+function createBarcodeVariant(
+  source: HTMLCanvasElement,
+  variant:
+    | 'color'
+    | 'grayscale'
+    | 'contrast'
+    | 'threshold-96'
+    | 'threshold-128'
+    | 'threshold-160'
+    | 'inverted'
+    | 'sharpen'
+): HTMLCanvasElement {
+  if (variant === 'color') return source;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = source.width;
+  canvas.height = source.height;
+  const context = canvas.getContext('2d', {
+    willReadFrequently: true,
+  });
+
+  if (!context) return source;
+
+  context.drawImage(source, 0, 0);
+  const imageData = context.getImageData(
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+  const pixels = imageData.data;
+  const original =
+    variant === 'sharpen' ? new Uint8ClampedArray(pixels) : null;
+  const threshold =
+    variant === 'threshold-96'
+      ? 96
+      : variant === 'threshold-128'
+        ? 128
+        : variant === 'threshold-160'
+          ? 160
+          : null;
+
+  for (let index = 0; index < pixels.length; index += 4) {
+    const luminance =
+      pixels[index] * 0.299 +
+      pixels[index + 1] * 0.587 +
+      pixels[index + 2] * 0.114;
+    let value = luminance;
+
+    if (variant === 'contrast') {
+      value = (luminance - 128) * 1.55 + 128;
+    } else if (threshold !== null) {
+      value = luminance >= threshold ? 255 : 0;
+    } else if (variant === 'inverted') {
+      value = 255 - luminance;
+    }
+
+    if (variant !== 'sharpen') {
+      const safeValue = Math.max(0, Math.min(255, value));
+      pixels[index] = safeValue;
+      pixels[index + 1] = safeValue;
+      pixels[index + 2] = safeValue;
+    }
+  }
+
+  if (variant === 'sharpen' && original) {
+    const width = canvas.width;
+    const height = canvas.height;
+
+    for (let y = 1; y < height - 1; y += 1) {
+      for (let x = 1; x < width - 1; x += 1) {
+        const pixelIndex = (y * width + x) * 4;
+
+        for (let channel = 0; channel < 3; channel += 1) {
+          const sharpened =
+            original[pixelIndex + channel] * 5 -
+            original[pixelIndex - 4 + channel] -
+            original[pixelIndex + 4 + channel] -
+            original[pixelIndex - width * 4 + channel] -
+            original[pixelIndex + width * 4 + channel];
+          pixels[pixelIndex + channel] = Math.max(
+            0,
+            Math.min(255, sharpened)
+          );
+        }
+      }
+    }
+  }
+
+  context.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+async function decodeValveBarcodePhoto(
+  image: HTMLImageElement,
+  selectedCrop?: BarcodeCropRect
+): Promise<string> {
+  if (!selectedCrop) {
+    try {
+      const directResult = await createGs1Code128Reader()
+        .decodeFromImageElement(image);
+      const rawValue = directResult.getText();
+
+      if (isValidGs1Code128(rawValue)) return rawValue;
+    } catch {
+      // Kontrollü görüntü varyasyonları aşağıda denenir.
+    }
   }
 
   const sourceWidth = image.naturalWidth || image.width;
   const sourceHeight = image.naturalHeight || image.height;
-  const maxDimension = 2800;
-  const scale = Math.min(
-    1,
-    maxDimension / Math.max(sourceWidth, sourceHeight)
-  );
-  const width = Math.max(1, Math.round(sourceWidth * scale));
-  const height = Math.max(1, Math.round(sourceHeight * scale));
-  const bands = [
-    { y: 0, height: 1 },
-    { y: 0, height: 0.6 },
-    { y: 0.2, height: 0.6 },
-    { y: 0.4, height: 0.6 },
-  ];
+  const cropAreas: BarcodeCropRect[] = selectedCrop
+    ? [selectedCrop]
+    : [
+        { x: 0, y: 0, width: 1, height: 1 },
+        { x: 0.02, y: 0.18, width: 0.96, height: 0.64 },
+        { x: 0.02, y: 0.38, width: 0.96, height: 0.6 },
+        { x: 0.02, y: 0.02, width: 0.96, height: 0.6 },
+        { x: 0.05, y: 0.1, width: 0.9, height: 0.8 },
+      ];
+  const rotations = [0, 90, 180, 270];
+  const variants = [
+    'color',
+    'grayscale',
+    'contrast',
+    'threshold-96',
+    'threshold-128',
+    'threshold-160',
+    'inverted',
+    'sharpen',
+  ] as const;
+  let attemptCount = 0;
 
-  for (const band of bands) {
-    const sourceY = Math.round(sourceHeight * band.y);
-    const sourceBandHeight = Math.max(
+  for (const crop of cropAreas) {
+    const cropPixelWidth = Math.max(
       1,
-      Math.round(sourceHeight * band.height)
+      Math.round(sourceWidth * crop.width)
     );
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = Math.max(1, Math.round(height * band.height));
-    const context = canvas.getContext('2d', {
-      willReadFrequently: true,
-    });
-
-    if (!context) continue;
-
-    context.drawImage(
-      image,
-      0,
-      sourceY,
-      sourceWidth,
-      sourceBandHeight,
-      0,
-      0,
-      canvas.width,
-      canvas.height
+    const targetWidths = Array.from(
+      new Set([
+        Math.min(cropPixelWidth, 2400),
+        Math.min(cropPixelWidth, 1500),
+        Math.min(cropPixelWidth, 1200),
+      ])
     );
 
-    try {
-      return createValveBarcodeReader()
-        .decodeFromCanvas(canvas)
-        .getText();
-    } catch {
-      const imageData = context.getImageData(
-        0,
-        0,
-        canvas.width,
-        canvas.height
+    for (const targetWidth of targetWidths) {
+      const sourceX = Math.round(sourceWidth * crop.x);
+      const sourceY = Math.round(sourceHeight * crop.y);
+      const cropPixelHeight = Math.max(
+        1,
+        Math.round(sourceHeight * crop.height)
       );
-      const pixels = imageData.data;
+      const targetHeight = Math.max(
+        1,
+        Math.round(
+          (cropPixelHeight / cropPixelWidth) * targetWidth
+        )
+      );
+      const baseCanvas = document.createElement('canvas');
+      baseCanvas.width = targetWidth;
+      baseCanvas.height = targetHeight;
+      const baseContext = baseCanvas.getContext('2d');
 
-      for (let index = 0; index < pixels.length; index += 4) {
-        const luminance =
-          pixels[index] * 0.299 +
-          pixels[index + 1] * 0.587 +
-          pixels[index + 2] * 0.114;
-        const contrasted = Math.max(
-          0,
-          Math.min(255, (luminance - 128) * 1.45 + 128)
+      if (!baseContext) continue;
+
+      baseContext.imageSmoothingEnabled = true;
+      baseContext.imageSmoothingQuality = 'high';
+      baseContext.drawImage(
+        image,
+        sourceX,
+        sourceY,
+        cropPixelWidth,
+        cropPixelHeight,
+        0,
+        0,
+        targetWidth,
+        targetHeight
+      );
+
+      for (const rotation of rotations) {
+        const rotatedCanvas = rotateBarcodeCanvas(
+          baseCanvas,
+          rotation
         );
-        pixels[index] = contrasted;
-        pixels[index + 1] = contrasted;
-        pixels[index + 2] = contrasted;
-      }
 
-      context.putImageData(imageData, 0, 0);
+        for (const variant of variants) {
+          const candidate = createBarcodeVariant(
+            rotatedCanvas,
+            variant
+          );
 
-      try {
-        return createValveBarcodeReader()
-          .decodeFromCanvas(canvas)
-          .getText();
-      } catch {
-        // Sonraki yatay bant denenir.
+          try {
+            const rawValue = createGs1Code128Reader()
+              .decodeFromCanvas(candidate)
+              .getText();
+
+            if (isValidGs1Code128(rawValue)) return rawValue;
+          } catch {
+            // Sonraki kontrollü varyasyon denenir.
+          }
+
+          attemptCount += 1;
+
+          if (attemptCount % 4 === 0) {
+            await yieldBarcodeWork();
+          }
+        }
       }
     }
   }
@@ -586,6 +790,11 @@ export default function Stock() {
   const cameraZxingControlsRef = useRef<IScannerControls | null>(null);
   const cameraDetectingRef = useRef(false);
   const lastCameraCodeRef = useRef({ value: '', detectedAt: 0 });
+  const lastPhotoFingerprintRef = useRef('');
+  const barcodeCropFrameRef = useRef<HTMLDivElement | null>(null);
+  const barcodeCropInteractionRef =
+    useRef<BarcodeCropInteraction | null>(null);
+  const barcodeCropObjectUrlRef = useRef('');
 
   const [items, setItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -631,6 +840,17 @@ export default function Stock() {
   } | null>(null);
   const [cameraFocusDistance, setCameraFocusDistance] = useState(0);
   const [cameraRefocusing, setCameraRefocusing] = useState(false);
+  const [barcodeCropSession, setBarcodeCropSession] =
+    useState<BarcodeCropSession | null>(null);
+  const [barcodeCropRect, setBarcodeCropRect] =
+    useState<BarcodeCropRect>({
+      x: 0.05,
+      y: 0.36,
+      width: 0.9,
+      height: 0.28,
+    });
+  const [barcodeCropScanning, setBarcodeCropScanning] =
+    useState(false);
   const [parsed, setParsed] = useState<ParsedBarcode | null>(null);
   const [scanResult, setScanResult] = useState<ScanResult | null>(
     null
@@ -684,6 +904,16 @@ export default function Stock() {
   useEffect(() => {
     void loadStock();
   }, [loadStock]);
+
+  useEffect(
+    () => () => {
+      if (barcodeCropObjectUrlRef.current) {
+        URL.revokeObjectURL(barcodeCropObjectUrlRef.current);
+        barcodeCropObjectUrlRef.current = '';
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     try {
@@ -1406,6 +1636,148 @@ export default function Stock() {
     );
   }
 
+  function closeBarcodeCrop() {
+    if (barcodeCropObjectUrlRef.current) {
+      URL.revokeObjectURL(barcodeCropObjectUrlRef.current);
+      barcodeCropObjectUrlRef.current = '';
+    }
+
+    barcodeCropInteractionRef.current = null;
+    lastPhotoFingerprintRef.current = '';
+    setBarcodeCropSession(null);
+    setBarcodeCropScanning(false);
+  }
+
+  function beginBarcodeCropInteraction(
+    event: ReactPointerEvent<HTMLElement>,
+    mode: BarcodeCropDragMode
+  ) {
+    if (barcodeCropScanning) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    barcodeCropFrameRef.current?.setPointerCapture(event.pointerId);
+    barcodeCropInteractionRef.current = {
+      mode,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startCrop: barcodeCropRect,
+    };
+  }
+
+  function moveBarcodeCrop(event: ReactPointerEvent<HTMLDivElement>) {
+    const interaction = barcodeCropInteractionRef.current;
+    const frame = barcodeCropFrameRef.current;
+
+    if (
+      !interaction ||
+      interaction.pointerId !== event.pointerId ||
+      !frame
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    const bounds = frame.getBoundingClientRect();
+    const deltaX = (event.clientX - interaction.startX) / bounds.width;
+    const deltaY = (event.clientY - interaction.startY) / bounds.height;
+    const start = interaction.startCrop;
+    const minWidth = 0.25;
+    const minHeight = 0.12;
+    let next = { ...start };
+
+    if (interaction.mode === 'move') {
+      next.x = Math.min(
+        1 - start.width,
+        Math.max(0, start.x + deltaX)
+      );
+      next.y = Math.min(
+        1 - start.height,
+        Math.max(0, start.y + deltaY)
+      );
+    } else {
+      const west = interaction.mode.includes('west');
+      const north = interaction.mode.includes('north');
+      const proposedX = west ? start.x + deltaX : start.x;
+      const proposedY = north ? start.y + deltaY : start.y;
+      const proposedRight = west
+        ? start.x + start.width
+        : start.x + start.width + deltaX;
+      const proposedBottom = north
+        ? start.y + start.height
+        : start.y + start.height + deltaY;
+      const left = Math.max(
+        0,
+        Math.min(proposedX, proposedRight - minWidth)
+      );
+      const top = Math.max(
+        0,
+        Math.min(proposedY, proposedBottom - minHeight)
+      );
+      const right = Math.min(
+        1,
+        Math.max(proposedRight, left + minWidth)
+      );
+      const bottom = Math.min(
+        1,
+        Math.max(proposedBottom, top + minHeight)
+      );
+
+      next = {
+        x: left,
+        y: top,
+        width: right - left,
+        height: bottom - top,
+      };
+    }
+
+    setBarcodeCropRect(next);
+  }
+
+  function endBarcodeCropInteraction(
+    event: ReactPointerEvent<HTMLDivElement>
+  ) {
+    if (
+      barcodeCropInteractionRef.current?.pointerId !==
+      event.pointerId
+    ) {
+      return;
+    }
+
+    if (barcodeCropFrameRef.current?.hasPointerCapture(event.pointerId)) {
+      barcodeCropFrameRef.current.releasePointerCapture(event.pointerId);
+    }
+
+    barcodeCropInteractionRef.current = null;
+  }
+
+  async function scanSelectedBarcodeCrop() {
+    if (!barcodeCropSession || barcodeCropScanning) return;
+
+    setBarcodeCropScanning(true);
+    setMessage('');
+
+    try {
+      const image = new Image();
+      image.src = barcodeCropSession.imageUrl;
+      await image.decode();
+      const rawValue = await decodeValveBarcodePhoto(
+        image,
+        barcodeCropRect
+      );
+
+      closeBarcodeCrop();
+      processDetectedCameraCode(rawValue);
+    } catch (cropError) {
+      console.warn('Seçilen barkod alanı çözümlenemedi:', cropError);
+      setMessage(
+        'Seçilen alanda geçerli GS1-128 bulunamadı. Barkodun tamamını ve iki yanındaki beyaz boşlukları çerçeveye alın.'
+      );
+      setBarcodeCropScanning(false);
+    }
+  }
+
   async function scanBarcodePhoto(
     event: ChangeEvent<HTMLInputElement>
   ) {
@@ -1414,10 +1786,20 @@ export default function Stock() {
 
     if (!file || cameraPhotoScanning) return;
 
+    const fingerprint = `${file.name}:${file.size}:${file.lastModified}`;
+
+    if (lastPhotoFingerprintRef.current === fingerprint) return;
+
+    lastPhotoFingerprintRef.current = fingerprint;
+
     setCameraPhotoScanning(true);
     setCameraError('');
+    setMessage('Fotoğraf GS1-128 için analiz ediliyor...');
+
+    closeBarcodeCrop();
 
     const imageUrl = URL.createObjectURL(file);
+    let keepImageUrl = false;
 
     try {
       const image = new Image();
@@ -1428,13 +1810,27 @@ export default function Stock() {
       processDetectedCameraCode(rawValue);
     } catch (photoError) {
       console.warn('Fotoğraftaki barkod çözümlenemedi:', photoError);
+      keepImageUrl = true;
+      barcodeCropObjectUrlRef.current = imageUrl;
+      const image = new Image();
+      image.src = imageUrl;
+      await image.decode();
+      setBarcodeCropRect({
+        x: 0.05,
+        y: 0.36,
+        width: 0.9,
+        height: 0.28,
+      });
+      setBarcodeCropSession({
+        imageUrl,
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight,
+      });
       setMessage(
-        'Fotoğraf otomatik çözümlenemedi. Canlı tarama açıldı; isterseniz yeniden fotoğraf çekebilir veya LOT/SN bilgisini manuel girebilirsiniz.'
+        'Otomatik tarama sonuç vermedi. Barkodun tamamını kırpma çerçevesine alın.'
       );
-      setCameraError('');
-      setCameraOpen(true);
     } finally {
-      URL.revokeObjectURL(imageUrl);
+      if (!keepImageUrl) URL.revokeObjectURL(imageUrl);
       setCameraPhotoScanning(false);
     }
   }
@@ -1966,6 +2362,159 @@ export default function Stock() {
               <p className="text-center text-[11px] leading-4 text-slate-500">
                 Transfer yalnızca seçili kapaklara uygulanır. Mevcut transfer RPC akışı değiştirilmedi.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {barcodeCropSession && (
+        <div
+          className="fixed inset-0 z-[145] flex items-center justify-center overflow-y-auto bg-slate-950/95 px-3 py-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="barcode-crop-title"
+        >
+          <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-violet-400/30 bg-slate-900 shadow-2xl shadow-violet-500/10">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-700 px-4 py-4 sm:px-5">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-300">
+                  GS1-128 Alan Seçimi
+                </p>
+                <h2
+                  id="barcode-crop-title"
+                  className="mt-1 text-xl font-black text-white"
+                >
+                  Barkodu çerçeve içine al
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-slate-400">
+                  Çerçeveyi sürükleyin; köşelerden büyütüp küçültün.
+                  Barkodun tamamı ile sol ve sağındaki beyaz boşluklar
+                  içeride kalmalı.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeBarcodeCrop}
+                disabled={barcodeCropScanning}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-slate-300 transition hover:bg-slate-700 hover:text-white disabled:opacity-40"
+                aria-label="Kırpma ekranını kapat"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 p-3 sm:p-5">
+              <div className="flex max-h-[66vh] justify-center overflow-auto rounded-2xl border border-slate-700 bg-black p-2">
+                <div
+                  ref={barcodeCropFrameRef}
+                  className="relative inline-block touch-none select-none"
+                  onPointerMove={moveBarcodeCrop}
+                  onPointerUp={endBarcodeCropInteraction}
+                  onPointerCancel={endBarcodeCropInteraction}
+                >
+                  <img
+                    src={barcodeCropSession.imageUrl}
+                    alt="Barkod alanı seçilecek kapak etiketi"
+                    className="block max-h-[62vh] max-w-full object-contain"
+                    draggable={false}
+                  />
+
+                  <div
+                    className="absolute cursor-move border-2 border-cyan-300 bg-cyan-300/10 shadow-[0_0_0_9999px_rgba(2,6,23,0.58)]"
+                    style={{
+                      left: `${barcodeCropRect.x * 100}%`,
+                      top: `${barcodeCropRect.y * 100}%`,
+                      width: `${barcodeCropRect.width * 100}%`,
+                      height: `${barcodeCropRect.height * 100}%`,
+                    }}
+                    onPointerDown={event =>
+                      beginBarcodeCropInteraction(event, 'move')
+                    }
+                  >
+                    <span className="pointer-events-none absolute inset-x-3 top-1/2 h-px bg-cyan-200 shadow-[0_0_10px_rgba(103,232,249,0.9)]" />
+
+                    {(
+                      [
+                        ['north-west', '-left-3 -top-3 cursor-nwse-resize'],
+                        ['north-east', '-right-3 -top-3 cursor-nesw-resize'],
+                        ['south-west', '-bottom-3 -left-3 cursor-nesw-resize'],
+                        ['south-east', '-bottom-3 -right-3 cursor-nwse-resize'],
+                      ] as const
+                    ).map(([mode, position]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        aria-label="Kırpma alanını boyutlandır"
+                        className={`absolute h-7 w-7 rounded-full border-2 border-slate-950 bg-cyan-300 shadow-lg ${position}`}
+                        onPointerDown={event =>
+                          beginBarcodeCropInteraction(event, mode)
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-center text-[11px] leading-4 text-slate-500">
+                Orijinal fotoğraf: {barcodeCropSession.naturalWidth} ×{' '}
+                {barcodeCropSession.naturalHeight} piksel
+              </p>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => void scanSelectedBarcodeCrop()}
+                  disabled={barcodeCropScanning}
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-black text-white transition hover:bg-violet-500 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {barcodeCropScanning ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ScanLine className="h-4 w-4" />
+                  )}
+                  {barcodeCropScanning
+                    ? 'GS1-128 Taranıyor...'
+                    : 'Tekrar Tara'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeBarcodeCrop();
+                    cameraPhotoInputRef.current?.click();
+                  }}
+                  disabled={barcodeCropScanning}
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-500/10 px-4 py-3 text-sm font-bold text-cyan-100 transition hover:bg-cyan-500/20 disabled:opacity-40"
+                >
+                  <Camera className="h-4 w-4" />
+                  Fotoğrafı Yeniden Çek
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeBarcodeCrop();
+                    setCameraError('');
+                    setCameraOpen(true);
+                  }}
+                  disabled={barcodeCropScanning}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm font-bold text-slate-200 transition hover:bg-slate-700 disabled:opacity-40"
+                >
+                  <Camera className="h-4 w-4" />
+                  Canlı Taramayı Dene
+                </button>
+
+                <button
+                  type="button"
+                  onClick={closeBarcodeCrop}
+                  disabled={barcodeCropScanning}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-bold text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:opacity-40"
+                >
+                  <X className="h-4 w-4" />
+                  İptal
+                </button>
+              </div>
             </div>
           </div>
         </div>
