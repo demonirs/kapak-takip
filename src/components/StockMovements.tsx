@@ -13,6 +13,7 @@ import {
   Search,
   X,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
 const DATABASE_PAGE_SIZE = 1000;
@@ -26,6 +27,27 @@ type StockItem = {
   son_kullanma_tarihi: string | null;
   durum: string | null;
   created_at: string | null;
+  kullanilan_vaka_id: string | null;
+  usage?: UsageDetail;
+};
+
+type CaseUsage = {
+  id: string;
+  merkez_hastane: string | null;
+  hasta_adi: string | null;
+  vaka_tarihi: string | null;
+  lot_no: string | null;
+};
+
+type FocUsage = {
+  id: string;
+  vaka_id: string;
+  foc_stok_id: string | null;
+};
+
+type UsageDetail = CaseUsage & {
+  usageType: 'foc' | 'normal';
+  focId: string | null;
 };
 
 type TransferItem = {
@@ -88,7 +110,8 @@ async function fetchAllStockEntries(): Promise<StockItem[]> {
           lot_no,
           son_kullanma_tarihi,
           durum,
-          created_at
+          created_at,
+          kullanilan_vaka_id
         `
       )
       .order('created_at', { ascending: false })
@@ -105,6 +128,48 @@ async function fetchAllStockEntries(): Promise<StockItem[]> {
       break;
     }
 
+    from += DATABASE_PAGE_SIZE;
+  }
+
+  return allRows;
+}
+
+async function fetchAllCaseUsage(): Promise<CaseUsage[]> {
+  const allRows: CaseUsage[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('kapaklar')
+      .select('id, merkez_hastane, hasta_adi, vaka_tarihi, lot_no')
+      .range(from, from + DATABASE_PAGE_SIZE - 1);
+
+    if (error) throw error;
+
+    const rows = (data || []) as CaseUsage[];
+    allRows.push(...rows);
+    if (rows.length < DATABASE_PAGE_SIZE) break;
+    from += DATABASE_PAGE_SIZE;
+  }
+
+  return allRows;
+}
+
+async function fetchAllFocUsage(): Promise<FocUsage[]> {
+  const allRows: FocUsage[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('foc_kayitlari')
+      .select('id, vaka_id, foc_stok_id')
+      .range(from, from + DATABASE_PAGE_SIZE - 1);
+
+    if (error) throw error;
+
+    const rows = (data || []) as FocUsage[];
+    allRows.push(...rows);
+    if (rows.length < DATABASE_PAGE_SIZE) break;
     from += DATABASE_PAGE_SIZE;
   }
 
@@ -216,22 +281,57 @@ export default function StockMovements() {
     setLoading(true);
     setMessage('');
 
-    const [stockResult, transferResult] = await Promise.allSettled([
+    const [stockResult, transferResult, caseResult, focResult] = await Promise.allSettled([
         fetchAllStockEntries(),
         fetchAllTransfers(),
+        fetchAllCaseUsage(),
+        fetchAllFocUsage(),
     ]);
 
     const errors: string[] = [];
 
-    if (stockResult.status === 'fulfilled') {
-      setItems(stockResult.value);
+    if (
+      stockResult.status === 'fulfilled' &&
+      caseResult.status === 'fulfilled' &&
+      focResult.status === 'fulfilled'
+    ) {
+      const casesById = new Map(caseResult.value.map(item => [item.id, item]));
+      const focByStockId = new Map(
+        focResult.value
+          .filter(item => item.foc_stok_id)
+          .map(item => [item.foc_stok_id as string, item])
+      );
+
+      setItems(
+        stockResult.value.map(item => {
+          const usedCase = item.kullanilan_vaka_id
+            ? casesById.get(item.kullanilan_vaka_id)
+            : undefined;
+          const foc = focByStockId.get(item.id);
+
+          return {
+            ...item,
+            usage: usedCase
+              ? {
+                  ...usedCase,
+                  usageType: foc ? 'foc' : 'normal',
+                  focId: foc?.id ?? null,
+                }
+              : undefined,
+          };
+        })
+      );
     } else {
       setItems([]);
-      errors.push(
-        `Stok girişleri alınamadı: ${getErrorMessage(
-          stockResult.reason
-        )}`
-      );
+      const reason =
+        stockResult.status === 'rejected'
+          ? stockResult.reason
+          : caseResult.status === 'rejected'
+            ? caseResult.reason
+            : focResult.status === 'rejected'
+              ? focResult.reason
+              : 'Kullanım bağlantıları alınamadı.';
+      errors.push(`Stok girişleri alınamadı: ${getErrorMessage(reason)}`);
     }
 
     if (transferResult.status === 'fulfilled') {
@@ -266,6 +366,11 @@ export default function StockMovements() {
         item.son_kullanma_tarihi,
         statusText(item.durum),
         formatDateTime(item.created_at),
+        item.usage?.usageType === 'foc' ? 'foc' : 'normal kullanım',
+        item.usage?.merkez_hastane,
+        item.usage?.hasta_adi,
+        item.usage?.vaka_tarihi,
+        item.usage?.lot_no,
       ]
         .map(normalize)
         .join(' ');
@@ -520,14 +625,15 @@ export default function StockMovements() {
             <table className="w-full table-fixed">
               <thead className="border-b border-slate-700 bg-slate-900/50">
                 <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  <th className="w-[21%] px-3 py-2.5">
+                  <th className="w-[17%] px-3 py-2.5">
                     Giriş Tarihi ve Saati
                   </th>
-                  <th className="w-[25%] px-3 py-2.5">Ürün</th>
-                  <th className="w-[12%] px-3 py-2.5">Ölçü</th>
-                  <th className="w-[18%] px-3 py-2.5">LOT</th>
-                  <th className="w-[13%] px-3 py-2.5">SKT</th>
-                  <th className="w-[11%] px-3 py-2.5">Durum</th>
+                  <th className="w-[18%] px-3 py-2.5">Ürün</th>
+                  <th className="w-[9%] px-3 py-2.5">Ölçü</th>
+                  <th className="w-[13%] px-3 py-2.5">LOT</th>
+                  <th className="w-[11%] px-3 py-2.5">SKT</th>
+                  <th className="w-[12%] px-3 py-2.5">Durum</th>
+                  <th className="w-[20%] px-3 py-2.5">Kullanım Yeri</th>
                 </tr>
               </thead>
 
@@ -570,6 +676,30 @@ export default function StockMovements() {
                       >
                         {statusText(item.durum)}
                       </span>
+                    </td>
+
+                    <td className="px-3 py-3 text-xs">
+                      {item.usage ? (
+                        <Link
+                          to={`/view/${item.usage.id}`}
+                          className="block rounded-md transition hover:text-cyan-200"
+                          title={`${item.usage.merkez_hastane || '-'} / ${item.usage.hasta_adi || '-'}`}
+                        >
+                          <span className="font-semibold text-cyan-300">
+                            {item.usage.usageType === 'foc' ? 'FOC kullanımı' : 'Vaka kullanımı'}
+                          </span>
+                          <span className="mt-0.5 block truncate text-slate-300">
+                            {item.usage.merkez_hastane || 'Hastane belirtilmedi'}
+                          </span>
+                          <span className="block truncate text-slate-500">
+                            {item.usage.hasta_adi || 'Hasta belirtilmedi'} · {formatDate(item.usage.vaka_tarihi)}
+                          </span>
+                        </Link>
+                      ) : item.durum === 'kullanildi' ? (
+                        <span className="text-amber-300">Vaka bağlantısı bulunamadı</span>
+                      ) : (
+                        <span className="text-slate-600">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -625,6 +755,23 @@ export default function StockMovements() {
                     </div>
                   </div>
                 </div>
+
+                {item.usage && (
+                  <Link
+                    to={`/view/${item.usage.id}`}
+                    className="mt-3 block rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-2.5 text-xs transition hover:bg-cyan-500/10"
+                  >
+                    <span className="font-semibold text-cyan-300">
+                      {item.usage.usageType === 'foc' ? 'FOC kullanımı' : 'Vaka kullanımı'}
+                    </span>
+                    <span className="mt-1 block text-slate-300">
+                      {item.usage.merkez_hastane || 'Hastane belirtilmedi'}
+                    </span>
+                    <span className="mt-0.5 block text-slate-500">
+                      {item.usage.hasta_adi || 'Hasta belirtilmedi'} · {formatDate(item.usage.vaka_tarihi)}
+                    </span>
+                  </Link>
+                )}
               </article>
             ))}
           </div>

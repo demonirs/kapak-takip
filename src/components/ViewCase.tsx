@@ -21,6 +21,8 @@ function formatValveSize(value: string | number | null | undefined) {
 export default function ViewCase() {
   const { id } = useParams();
   const [k, setK] = useState<Kapak | null>(null);
+  const [focMailText, setFocMailText] = useState<string | null>(null);
+  const [focLotNo, setFocLotNo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -33,16 +35,31 @@ export default function ViewCase() {
       setError(null);
 
       try {
-        const { data, error: loadError } = await timeout(
-          supabase
-            .from('kapaklar')
-            .select('*')
-            .eq('id', caseId)
-            .maybeSingle(),
-          10000
-        );
+        const [caseResponse, focResponse] = await Promise.all([
+          timeout(
+            supabase
+              .from('kapaklar')
+              .select('*')
+              .eq('id', caseId)
+              .maybeSingle(),
+            10000
+          ),
+          timeout(
+            supabase
+              .from('foc_kayitlari')
+              .select('mail_metni, foc_lot_no')
+              .eq('vaka_id', caseId)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle(),
+            10000
+          ),
+        ]);
+
+        const { data, error: loadError } = caseResponse;
 
         if (loadError) throw loadError;
+        if (focResponse.error) throw focResponse.error;
 
         if (!data) {
           throw new Error(
@@ -52,10 +69,14 @@ export default function ViewCase() {
 
         if (active) {
           setK(data as Kapak);
+          setFocMailText(focResponse.data?.mail_metni?.trim() || null);
+          setFocLotNo(focResponse.data?.foc_lot_no?.trim() || null);
         }
       } catch (loadError: unknown) {
         if (active) {
           setK(null);
+          setFocMailText(null);
+          setFocLotNo(null);
           setError(
             loadError instanceof Error
               ? loadError.message
@@ -122,7 +143,7 @@ export default function ViewCase() {
     ? k.vaka_tarihi.split('T')[0].split('-').reverse().join('.')
     : 'Tarih belirtilmedi';
 
-  const mail = `${formattedDate}
+  const standardMail = `${formattedDate}
 
 ${k.hasta_adi} isimli hastaya Medtronic ${k.kapak_tipi} ${formatValveSize(k.kapak_size)} kapak Lot no (${k.lot_no}) Dr. ${k.doktor} tarafından başarılı bir şekilde implante edildi.
 
@@ -132,6 +153,8 @@ ${k.pre_balon !== 'Yok' ? `${k.pre_balon} pre balon yapıldı.\n\n` : ''}${k.pos
 
 Saygılarımla,
 CRİMP: ${k.crimp_yapan}`;
+
+  const mail = focMailText ?? standardMail;
 
   async function copyMailText() {
     await navigator.clipboard.writeText(mail);
@@ -156,7 +179,7 @@ CRİMP: ${k.crimp_yapan}`;
         <header className="flex min-w-0 flex-col gap-3 border-b border-slate-800 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-400">
-              Mail Önizleme
+              {focMailText ? 'FOC Mail Önizleme' : 'Mail Önizleme'}
             </p>
 
             <h1 className="mt-1 truncate text-lg font-semibold text-white sm:text-xl">
@@ -170,6 +193,7 @@ CRİMP: ${k.crimp_yapan}`;
               {k.kapak_size
                 ? ` / ${formatValveSize(k.kapak_size)}`
                 : ''}
+              {focLotNo ? ` • FOC LOT: ${focLotNo}` : ''}
             </p>
           </div>
 
