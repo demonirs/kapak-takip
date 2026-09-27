@@ -2,6 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, Check, ChevronDown, Filter, Plus, Trash2, X } from 'lucide-react';
 import { supabase, timeout } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  useBackLayer,
+  useKavisNavigation,
+  useUnsavedChanges,
+} from '../contexts/NavigationContext';
 import { notifyAdmins } from '../lib/notifications';
 
 const DATABASE_PAGE_SIZE = 1000;
@@ -194,6 +199,30 @@ export default function CompetitorCases() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [searchText, setSearchText] = useState('');
+  const { requestLeave } = useKavisNavigation();
+  const today = new Date().toISOString().slice(0, 10);
+  const hasUnsavedChanges =
+    isFormOpen &&
+    (Boolean(merkez.trim()) ||
+      Boolean(doktor.trim()) ||
+      vakaTarihi !== today ||
+      marka !== 'Meril' ||
+      Boolean(notlar.trim()) ||
+      Boolean(digerAciklama.trim()));
+
+  useUnsavedChanges('competitor-case-form', hasUnsavedChanges);
+  useBackLayer(
+    'competitor-filter-panel',
+    720,
+    isFiltersOpen,
+    () => setIsFiltersOpen(false)
+  );
+  useBackLayer(
+    'competitor-case-form-panel',
+    610,
+    isFormOpen && !hasUnsavedChanges,
+    () => setIsFormOpen(false)
+  );
 
   useEffect(() => {
     loadCases();
@@ -378,7 +407,11 @@ export default function CompetitorCases() {
         <button
           type="button"
           onClick={() => {
-            setIsFormOpen(value => !value);
+            if (isFormOpen) {
+              requestLeave(() => setIsFormOpen(false));
+            } else {
+              setIsFormOpen(true);
+            }
             setMessage('');
           }}
           className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-500 sm:w-auto"

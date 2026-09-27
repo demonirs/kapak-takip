@@ -17,6 +17,7 @@ import {
 } from './contexts/AuthContext';
 
 import { supabase } from './lib/supabase';
+import { NavigationProvider } from './contexts/NavigationContext';
 
 import Layout from './components/Layout';
 import Login from './components/Login';
@@ -201,9 +202,11 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
+      <NavigationProvider>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </NavigationProvider>
     </BrowserRouter>
   );
 }
