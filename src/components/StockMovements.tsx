@@ -28,7 +28,17 @@ type StockItem = {
   durum: string | null;
   created_at: string | null;
   kullanilan_vaka_id: string | null;
+  stockEntryAt?: string | null;
+  usageMovementAt?: string | null;
   usage?: UsageDetail;
+};
+
+type StockMovement = {
+  id: string;
+  kapak_stok_id: string;
+  islem: string | null;
+  created_at: string | null;
+  arsivlendi: boolean | null;
 };
 
 type CaseUsage = {
@@ -176,6 +186,29 @@ async function fetchAllFocUsage(): Promise<FocUsage[]> {
   return allRows;
 }
 
+async function fetchAllStockMovements(): Promise<StockMovement[]> {
+  const allRows: StockMovement[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('stok_hareketleri')
+      .select('id, kapak_stok_id, islem, created_at, arsivlendi')
+      .eq('arsivlendi', false)
+      .order('created_at', { ascending: true })
+      .range(from, from + DATABASE_PAGE_SIZE - 1);
+
+    if (error) throw error;
+
+    const rows = (data || []) as StockMovement[];
+    allRows.push(...rows);
+    if (rows.length < DATABASE_PAGE_SIZE) break;
+    from += DATABASE_PAGE_SIZE;
+  }
+
+  return allRows;
+}
+
 async function fetchAllTransfers(): Promise<TransferItem[]> {
   const allRows: TransferItem[] = [];
   let from = 0;
@@ -281,11 +314,12 @@ export default function StockMovements() {
     setLoading(true);
     setMessage('');
 
-    const [stockResult, transferResult, caseResult, focResult] = await Promise.allSettled([
+    const [stockResult, transferResult, caseResult, focResult, movementResult] = await Promise.allSettled([
         fetchAllStockEntries(),
         fetchAllTransfers(),
         fetchAllCaseUsage(),
         fetchAllFocUsage(),
+        fetchAllStockMovements(),
     ]);
 
     const errors: string[] = [];
@@ -293,7 +327,8 @@ export default function StockMovements() {
     if (
       stockResult.status === 'fulfilled' &&
       caseResult.status === 'fulfilled' &&
-      focResult.status === 'fulfilled'
+      focResult.status === 'fulfilled' &&
+      movementResult.status === 'fulfilled'
     ) {
       const casesById = new Map(caseResult.value.map(item => [item.id, item]));
       const focByStockId = new Map(
@@ -301,6 +336,13 @@ export default function StockMovements() {
           .filter(item => item.foc_stok_id)
           .map(item => [item.foc_stok_id as string, item])
       );
+      const movementsByStockId = new Map<string, StockMovement[]>();
+
+      movementResult.value.forEach(movement => {
+        const current = movementsByStockId.get(movement.kapak_stok_id) || [];
+        current.push(movement);
+        movementsByStockId.set(movement.kapak_stok_id, current);
+      });
 
       setItems(
         stockResult.value.map(item => {
@@ -308,9 +350,16 @@ export default function StockMovements() {
             ? casesById.get(item.kullanilan_vaka_id)
             : undefined;
           const foc = focByStockId.get(item.id);
+          const movements = movementsByStockId.get(item.id) || [];
+          const entryMovement = movements.find(movement => movement.islem === 'giris');
+          const usageMovement = [...movements]
+            .reverse()
+            .find(movement => movement.islem === 'kullanildi');
 
           return {
             ...item,
+            stockEntryAt: entryMovement?.created_at ?? item.created_at,
+            usageMovementAt: usageMovement?.created_at ?? null,
             usage: usedCase
               ? {
                   ...usedCase,
@@ -330,6 +379,8 @@ export default function StockMovements() {
             ? caseResult.reason
             : focResult.status === 'rejected'
               ? focResult.reason
+              : movementResult.status === 'rejected'
+                ? movementResult.reason
               : 'Kullanım bağlantıları alınamadı.';
       errors.push(`Stok girişleri alınamadı: ${getErrorMessage(reason)}`);
     }
@@ -365,7 +416,8 @@ export default function StockMovements() {
         item.lot_no,
         item.son_kullanma_tarihi,
         statusText(item.durum),
-        formatDateTime(item.created_at),
+        formatDateTime(item.stockEntryAt ?? item.created_at),
+        formatDateTime(item.usageMovementAt ?? null),
         item.usage?.usageType === 'foc' ? 'foc' : 'normal kullanım',
         item.usage?.merkez_hastane,
         item.usage?.hasta_adi,
@@ -626,7 +678,7 @@ export default function StockMovements() {
               <thead className="border-b border-slate-700 bg-slate-900/50">
                 <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                   <th className="w-[17%] px-3 py-2.5">
-                    Giriş Tarihi ve Saati
+                    Stok Giriş Tarihi
                   </th>
                   <th className="w-[18%] px-3 py-2.5">Ürün</th>
                   <th className="w-[9%] px-3 py-2.5">Ölçü</th>
@@ -644,7 +696,7 @@ export default function StockMovements() {
                     className="text-sm text-slate-300 transition hover:bg-slate-700/30"
                   >
                     <td className="whitespace-nowrap px-3 py-3 text-xs font-medium text-slate-300">
-                      {formatDateTime(item.created_at)}
+                      {formatDateTime(item.stockEntryAt ?? item.created_at)}
                     </td>
 
                     <td
@@ -694,6 +746,9 @@ export default function StockMovements() {
                           <span className="block truncate text-slate-500">
                             {item.usage.hasta_adi || 'Hasta belirtilmedi'} · {formatDate(item.usage.vaka_tarihi)}
                           </span>
+                          <span className="mt-0.5 block text-slate-500">
+                            Sisteme işlendi: {formatDateTime(item.usageMovementAt ?? null)}
+                          </span>
                         </Link>
                       ) : item.durum === 'kullanildi' ? (
                         <span className="text-amber-300">Vaka bağlantısı bulunamadı</span>
@@ -721,7 +776,7 @@ export default function StockMovements() {
 
                     <div className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-400">
                       <CalendarClock className="h-3.5 w-3.5 shrink-0 text-cyan-400" />
-                      <span>{formatDateTime(item.created_at)}</span>
+                      <span>Stok girişi: {formatDateTime(item.stockEntryAt ?? item.created_at)}</span>
                     </div>
                   </div>
 
@@ -769,6 +824,9 @@ export default function StockMovements() {
                     </span>
                     <span className="mt-0.5 block text-slate-500">
                       {item.usage.hasta_adi || 'Hasta belirtilmedi'} · {formatDate(item.usage.vaka_tarihi)}
+                    </span>
+                    <span className="mt-0.5 block text-slate-500">
+                      Sisteme işlendi: {formatDateTime(item.usageMovementAt ?? null)}
                     </span>
                   </Link>
                 )}
