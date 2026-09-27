@@ -23,6 +23,11 @@ import {
   timeout,
 } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  useBackLayer,
+  useKavisNavigation,
+  useUnsavedChanges,
+} from '../contexts/NavigationContext';
 import { notifyAdmins } from '../lib/notifications';
 
 const initial = {
@@ -224,6 +229,34 @@ export default function AddCase() {
   const [attemptedSteps, setAttemptedSteps] = useState<Set<WizardStep>>(
     () => new Set()
   );
+  const formBaselineRef = useRef(
+    JSON.stringify({
+      form: initial,
+      selectedStockId: '',
+      selectedCrimper: '',
+      hasFoc: false,
+    })
+  );
+  const { requestBack } = useKavisNavigation();
+
+  const formSignature = JSON.stringify({
+    form,
+    selectedStockId,
+    selectedCrimper,
+    hasFoc,
+  });
+  const hasUnsavedChanges =
+    !loading &&
+    !successSummary &&
+    formSignature !== formBaselineRef.current;
+
+  useUnsavedChanges('case-form', hasUnsavedChanges);
+  useBackLayer(
+    'case-success-dialog',
+    820,
+    Boolean(successSummary),
+    () => setSuccessSummary(null)
+  );
 
   const currentCrimpYapan =
     profile?.full_name || user?.email?.split('@')[0] || 'Kullanıcı';
@@ -252,12 +285,19 @@ export default function AddCase() {
     if (!id) {
       const lastHospital = localStorage.getItem('lastHospital') || '';
       const lastDoctor = localStorage.getItem('lastDoctor') || '';
-
-      setForm(previous => ({
-        ...previous,
+      const nextForm = {
+        ...initial,
         merkez_hastane: lastHospital,
         doktor: lastDoctor,
-      }));
+      };
+
+      formBaselineRef.current = JSON.stringify({
+        form: nextForm,
+        selectedStockId: '',
+        selectedCrimper: '',
+        hasFoc: false,
+      });
+      setForm(nextForm);
 
       return;
     }
@@ -298,7 +338,7 @@ export default function AddCase() {
         son_kul_tarihi: currentCase.son_kul_tarihi,
       });
 
-      setForm({
+      const loadedForm = {
         vaka_tarihi: currentCase.vaka_tarihi,
         merkez_hastane: currentCase.merkez_hastane,
         doktor: currentCase.doktor,
@@ -311,7 +351,15 @@ export default function AddCase() {
         post_balon: currentCase.post_balon,
         paravalvuler_ay: currentCase.paravalvuler_ay,
         proglide_adedi: currentCase.proglide_adedi,
+      };
+
+      formBaselineRef.current = JSON.stringify({
+        form: loadedForm,
+        selectedStockId: '',
+        selectedCrimper: '',
+        hasFoc: false,
       });
+      setForm(loadedForm);
     } catch (caughtError: unknown) {
       const message =
         caughtError instanceof Error
@@ -425,6 +473,13 @@ export default function AddCase() {
   const showDiyarbakirWarning =
     isDiyarbakirStock && dismissedDiyarbakirLot !== normalizedCurrentLot;
 
+  useBackLayer(
+    'case-diyarbakir-warning',
+    810,
+    showDiyarbakirWarning,
+    () => setDismissedDiyarbakirLot(normalizedCurrentLot)
+  );
+
   const set = (
     name: keyof FormState,
     value: string | number
@@ -488,11 +543,19 @@ export default function AddCase() {
     const lastHospital = localStorage.getItem('lastHospital') || '';
     const lastDoctor = localStorage.getItem('lastDoctor') || '';
 
-    setForm({
+    const nextForm = {
       ...initial,
       merkez_hastane: lastHospital,
       doktor: lastDoctor,
+    };
+
+    formBaselineRef.current = JSON.stringify({
+      form: nextForm,
+      selectedStockId: '',
+      selectedCrimper: '',
+      hasFoc: false,
     });
+    setForm(nextForm);
     setSelectedStockId('');
     setSelectedSize(null);
     setSelectedCrimper('');
@@ -648,6 +711,8 @@ export default function AddCase() {
           throw updateError;
         }
 
+        formBaselineRef.current = formSignature;
+
         try {
           await notifyAdmins({
             title: 'Vaka Güncellendi',
@@ -664,11 +729,11 @@ export default function AddCase() {
         }
 
         if (hasFoc) {
-          navigate(`/foc/${id}`);
+          navigate(`/foc/${id}`, { replace: true });
           return;
         }
 
-        navigate('/list');
+        navigate('/list', { replace: true });
         return;
       }
 
@@ -710,6 +775,8 @@ export default function AddCase() {
         );
       }
 
+      formBaselineRef.current = formSignature;
+
       let notificationStatus: SuccessSummary['notificationStatus'] =
         'sent';
 
@@ -730,7 +797,7 @@ export default function AddCase() {
       }
 
       if (hasFoc) {
-        navigate(`/foc/${newCaseId}`);
+        navigate(`/foc/${newCaseId}`, { replace: true });
         return;
       }
 
@@ -778,7 +845,7 @@ export default function AddCase() {
     <div className="mx-auto w-full max-w-4xl">
       <button
         type="button"
-        onClick={() => navigate(-1)}
+        onClick={requestBack}
         className="mb-3 inline-flex min-h-10 items-center gap-2 rounded-lg px-2 text-sm text-slate-400 transition hover:bg-slate-800 hover:text-cyan-300"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -1674,7 +1741,9 @@ export default function AddCase() {
                 <button
                   type="button"
                   onClick={() =>
-                    navigate(`/view/${successSummary.caseId}`)
+                    navigate(`/view/${successSummary.caseId}`, {
+                      replace: true,
+                    })
                   }
                   className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400"
                 >
@@ -1693,7 +1762,7 @@ export default function AddCase() {
 
                 <button
                   type="button"
-                  onClick={() => navigate('/')}
+                  onClick={() => navigate('/', { replace: true })}
                   className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm font-bold text-slate-200 transition hover:bg-slate-700"
                 >
                   <Home className="h-4 w-4" />

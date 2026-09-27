@@ -12,6 +12,10 @@ import {
   Save,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  useKavisNavigation,
+  useUnsavedChanges,
+} from '../contexts/NavigationContext';
 import { notifyAdmins } from '../lib/notifications';
 import { supabase, timeout } from '../lib/supabase';
 
@@ -199,6 +203,18 @@ export default function FocCase() {
 
   const [error, setError] =
     useState<string | null>(null);
+  const { requestBack } = useKavisNavigation();
+
+  const hasUnsavedChanges =
+    !pageLoading &&
+    !existingFoc &&
+    (secondValveMode !== 'stock' ||
+      selectedSize !== null ||
+      Boolean(selectedStockId) ||
+      JSON.stringify(manualValve) !== JSON.stringify(initialManualValve) ||
+      Boolean(description.trim()));
+
+  useUnsavedChanges('foc-form', hasUnsavedChanges);
 
   const currentUserName =
     profile?.full_name ||
@@ -654,7 +670,7 @@ CRİMP: ${
         );
       }
 
-      navigate(`/view/${vakaId}`);
+      navigate(`/view/${vakaId}`, { replace: true });
     } catch (caughtError: unknown) {
       console.error(
         'FOC kayıt hatası:',
@@ -726,9 +742,7 @@ CRİMP: ${
       <div className="mx-auto max-w-4xl">
         <button
           type="button"
-          onClick={() =>
-            navigate('/list')
-          }
+          onClick={requestBack}
           className="mb-4 flex items-center gap-2 text-sm text-slate-300 hover:text-white"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -753,9 +767,7 @@ CRİMP: ${
     <div className="mx-auto max-w-4xl">
       <button
         type="button"
-        onClick={() =>
-          navigate(`/view/${caseItem.id}`)
-        }
+        onClick={requestBack}
         className="mb-3 flex items-center gap-2 text-sm text-slate-300 hover:text-white md:mb-4 md:text-base"
       >
         <ArrowLeft className="h-4 w-4 md:h-5 md:w-5" />
@@ -1325,11 +1337,7 @@ CRİMP: ${
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
             type="button"
-            onClick={() =>
-              navigate(
-                `/view/${caseItem.id}`
-              )
-            }
+            onClick={requestBack}
             className="rounded-xl border border-slate-600 bg-slate-800 px-5 py-3 text-sm font-semibold text-slate-300 hover:bg-slate-700 hover:text-white"
           >
             Vazgeç

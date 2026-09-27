@@ -31,6 +31,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import {
+  useBackLayer,
+  useKavisNavigation,
+} from '../contexts/NavigationContext';
 import { supabase } from '../lib/supabase';
 import {
   disablePushNotifications,
@@ -103,6 +107,7 @@ export default function Layout() {
 
   const notificationRef = useRef<HTMLDivElement | null>(null);
   const notificationPanelRef = useRef<HTMLElement | null>(null);
+  const routeTransitionRef = useRef<HTMLDivElement | null>(null);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -114,6 +119,17 @@ export default function Layout() {
     useState<PushNotificationStatus>('disabled');
   const [pushLoading, setPushLoading] = useState(false);
   const [pushMessage, setPushMessage] = useState('');
+  const { direction, requestLeave } = useKavisNavigation();
+
+  useBackLayer(
+    'layout-notification-panel',
+    700,
+    notificationOpen,
+    () => setNotificationOpen(false)
+  );
+  useBackLayer('layout-main-menu', 600, menuOpen, () =>
+    setMenuOpen(false)
+  );
 
   const unreadCount = notifications.filter(item => !item.is_read).length;
   const visibleNotifications = notifications.filter(item =>
@@ -147,6 +163,36 @@ export default function Layout() {
     setMenuOpen(false);
     setNotificationOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const element = routeTransitionRef.current;
+    if (!element) return undefined;
+
+    const animationClass =
+      direction === 'back'
+        ? 'route-transition-back'
+        : 'route-transition-forward';
+
+    element.classList.remove(
+      'route-transition-forward',
+      'route-transition-back'
+    );
+    void element.offsetWidth;
+    element.classList.add(animationClass);
+
+    const clearAnimationClass = () => {
+      element.classList.remove(animationClass);
+    };
+
+    element.addEventListener('animationend', clearAnimationClass, {
+      once: true,
+    });
+
+    return () => {
+      element.removeEventListener('animationend', clearAnimationClass);
+      element.classList.remove(animationClass);
+    };
+  }, [direction, location.key]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -307,17 +353,17 @@ export default function Layout() {
       item.related_table === 'cases' ||
       item.related_table === 'vakalar'
     ) {
-      navigate(`/view/${item.related_id}`);
+      requestLeave(() => navigate(`/view/${item.related_id}`));
       return;
     }
 
     if (item.related_table === 'stok_hareketleri') {
-      navigate('/stock-movements');
+      requestLeave(() => navigate('/stock-movements'));
       return;
     }
 
     if (item.related_table === 'rakip_vakalar') {
-      navigate('/competitor-cases');
+      requestLeave(() => navigate('/competitor-cases'));
     }
   }
 
@@ -405,12 +451,14 @@ export default function Layout() {
 
   function goHome() {
     setMenuOpen(false);
-    navigate('/');
+    requestLeave(() => navigate('/'));
   }
 
-  async function handleSignOut() {
+  function handleSignOut() {
     setMenuOpen(false);
-    await signOut();
+    requestLeave(() => {
+      void signOut();
+    });
   }
 
   return (
@@ -470,7 +518,11 @@ export default function Layout() {
                     <NavLink
                       key={item.to}
                       to={item.to}
-                      onClick={() => setMenuOpen(false)}
+                      onClick={event => {
+                        event.preventDefault();
+                        setMenuOpen(false);
+                        requestLeave(() => navigate(item.to));
+                      }}
                       className={({ isActive }) =>
                         `flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                           isActive
@@ -854,7 +906,9 @@ export default function Layout() {
       </header>
 
       <main className="app-container relative z-10 py-5 pb-10 sm:py-6 lg:py-8">
-        <Outlet />
+        <div ref={routeTransitionRef} className="route-transition-layer">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

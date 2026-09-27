@@ -32,9 +32,21 @@ import {
   BrowserMultiFormatReader,
   type IScannerControls,
 } from '@zxing/browser';
+import { Capacitor } from '@capacitor/core';
+import {
+  CapacitorBarcodeScanner,
+  CapacitorBarcodeScannerAndroidScanningLibrary,
+  CapacitorBarcodeScannerCameraDirection,
+  CapacitorBarcodeScannerScanOrientation,
+  CapacitorBarcodeScannerTypeHint,
+} from '@capacitor/barcode-scanner';
 import { supabase } from '../lib/supabase';
 import { downloadExcel } from '../lib/excel';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  useBackLayer,
+  useUnsavedChanges,
+} from '../contexts/NavigationContext';
 import { notifyAdmins } from '../lib/notifications';
 
 const DATABASE_PAGE_SIZE = 1000;
@@ -790,6 +802,8 @@ export default function Stock() {
   const cameraZxingControlsRef = useRef<IScannerControls | null>(null);
   const cameraDetectingRef = useRef(false);
   const lastCameraCodeRef = useRef({ value: '', detectedAt: 0 });
+  const nativeBarcodeScanInProgressRef = useRef(false);
+  const lastNativeBarcodeRawRef = useRef('');
   const lastPhotoFingerprintRef = useRef('');
   const barcodeCropFrameRef = useRef<HTMLDivElement | null>(null);
   const barcodeCropInteractionRef =
@@ -816,6 +830,8 @@ export default function Stock() {
     'native' | 'zxing' | 'hybrid' | ''
   >('');
   const [cameraPhotoScanning, setCameraPhotoScanning] =
+    useState(false);
+  const [nativeBarcodeScanning, setNativeBarcodeScanning] =
     useState(false);
   const [cameraTorchAvailable, setCameraTorchAvailable] =
     useState(false);
@@ -872,6 +888,41 @@ export default function Stock() {
       } catch {
         return [];
       }
+    }
+  );
+
+  const hasUnsavedStockWork =
+    Boolean(barcode.trim()) ||
+    (Boolean(parsed) && scanResult?.status === 'not-found') ||
+    Boolean(transferCity.trim()) ||
+    selectedTransferIds.length > 0;
+
+  useUnsavedChanges('stock-work', hasUnsavedStockWork);
+  useBackLayer(
+    'stock-native-barcode-scanner',
+    1000,
+    nativeBarcodeScanning,
+    () => undefined
+  );
+  useBackLayer(
+    'stock-barcode-crop',
+    920,
+    Boolean(barcodeCropSession),
+    closeBarcodeCrop
+  );
+  useBackLayer('stock-web-camera', 900, cameraOpen, closeCamera);
+  useBackLayer(
+    'stock-entry-success',
+    820,
+    Boolean(stockEntrySuccess),
+    closeStockEntrySuccessAndFocus
+  );
+  useBackLayer(
+    'stock-transfer-dialog',
+    780,
+    transferModalOpen,
+    () => {
+      if (!transferring) setTransferModalOpen(false);
     }
   );
 
@@ -1342,6 +1393,100 @@ export default function Stock() {
 
   function solveBarcode() {
     processBarcodeValue(barcode);
+  }
+
+  async function startNativeCode128Scanner() {
+    if (!Capacitor.isNativePlatform()) {
+      cameraPhotoInputRef.current?.click();
+      return;
+    }
+
+    if (nativeBarcodeScanInProgressRef.current) return;
+
+    nativeBarcodeScanInProgressRef.current = true;
+    setNativeBarcodeScanning(true);
+    setMessage('');
+
+    try {
+      const result = await CapacitorBarcodeScanner.scanBarcode({
+        hint: CapacitorBarcodeScannerTypeHint.CODE_128,
+        scanInstructions:
+          'Uzun çizgisel barkodu çerçeve içine alın',
+        scanButton: false,
+        scanText: 'Barkodu Tara',
+        cameraDirection:
+          CapacitorBarcodeScannerCameraDirection.BACK,
+        scanOrientation:
+          CapacitorBarcodeScannerScanOrientation.LANDSCAPE,
+        cancelButtonAccessibilityLabel: 'Taramayı iptal et',
+        torchButtonOnAccessibilityLabel: 'Feneri kapat',
+        torchButtonOffAccessibilityLabel: 'Feneri aç',
+        android: {
+          scanningLibrary:
+            CapacitorBarcodeScannerAndroidScanningLibrary.ZXING,
+        },
+      });
+
+      const rawValue = result.ScanResult || '';
+
+      if (!rawValue.trim()) {
+        setMessage('Barkod taraması iptal edildi.');
+        return;
+      }
+
+      lastNativeBarcodeRawRef.current = rawValue;
+
+      if (
+        result.format !== CapacitorBarcodeScannerTypeHint.CODE_128
+      ) {
+        setMessage(
+          'Yalnızca yatay GS1-128 / Code 128 barkodu kabul edilir.'
+        );
+        return;
+      }
+
+      if (!isValidGs1Code128(rawValue)) {
+        setMessage(
+          'Code 128 okundu ancak 01, 17 ve 21 GS1 alanları doğrulanamadı.'
+        );
+        return;
+      }
+
+      processDetectedCameraCode(rawValue);
+    } catch (scanError: unknown) {
+      const errorText =
+        scanError instanceof Error
+          ? scanError.message
+          : String(scanError ?? '');
+
+      if (/cancel|iptal/i.test(errorText)) {
+        setMessage('Barkod taraması iptal edildi.');
+      } else {
+        console.error('Native Code 128 taraması başlatılamadı:', scanError);
+        setMessage(
+          errorText
+            ? `Barkod tarayıcı açılamadı: ${errorText}`
+            : 'Barkod tarayıcı açılamadı. Manuel giriş yapabilirsiniz.'
+        );
+      }
+    } finally {
+      nativeBarcodeScanInProgressRef.current = false;
+      setNativeBarcodeScanning(false);
+    }
+  }
+
+  function startPreferredBarcodeCheck() {
+    if (barcode.trim()) {
+      solveBarcode();
+      return;
+    }
+
+    if (Capacitor.isNativePlatform()) {
+      void startNativeCode128Scanner();
+      return;
+    }
+
+    cameraPhotoInputRef.current?.click();
   }
 
   function stopCamera() {
@@ -3047,37 +3192,59 @@ export default function Stock() {
 
           <button
             type="button"
-            onClick={() => {
-              if (barcode.trim()) {
-                solveBarcode();
-                return;
-              }
-
-              cameraPhotoInputRef.current?.click();
-            }}
-            disabled={cameraPhotoScanning}
+            onClick={startPreferredBarcodeCheck}
+            disabled={
+              cameraPhotoScanning || nativeBarcodeScanning
+            }
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cyan-500"
             title={
               barcode.trim()
                 ? 'Barkodu kontrol et'
-                : 'Telefon kamerasıyla fotoğraf çek ve tara'
+                : Capacitor.isNativePlatform()
+                  ? 'Canlı GS1-128 barkod tarayıcıyı aç'
+                  : 'Telefon kamerasıyla fotoğraf çek ve tara'
             }
           >
-            {cameraPhotoScanning ? (
+            {cameraPhotoScanning || nativeBarcodeScanning ? (
               <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : Capacitor.isNativePlatform() ? (
+              <ScanLine className="h-4 w-4" />
             ) : (
               <Camera className="h-4 w-4" />
             )}
             <Search className="h-4 w-4" />
-            {cameraPhotoScanning ? 'Taranıyor...' : 'Kontrol Et'}
+            {cameraPhotoScanning || nativeBarcodeScanning
+              ? 'Taranıyor...'
+              : barcode.trim()
+                ? 'Kontrol Et'
+                : Capacitor.isNativePlatform()
+                  ? 'Barkodu Tara'
+                  : 'Kontrol Et'}
           </button>
         </div>
 
         <p className="mt-2 text-[11px] leading-4 text-slate-500">
-          Barkod alanı boşken <span className="font-semibold text-slate-300">Kontrol Et</span>{' '}
-          telefonun kendi yüksek çözünürlüklü kamerasını açar. Barkod girilmişse
-          aynı düğme mevcut kodu kontrol eder. Fotoğraf çözülemezse canlı tarama
-          otomatik açılır.
+          {Capacitor.isNativePlatform() ? (
+            <>
+              Barkod alanı boşken{' '}
+              <span className="font-semibold text-slate-300">
+                Barkodu Tara
+              </span>{' '}
+              yalnızca yatay GS1-128 / Code 128 için native arka kamera
+              tarayıcısını açar. Barkod girilmişse aynı düğme mevcut kodu
+              kontrol eder.
+            </>
+          ) : (
+            <>
+              Barkod alanı boşken{' '}
+              <span className="font-semibold text-slate-300">
+                Kontrol Et
+              </span>{' '}
+              telefonun kendi yüksek çözünürlüklü kamerasını açar. Barkod
+              girilmişse aynı düğme mevcut kodu kontrol eder. Fotoğraf
+              çözülemezse canlı tarama otomatik açılır.
+            </>
+          )}
         </p>
 
         {parsed && (
