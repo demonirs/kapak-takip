@@ -96,7 +96,7 @@ function getPageTitle(pathname: string) {
   if (pathname.startsWith('/users')) return 'Kullanıcı Yönetimi';
   if (pathname.startsWith('/export')) return 'Excel Aktar';
   if (pathname.startsWith('/competitor-cases')) return 'Rakip Vakalar';
-  return 'ValveFlow';
+  return 'KAVİS';
 }
 
 export default function Layout() {
@@ -474,19 +474,17 @@ export default function Layout() {
 
       <aside
         aria-label="Ana menü"
-        className={`fixed left-0 top-0 z-50 h-dvh w-[min(86vw,304px)] border-r border-slate-800/80 bg-slate-950/98 pt-[env(safe-area-inset-top)] shadow-2xl transition-transform duration-200 ease-out ${
+        className={`app-sidebar fixed left-0 top-0 z-50 h-dvh w-[min(86vw,304px)] border-r border-slate-800/80 bg-slate-950/98 pt-[env(safe-area-inset-top)] shadow-2xl transition-transform duration-200 ease-out ${
           menuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <div className="flex min-h-16 items-center justify-between border-b border-slate-800/80 px-4">
-          <button onClick={goHome} className="flex items-center gap-3 text-left">
-            <div className="h-10 w-10 overflow-hidden rounded-xl border border-slate-700 bg-[#202020]">
-              <img
-                src="/valveflow-heart.png"
-                alt=""
-                className="h-full w-full object-contain"
-              />
-            </div>
+          <button onClick={goHome} className="flex min-w-0 items-center gap-3 text-left">
+            <img
+              src="/brand/kavis-wordmark-dark.png"
+              alt="KAVİS"
+              className="h-auto w-24 shrink-0 object-contain"
+            />
 
             <div>
               <p className="text-sm font-bold leading-tight">Fokus Sağlık</p>
@@ -550,7 +548,7 @@ export default function Layout() {
         </div>
       </aside>
 
-      <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/90 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+      <header className="app-topbar sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/90 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
         <div className="app-container flex min-h-16 items-center">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
@@ -565,14 +563,14 @@ export default function Layout() {
 
               <button
                 onClick={goHome}
-                className="h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-slate-700 bg-[#202020] transition hover:border-cyan-500/50"
+                className="flex h-10 w-24 shrink-0 items-center justify-center rounded-lg border border-slate-700/60 px-2 transition hover:border-cyan-500/50"
                 title="Ana Sayfa"
                 aria-label="Ana Sayfa"
               >
                 <img
-                  src="/valveflow-heart.png"
-                  alt=""
-                  className="h-full w-full object-contain"
+                  src="/brand/kavis-wordmark-dark.png"
+                  alt="KAVİS"
+                  className="h-auto w-full object-contain"
                 />
               </button>
 

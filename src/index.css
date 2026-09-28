@@ -81,7 +81,19 @@
 }
 
 :root {
-  color-scheme: dark;
+  --kavis-canvas: #f4f8fb;
+  --kavis-surface: #ffffff;
+  --kavis-navy: #102a43;
+  --kavis-turquoise: #12b8b0;
+  --kavis-soft: #e7f8f6;
+  --kavis-text: #19324a;
+  --kavis-muted: #64778a;
+  --kavis-border: #d9e4ec;
+  --kavis-success: #2fa36b;
+  --kavis-warning: #e6a23c;
+  --kavis-danger: #d95757;
+  --kavis-coral: #ff7a68;
+  color-scheme: light;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
@@ -325,6 +337,208 @@ html.light-mode ::-webkit-scrollbar-thumb {
   background-clip: padding-box;
 }
 
+/* KAVİS airy theme: centralized compatibility layer for existing utilities. */
+html.light-mode,
+html.light-mode body {
+  background: var(--kavis-canvas);
+  color: var(--kavis-text);
+}
+
+html.light-mode .app-shell {
+  background: var(--kavis-canvas) !important;
+  color: var(--kavis-text) !important;
+}
+
+html.light-mode .bg-slate-950,
+html.light-mode .bg-slate-950\/90,
+html.light-mode .bg-slate-950\/95 {
+  background-color: var(--kavis-canvas) !important;
+}
+
+html.light-mode .bg-slate-900,
+html.light-mode .bg-slate-900\/35,
+html.light-mode .bg-slate-900\/50,
+html.light-mode .bg-slate-900\/60,
+html.light-mode .bg-slate-900\/70,
+html.light-mode .bg-slate-900\/80,
+html.light-mode .bg-slate-800,
+html.light-mode .bg-slate-800\/45,
+html.light-mode .bg-slate-800\/70,
+html.light-mode .bg-slate-800\/80,
+html.light-mode .surface,
+html.light-mode .surface-muted {
+  background-color: var(--kavis-surface) !important;
+  border-color: var(--kavis-border) !important;
+}
+
+html.light-mode .surface,
+html.light-mode .surface-muted {
+  box-shadow: 0 8px 24px rgba(16, 42, 67, 0.06);
+}
+
+html.light-mode .bg-slate-700,
+html.light-mode .bg-slate-700\/40,
+html.light-mode .bg-cyan-500\/10 {
+  background-color: var(--kavis-soft) !important;
+}
+
+html.light-mode .border-slate-900,
+html.light-mode .border-slate-800,
+html.light-mode .border-slate-800\/70,
+html.light-mode .border-slate-800\/80,
+html.light-mode .border-slate-700,
+html.light-mode .border-slate-700\/60,
+html.light-mode .border-slate-700\/70,
+html.light-mode .border-slate-700\/80,
+html.light-mode .border-slate-700\/90,
+html.light-mode input,
+html.light-mode select,
+html.light-mode textarea {
+  border-color: var(--kavis-border) !important;
+}
+
+html.light-mode .text-white,
+html.light-mode .text-slate-100,
+html.light-mode .text-slate-200 {
+  color: var(--kavis-text) !important;
+}
+
+html.light-mode .text-slate-300 {
+  color: #405b72 !important;
+}
+
+html.light-mode .text-slate-400,
+html.light-mode .text-slate-500 {
+  color: var(--kavis-muted) !important;
+}
+
+html.light-mode input,
+html.light-mode select,
+html.light-mode textarea {
+  background-color: var(--kavis-surface) !important;
+  color: var(--kavis-text) !important;
+}
+
+html.light-mode .bg-cyan-500 {
+  background-color: var(--kavis-turquoise) !important;
+}
+
+html.light-mode .text-cyan-200,
+html.light-mode .text-cyan-300,
+html.light-mode .text-cyan-400 {
+  color: #087f7a !important;
+}
+
+html.light-mode .app-sidebar,
+html.light-mode .app-topbar {
+  background-color: var(--kavis-navy) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+}
+
+html.light-mode .app-sidebar .text-white,
+html.light-mode .app-sidebar .text-slate-100,
+html.light-mode .app-sidebar .text-slate-200,
+html.light-mode .app-topbar .text-white,
+html.light-mode .app-topbar .text-slate-100,
+html.light-mode .app-topbar .text-slate-200 {
+  color: #ffffff !important;
+}
+
+html.light-mode .app-sidebar .text-slate-300,
+html.light-mode .app-sidebar .text-slate-400,
+html.light-mode .app-sidebar .text-slate-500,
+html.light-mode .app-topbar .text-slate-300,
+html.light-mode .app-topbar .text-slate-400,
+html.light-mode .app-topbar .text-slate-500 {
+  color: #c8d8e6 !important;
+}
+
+html.light-mode .app-sidebar .text-cyan-200,
+html.light-mode .app-sidebar .text-cyan-300,
+html.light-mode .app-topbar .text-cyan-200,
+html.light-mode .app-topbar .text-cyan-300 {
+  color: #8de5df !important;
+}
+
+html.light-mode .app-sidebar .icon-button,
+html.light-mode .app-topbar .icon-button {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  color: #8de5df !important;
+}
+
+/* Day mode status colors: darker text on calm tinted surfaces. */
+html.light-mode [class*="text-emerald-"] {
+  color: #176b49 !important;
+}
+
+html.light-mode [class*="bg-emerald-500/"] {
+  background-color: #e5f5ec !important;
+}
+
+html.light-mode [class*="border-emerald-"] {
+  border-color: #70b994 !important;
+}
+
+html.light-mode [class*="text-amber-"] {
+  color: #805600 !important;
+}
+
+html.light-mode [class*="bg-amber-500/"] {
+  background-color: #fff3d6 !important;
+}
+
+html.light-mode [class*="border-amber-"] {
+  border-color: #d8a83f !important;
+}
+
+html.light-mode [class*="text-violet-"] {
+  color: #6336a8 !important;
+}
+
+html.light-mode [class*="bg-violet-500/"] {
+  background-color: #f1eafa !important;
+}
+
+html.light-mode [class*="border-violet-"] {
+  border-color: #a88ad1 !important;
+}
+
+html.light-mode [class*="text-red-"] {
+  color: #aa3540 !important;
+}
+
+html.light-mode [class*="bg-red-500/"] {
+  background-color: #fdebec !important;
+}
+
+html.light-mode [class*="border-red-"] {
+  border-color: #dc858b !important;
+}
+
+html.light-mode [class*="text-cyan-"] {
+  color: #087f7a !important;
+}
+
+html.light-mode [class*="border-cyan-"] {
+  border-color: #39aaa5 !important;
+}
+
+html.light-mode .app-sidebar [class*="text-cyan-"],
+html.light-mode .app-topbar [class*="text-cyan-"] {
+  color: #8de5df !important;
+}
+
+html.light-mode .bg-emerald-500.text-white,
+html.light-mode .bg-emerald-600.text-white,
+html.light-mode .bg-red-500.text-white,
+html.light-mode .bg-red-600.text-white,
+html.light-mode .bg-violet-500.text-white,
+html.light-mode .bg-violet-600.text-white {
+  color: #ffffff !important;
+}
+
 .route-transition-layer {
   min-width: 0;
   will-change: auto;
@@ -371,4 +585,361 @@ html.light-mode ::-webkit-scrollbar-thumb {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+/* ================================================================
+   KAVİS FINAL THEME TOKENS — shared by PWA and Capacitor Android
+   ================================================================ */
+:root,
+html.light-mode {
+  --app-bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-soft: #f1e9dc;
+  --nav-bg: #163d4a;
+  --primary: #168c88;
+  --primary-hover: #117773;
+  --primary-soft: #e1f2ef;
+  --text-main: #243843;
+  --text-secondary: #6c7a80;
+  --text-muted: #819096;
+  --border: #dddcd6;
+  --success: #358c68;
+  --warning: #d79632;
+  --danger: #d9685b;
+  --shadow: rgba(36, 56, 67, 0.08);
+  color-scheme: light;
+}
+
+html.dark-mode {
+  --app-bg: #0e1d24;
+  --surface: #162a33;
+  --surface-elevated: #1c333d;
+  --surface-soft: #203b42;
+  --nav-bg: #0a171d;
+  --primary: #35b7ae;
+  --primary-hover: #47c8be;
+  --primary-soft: #183d3d;
+  --text-main: #f2f6f4;
+  --text-secondary: #a9bbb9;
+  --text-muted: #819591;
+  --border: #2c4650;
+  --success: #57b88a;
+  --warning: #e4ad50;
+  --danger: #e47a70;
+  --shadow: rgba(0, 0, 0, 0.24);
+  color-scheme: dark;
+}
+
+html.light-mode,
+html.dark-mode,
+html.light-mode body,
+html.dark-mode body,
+html.light-mode .app-shell,
+html.dark-mode .app-shell {
+  background: var(--app-bg) !important;
+  color: var(--text-main) !important;
+}
+
+html.light-mode body,
+html.dark-mode body {
+  background-image: none !important;
+}
+
+html.light-mode .surface,
+html.dark-mode .surface {
+  border-color: var(--border) !important;
+  border-radius: 14px;
+  background: var(--surface) !important;
+  box-shadow: 0 8px 24px var(--shadow);
+}
+
+html.light-mode .surface-muted,
+html.dark-mode .surface-muted {
+  border-color: var(--border) !important;
+  border-radius: 14px;
+  background: var(--surface-soft) !important;
+  box-shadow: 0 4px 14px var(--shadow);
+}
+
+html.light-mode .page-title,
+html.dark-mode .page-title {
+  color: var(--text-main) !important;
+}
+
+html.light-mode .page-description,
+html.dark-mode .page-description,
+html.light-mode .field-help,
+html.dark-mode .field-help {
+  color: var(--text-secondary) !important;
+}
+
+html.light-mode .field-label,
+html.dark-mode .field-label {
+  color: var(--text-main) !important;
+}
+
+html.light-mode .field-control,
+html.dark-mode .field-control,
+html.light-mode input,
+html.dark-mode input,
+html.light-mode select,
+html.dark-mode select,
+html.light-mode textarea,
+html.dark-mode textarea {
+  border-color: var(--border) !important;
+  background: var(--surface-elevated) !important;
+  color: var(--text-main) !important;
+}
+
+html.light-mode .field-control:focus,
+html.dark-mode .field-control:focus,
+html.light-mode input:focus,
+html.dark-mode input:focus,
+html.light-mode select:focus,
+html.dark-mode select:focus,
+html.light-mode textarea:focus,
+html.dark-mode textarea:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent) !important;
+}
+
+html.light-mode .button-primary,
+html.dark-mode .button-primary,
+html.light-mode .bg-cyan-500,
+html.dark-mode .bg-cyan-500,
+html.light-mode .bg-cyan-600,
+html.dark-mode .bg-cyan-600 {
+  background-color: var(--primary) !important;
+  color: #ffffff !important;
+}
+
+html.light-mode .button-primary:hover,
+html.dark-mode .button-primary:hover,
+html.light-mode .hover\:bg-cyan-400:hover,
+html.dark-mode .hover\:bg-cyan-400:hover {
+  background-color: var(--primary-hover) !important;
+}
+
+html.light-mode .button-secondary,
+html.dark-mode .button-secondary,
+html.light-mode .icon-button,
+html.dark-mode .icon-button {
+  border-color: var(--border) !important;
+  background: var(--surface-elevated) !important;
+  color: var(--text-secondary) !important;
+}
+
+html.light-mode .button-secondary:hover,
+html.dark-mode .button-secondary:hover,
+html.light-mode .icon-button:hover,
+html.dark-mode .icon-button:hover {
+  background: var(--surface-soft) !important;
+  color: var(--text-main) !important;
+}
+
+html.light-mode .button-danger,
+html.dark-mode .button-danger {
+  background: var(--danger) !important;
+  color: #ffffff !important;
+}
+
+html.light-mode .bg-slate-950,
+html.light-mode .bg-slate-950\/90,
+html.light-mode .bg-slate-950\/95,
+html.dark-mode .bg-slate-950,
+html.dark-mode .bg-slate-950\/90,
+html.dark-mode .bg-slate-950\/95 {
+  background-color: var(--app-bg) !important;
+}
+
+html.light-mode .bg-slate-900,
+html.light-mode .bg-slate-900\/35,
+html.light-mode .bg-slate-900\/50,
+html.light-mode .bg-slate-900\/60,
+html.light-mode .bg-slate-900\/70,
+html.light-mode .bg-slate-900\/80,
+html.dark-mode .bg-slate-900,
+html.dark-mode .bg-slate-900\/35,
+html.dark-mode .bg-slate-900\/50,
+html.dark-mode .bg-slate-900\/60,
+html.dark-mode .bg-slate-900\/70,
+html.dark-mode .bg-slate-900\/80 {
+  background-color: var(--surface) !important;
+}
+
+html.light-mode .bg-slate-800,
+html.light-mode .bg-slate-800\/45,
+html.light-mode .bg-slate-800\/70,
+html.light-mode .bg-slate-800\/80,
+html.dark-mode .bg-slate-800,
+html.dark-mode .bg-slate-800\/45,
+html.dark-mode .bg-slate-800\/70,
+html.dark-mode .bg-slate-800\/80 {
+  background-color: var(--surface-elevated) !important;
+}
+
+html.light-mode .bg-slate-700,
+html.light-mode .bg-slate-700\/40,
+html.dark-mode .bg-slate-700,
+html.dark-mode .bg-slate-700\/40 {
+  background-color: var(--surface-soft) !important;
+}
+
+html.light-mode [class*="border-slate-"],
+html.dark-mode [class*="border-slate-"] {
+  border-color: var(--border) !important;
+}
+
+html.light-mode .text-white,
+html.light-mode .text-slate-100,
+html.light-mode .text-slate-200,
+html.dark-mode .text-white,
+html.dark-mode .text-slate-100,
+html.dark-mode .text-slate-200 {
+  color: var(--text-main) !important;
+}
+
+html.light-mode .text-slate-300,
+html.light-mode .text-slate-400,
+html.dark-mode .text-slate-300,
+html.dark-mode .text-slate-400 {
+  color: var(--text-secondary) !important;
+}
+
+html.light-mode .text-slate-500,
+html.dark-mode .text-slate-500 {
+  color: var(--text-muted) !important;
+}
+
+html.light-mode [class*="text-cyan-"],
+html.dark-mode [class*="text-cyan-"] {
+  color: var(--primary) !important;
+}
+
+html.light-mode [class*="bg-cyan-500/"],
+html.dark-mode [class*="bg-cyan-500/"] {
+  background-color: var(--primary-soft) !important;
+}
+
+html.light-mode [class*="border-cyan-"],
+html.dark-mode [class*="border-cyan-"] {
+  border-color: var(--primary) !important;
+}
+
+html.light-mode [class*="text-violet-"],
+html.dark-mode [class*="text-violet-"] {
+  color: var(--primary) !important;
+}
+
+html.light-mode [class*="bg-violet-500/"],
+html.dark-mode [class*="bg-violet-500/"] {
+  background-color: var(--primary-soft) !important;
+}
+
+html.light-mode [class*="border-violet-"],
+html.dark-mode [class*="border-violet-"] {
+  border-color: var(--primary) !important;
+}
+
+html.light-mode [class*="text-emerald-"],
+html.dark-mode [class*="text-emerald-"] {
+  color: var(--success) !important;
+}
+
+html.light-mode [class*="bg-emerald-500/"],
+html.dark-mode [class*="bg-emerald-500/"] {
+  background-color: color-mix(in srgb, var(--success) 12%, var(--surface)) !important;
+}
+
+html.light-mode [class*="border-emerald-"],
+html.dark-mode [class*="border-emerald-"] {
+  border-color: var(--success) !important;
+}
+
+html.light-mode [class*="text-amber-"],
+html.dark-mode [class*="text-amber-"] {
+  color: var(--warning) !important;
+}
+
+html.light-mode [class*="bg-amber-500/"],
+html.dark-mode [class*="bg-amber-500/"] {
+  background-color: color-mix(in srgb, var(--warning) 13%, var(--surface)) !important;
+}
+
+html.light-mode [class*="border-amber-"],
+html.dark-mode [class*="border-amber-"] {
+  border-color: var(--warning) !important;
+}
+
+html.light-mode [class*="text-red-"],
+html.dark-mode [class*="text-red-"] {
+  color: var(--danger) !important;
+}
+
+html.light-mode [class*="bg-red-500/"],
+html.dark-mode [class*="bg-red-500/"] {
+  background-color: color-mix(in srgb, var(--danger) 12%, var(--surface)) !important;
+}
+
+html.light-mode [class*="border-red-"],
+html.dark-mode [class*="border-red-"] {
+  border-color: var(--danger) !important;
+}
+
+html.light-mode .app-sidebar,
+html.dark-mode .app-sidebar,
+html.light-mode .app-topbar,
+html.dark-mode .app-topbar {
+  border-color: color-mix(in srgb, var(--text-main) 14%, transparent) !important;
+  background: var(--nav-bg) !important;
+  color: #f2f6f4 !important;
+}
+
+html.light-mode .app-sidebar [class*="text-slate-"],
+html.dark-mode .app-sidebar [class*="text-slate-"],
+html.light-mode .app-topbar [class*="text-slate-"],
+html.dark-mode .app-topbar [class*="text-slate-"] {
+  color: #a9bbb9 !important;
+}
+
+html.light-mode .app-sidebar .text-white,
+html.dark-mode .app-sidebar .text-white,
+html.light-mode .app-topbar .text-white,
+html.dark-mode .app-topbar .text-white,
+html.light-mode .app-topbar .text-slate-200,
+html.dark-mode .app-topbar .text-slate-200 {
+  color: #f2f6f4 !important;
+}
+
+html.light-mode .app-sidebar [class*="text-cyan-"],
+html.dark-mode .app-sidebar [class*="text-cyan-"],
+html.light-mode .app-topbar [class*="text-cyan-"],
+html.dark-mode .app-topbar [class*="text-cyan-"] {
+  color: #78d8d1 !important;
+}
+
+html.light-mode .app-sidebar .icon-button,
+html.dark-mode .app-sidebar .icon-button,
+html.light-mode .app-topbar .icon-button,
+html.dark-mode .app-topbar .icon-button {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #78d8d1 !important;
+}
+
+html.light-mode .app-sidebar .hover\:bg-slate-900:hover,
+html.dark-mode .app-sidebar .hover\:bg-slate-900:hover {
+  background: rgba(255, 255, 255, 0.07) !important;
+}
+
+html.light-mode .bg-emerald-500.text-white,
+html.light-mode .bg-emerald-600.text-white,
+html.light-mode .bg-red-500.text-white,
+html.light-mode .bg-red-600.text-white,
+html.dark-mode .bg-emerald-500.text-white,
+html.dark-mode .bg-emerald-600.text-white,
+html.dark-mode .bg-red-500.text-white,
+html.dark-mode .bg-red-600.text-white {
+  color: #ffffff !important;
 }

@@ -2,6 +2,14 @@ import { createContext, useContext, useEffect, useState } from 'react';
 
 type Theme = 'dark' | 'light';
 
+type ThemePreference = Theme | 'system';
+
+function getSystemTheme(): Theme {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light';
+}
+
 type ThemeContextType = {
   theme: Theme;
   toggleTheme: () => void;
@@ -10,19 +18,40 @@ type ThemeContextType = {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    return (localStorage.getItem('theme') as Theme) || 'dark';
+  const [preference, setPreference] = useState<ThemePreference>(() => {
+    const saved = localStorage.getItem('kavis-theme-preference');
+    return saved === 'light' || saved === 'dark' || saved === 'system'
+      ? saved
+      : 'system';
   });
 
-  useEffect(() => {
-    localStorage.setItem('theme', theme);
+  const [theme, setTheme] = useState<Theme>(() =>
+    preference === 'system' ? getSystemTheme() : preference
+  );
 
+  useEffect(() => {
+    localStorage.setItem('kavis-theme-preference', preference);
+
+    if (preference !== 'system') {
+      setTheme(preference);
+      return;
+    }
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const syncWithSystem = () => setTheme(media.matches ? 'dark' : 'light');
+    syncWithSystem();
+    media.addEventListener('change', syncWithSystem);
+
+    return () => media.removeEventListener('change', syncWithSystem);
+  }, [preference]);
+
+  useEffect(() => {
     document.documentElement.classList.remove('dark-mode', 'light-mode');
     document.documentElement.classList.add(`${theme}-mode`);
   }, [theme]);
 
   function toggleTheme() {
-    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+    setPreference(theme === 'dark' ? 'light' : 'dark');
   }
 
   return (
