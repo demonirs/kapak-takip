@@ -3,15 +3,16 @@ import {
   Navigate,
   useNavigate,
 } from 'react-router-dom';
-import { HeartPulse } from 'lucide-react';
 
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
 
 type Mode = 'login' | 'signup' | 'forgot' | 'reset';
 
 export default function Login() {
   const { user, signIn, signUp } = useAuth();
+  const { theme } = useTheme();
   const navigate = useNavigate();
 
   const isResetPage =
@@ -221,12 +222,22 @@ export default function Login() {
         className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4"
       >
         <div className="text-center space-y-2">
-          <div className="mx-auto w-14 h-14 rounded-xl bg-cyan-500 flex items-center justify-center">
-            <HeartPulse className="text-white" />
-          </div>
+          <img
+            src="/brand/kavis-logo-1024.png"
+            alt=""
+            className="mx-auto h-16 w-16 rounded-2xl object-contain shadow-lg"
+          />
+
+          <img
+            src={theme === 'dark'
+              ? '/brand/kavis-wordmark-dark.png'
+              : '/brand/kavis-wordmark-light.png'}
+            alt="KAVİS"
+            className="mx-auto h-auto w-44 object-contain"
+          />
 
           <h1 className="text-2xl font-bold text-white">
-            Kapak Takip
+            Klinik Akış ve Vaka İzleme Sistemi
           </h1>
 
           <p className="text-slate-400">
