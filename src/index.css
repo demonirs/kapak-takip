@@ -943,3 +943,47 @@ html.dark-mode .bg-red-500.text-white,
 html.dark-mode .bg-red-600.text-white {
   color: #ffffff !important;
 }
+.mail-preview {
+  color: var(--text-main);
+  background-color: var(--surface-soft);
+  border-color: var(--border);
+} /* Light theme: legacy translucent slate surfaces */
+html.light-mode [class~="bg-slate-950/20"],
+html.light-mode [class~="bg-slate-950/30"],
+html.light-mode [class~="bg-slate-950/35"],
+html.light-mode [class~="bg-slate-950/40"],
+html.light-mode [class~="bg-slate-950/45"],
+html.light-mode [class~="bg-slate-950/60"],
+html.light-mode [class~="bg-slate-950/70"],
+html.light-mode [class~="bg-slate-950/80"],
+html.light-mode [class~="bg-slate-950/85"],
+html.light-mode [class~="bg-slate-950/90"],
+html.light-mode [class~="bg-slate-950/95"],
+html.light-mode [class~="bg-slate-950/98"] {
+  background-color: var(--app-bg) !important;
+}
+
+html.light-mode [class~="bg-slate-900/35"],
+html.light-mode [class~="bg-slate-900/40"],
+html.light-mode [class~="bg-slate-900/50"],
+html.light-mode [class~="bg-slate-900/60"],
+html.light-mode [class~="bg-slate-900/70"] {
+  background-color: var(--surface) !important;
+}
+
+html.light-mode [class~="bg-slate-800/30"],
+html.light-mode [class~="bg-slate-800/40"],
+html.light-mode [class~="bg-slate-800/50"],
+html.light-mode [class~="bg-slate-800/60"],
+html.light-mode [class~="bg-slate-800/70"] {
+  background-color: var(--surface-elevated) !important;
+}
+
+html.light-mode [class~="bg-slate-700/25"],
+html.light-mode [class~="bg-slate-700/30"],
+html.light-mode [class~="bg-slate-700/40"],
+html.light-mode [class~="bg-slate-700/50"],
+html.light-mode [class~="bg-slate-700/60"],
+html.light-mode [class~="bg-slate-700/70"] {
+  background-color: var(--surface-soft) !important;
+}

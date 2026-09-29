@@ -213,7 +213,7 @@ CRİMP: ${k.crimp_yapan}`;
         </header>
 
         <div className="p-3 sm:p-4">
-          <pre className="max-w-full whitespace-pre-wrap break-words rounded-lg border border-slate-800 bg-slate-950/55 p-3 font-mono text-[13px] leading-6 text-slate-300 sm:p-4 sm:text-sm sm:leading-6">
+          <pre className="mail-preview max-w-full whitespace-pre-wrap break-words rounded-lg border p-3 font-mono text-[13px] leading-6 sm:p-4 sm:text-sm sm:leading-6">
             {mail}
           </pre>
         </div>
