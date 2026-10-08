@@ -1,0 +1,30 @@
+KAVİS CANLI TEMA 001
+====================
+
+Bu paket yalnızca tema dosyasını günceller.
+
+1. ZIP dosyasını açın.
+2. İçindeki src klasörünü mevcut KAVIS-Unified klasörünün üzerine kopyalayın.
+3. Sorulduğunda src\index.css dosyasının değiştirilmesini onaylayın.
+4. CMD ile proje ana klasöründe çalıştırın:
+
+   npm run check
+
+Telefona test güncellemesi için:
+
+   npm run build
+   npx cap sync android
+   set "JAVA_HOME=C:\Users\fatih\.jdks\jbr-21.0.11"
+   set "PATH=%JAVA_HOME%\bin;%PATH%"
+   cd android
+   gradlew.bat assembleDebug
+   "%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe" install -r app\build\outputs\apk\debug\app-debug.apk
+
+Beklenen paket kimliği: com.kavis.app.dev
+
+Değişiklik özeti:
+- Açık modda canlı turkuaz/mavi vurgular ve yüksek kontrastlı koyu metin.
+- Koyu modda derin lacivert yüzeyler ve canlı camgöbeği vurgular.
+- Buton, form, durum rozeti ve menüler için kontrast güvenliği.
+- Başarı, uyarı ve hata renklerinde okunabilir ön plan renkleri.
+- Mevcut açık/koyu tema düğmesi ve uygulama davranışı korunur.

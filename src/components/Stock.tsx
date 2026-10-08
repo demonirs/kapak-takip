@@ -1325,7 +1325,7 @@ export default function Stock() {
     }
   }
 
-  function processBarcodeValue(rawBarcode: string) {
+  const processBarcodeValue = useCallback((rawBarcode: string) => {
     setMessage('');
     setParsed(null);
     setScanResult(null);
@@ -1389,7 +1389,7 @@ export default function Stock() {
         barcodeInputRef.current?.focus();
       }, 0);
     }
-  }
+  }, [items]);
 
   function solveBarcode() {
     processBarcodeValue(barcode);
@@ -1528,7 +1528,7 @@ export default function Stock() {
     setCameraPhotoScanning(false);
   }
 
-  function processDetectedCameraCode(rawValue: string) {
+  const processDetectedCameraCode = useCallback((rawValue: string) => {
     const normalizedValue = rawValue.trim();
 
     if (!normalizedValue) return;
@@ -1554,7 +1554,7 @@ export default function Stock() {
     setCameraError('');
     setCameraPhotoScanning(false);
     processBarcodeValue(normalizedValue);
-  }
+  }, [processBarcodeValue]);
 
   async function selectPreferredRearCameraId(
     currentStream: MediaStream
@@ -2228,7 +2228,7 @@ export default function Stock() {
       cancelled = true;
       stopCamera();
     };
-  }, [cameraOpen, cameraSelectedDeviceId]);
+  }, [cameraOpen, cameraSelectedDeviceId, processDetectedCameraCode]);
 
   async function addToStock() {
     if (!parsed || scanResult?.status !== 'not-found' || saving) {

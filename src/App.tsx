@@ -1,3 +1,4 @@
+import { canViewWarehouse, canWriteCases } from './lib/permissions';
 import {
   lazy,
   Suspense,
@@ -41,6 +42,9 @@ const Stock = lazy(
 const StockMovements = lazy(
   () => import('./components/StockMovements')
 );
+const MainWarehouse = lazy(
+  () => import('./components/MainWarehouse')
+);
 const CompetitorCases = lazy(
   () => import('./components/CompetitorCases')
 );
@@ -76,6 +80,19 @@ function Protected({
   }
 
   return <>{children}</>;
+}
+
+function PermissionGuard({ children, warehouse = false }: {
+  children: React.ReactNode;
+  warehouse?: boolean;
+}) {
+  const { user, profile, loading } = useAuth();
+  if (loading) return <PageLoading />;
+  if (!user || profile?.id !== user.id) return <Navigate to="/" replace />;
+  const allowed = warehouse
+    ? canViewWarehouse(profile.role)
+    : canWriteCases(profile.role);
+  return allowed ? <>{children}</> : <Navigate to="/" replace />;
 }
 
 function AppRoutes() {
@@ -152,10 +169,10 @@ function AppRoutes() {
         >
           <Route index element={<Dashboard />} />
 
-          <Route path="add" element={<AddCase />} />
-          <Route path="edit/:id" element={<AddCase />} />
+          <Route path="add" element={<PermissionGuard><AddCase /></PermissionGuard>} />
+          <Route path="edit/:id" element={<PermissionGuard><AddCase /></PermissionGuard>} />
 
-          <Route path="foc/:vakaId" element={<FocCase />} />
+          <Route path="foc/:vakaId" element={<PermissionGuard><FocCase /></PermissionGuard>} />
 
           <Route path="list" element={<List />} />
           <Route path="view/:id" element={<ViewCase />} />
@@ -178,13 +195,18 @@ function AppRoutes() {
           />
 
           <Route
+            path="main-warehouse"
+            element={<PermissionGuard warehouse><MainWarehouse /></PermissionGuard>}
+          />
+
+          <Route
             path="archive"
             element={<Navigate to="/list" replace />}
           />
 
           <Route
             path="competitor-cases"
-            element={<CompetitorCases />}
+            element={<PermissionGuard><CompetitorCases /></PermissionGuard>}
           />
 
           <Route path="users" element={<Users />} />
