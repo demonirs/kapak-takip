@@ -1,0 +1,39 @@
+KAVİS — İstanbul yetki düzeltmesi, aşama 1 (01.10.2026)
+
+Bu paket yalnızca aşağıdaki dosyaları içerir:
+src/App.tsx
+src/components/Layout.tsx
+src/components/MainWarehouse.tsx
+src/components/Users.tsx
+src/lib/permissions.ts (yeni)
+sql/KAVIS_Istanbul_004_yetkiler.sql (yeni)
+
+1. Mevcut dört TSX dosyasını proje DIŞINDA bir klasöre kopyalayarak yedekleyin.
+2. ZIP içindeki src ve sql klasörlerini KAVIS-Unified içine kopyalayın.
+3. CMD'de npm run check çalıştırın. Çıktıyı paylaşın.
+4. Kontrol başarılı olduktan sonra SQL yalnızca İstanbul Supabase projesinde uygulanır.
+   SQL transaction içindedir: hata oluşursa COMMIT çalıştırmayın; ROLLBACK; çalıştırın.
+5. npm run dev ile yetkileri test edin.
+
+Test matrisi:
+Ankara: Ana Depo menüde yok; doğrudan /main-warehouse erişimi yok.
+İstanbul member: vaka ekleme/düzenleme mevcut; Ana Depo menü/sayfa/API erişimi yok.
+İstanbul depo: vakaları görüntüler; /add, /edit/:id, /foc/:vakaId ve rakip vaka
+sayfasına erişemez; vaka/FOC oluşturan RPC çağrıları da reddedilir.
+İstanbul depo_viewer: klinik vaka yetkileri mevcut; Ana Depo okur, stok değiştiremez.
+İstanbul admin: depo stok girişi/çıkışı ve rol yönetimi mevcut.
+Member kendi profil rolünü değiştirmeyi denediğinde mevcut trigger reddetmelidir.
+Barkod iki defa okutulunca adet 2 olmalı; yetersiz stok çıkışı reddedilmeli.
+
+Sınırlar:
+- Bu aşamada bekleyen e-posta rolleri eklenmedi; mevcut kullanıcılar üzerinden rol atanır.
+- Dinçer'in mevcut kapak transfer RPC'si korunmuştur; gerçek hesapla test edilmelidir.
+- Login hata mesajları bu pakette değiştirilmedi.
+- SQL'in gerçek Supabase'de çalışması ve tam TypeScript/ESLint/build kontrolü henüz yapılmadı.
+- Barkod okutma sırasındaki kilit yalnızca eşzamanlı ilk stok kaydı oluşumunu düzenler.
+- Eski manuel ürün oluşturma RPC'sinin authenticated erişimi kapatılmıştır: eski
+  ürün kategori listesi mevcut tabloyla uyumsuzdur. Aktif ekran barkod RPC'sini kullanır.
+- AuthContext, ThemeContext, Stock ve çalışan vaka formu dosyaları değiştirilmedi.
+- Git push, main merge, production deploy ve Android sync/build yapılmaz.
+
+Bekleyen roller ve giriş mesajları bu aşamanın kontrollerinden sonra tamamlanacaktır.
