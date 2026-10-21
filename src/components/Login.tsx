@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
-import {
-  Navigate,
-  useNavigate,
-} from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { supabase } from '../lib/supabase';
+import { formatAuthError } from '../lib/authErrors';
+import {
+  getActiveCity,
+  getCityLabel,
+  isCityConfigured,
+  setActiveCity,
+  supabase,
+  type KavisCity,
+} from '../lib/supabase';
 
 type Mode = 'login' | 'signup' | 'forgot' | 'reset';
 
@@ -14,92 +19,82 @@ export default function Login() {
   const { user, signIn, signUp } = useAuth();
   const { theme } = useTheme();
   const navigate = useNavigate();
+  const isResetPage = window.location.pathname === '/reset-password';
 
-  const isResetPage =
-    window.location.pathname === '/reset-password';
-
-  const [mode, setMode] = useState<Mode>(
-    isResetPage ? 'reset' : 'login'
-  );
-
+  const [mode, setMode] = useState<Mode>(isResetPage ? 'reset' : 'login');
+  const [city, setCity] = useState<KavisCity>(() => getActiveCity());
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [passwordConfirm, setPasswordConfirm] =
-    useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
   const [fullName, setFullName] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
-  const [error, setError] = useState<string | null>(
-    null
-  );
-
-  const [message, setMessage] = useState<
-    string | null
-  >(null);
+  const rememberedEmailKey = `rememberedEmail.${city}`;
 
   useEffect(() => {
-    const savedEmail = localStorage.getItem(
-      'rememberedEmail'
-    );
-
-    if (savedEmail) {
-      setEmail(savedEmail);
-    }
-  }, []);
+    setEmail(localStorage.getItem(rememberedEmailKey) ?? '');
+  }, [rememberedEmailKey]);
 
   if (user && mode !== 'reset') {
     return <Navigate to="/" replace />;
   }
 
+  function changeCity(nextCity: KavisCity) {
+    if (nextCity === city) return;
+
+    try {
+      setActiveCity(nextCity);
+      setCity(nextCity);
+      window.location.replace('/login');
+    } catch (cityError) {
+      setError(
+        cityError instanceof Error
+          ? cityError.message
+          : 'Şehir bağlantısı değiştirilemedi.'
+      );
+    }
+  }
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     setLoading(true);
     setError(null);
     setMessage(null);
 
     try {
       if (mode === 'forgot') {
-        const trimmedEmail = email.trim();
-
-        const { error: recoveryError } =
-          await supabase.auth.resetPasswordForEmail(
-            trimmedEmail,
-            {
-              redirectTo: `${window.location.origin}/reset-password`,
-            }
-          );
+        const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(
+          email.trim(),
+          {
+            redirectTo: `${window.location.origin}/reset-password?city=${city}`,
+          }
+        );
 
         if (recoveryError) {
-          setError(recoveryError.message);
+          setError(formatAuthError(recoveryError, city, 'recovery'));
           return;
         }
 
         setMessage(
           'Şifre yenileme bağlantısı e-posta adresine gönderildi. Gelen kutusu ve spam klasörünü kontrol et.'
         );
-
         return;
       }
 
       if (mode === 'reset') {
         if (password.length < 8) {
-          setError(
-            'Yeni şifre en az 8 karakter olmalıdır.'
-          );
+          setError('Yeni şifre en az 8 karakter olmalıdır.');
           return;
         }
-
         if (password !== passwordConfirm) {
           setError('Şifreler birbiriyle eşleşmiyor.');
           return;
         }
 
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
+        const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
           setError(
             'Şifre yenileme bağlantısının süresi dolmuş veya bağlantı geçersiz. Giriş ekranından yeniden bağlantı iste.'
@@ -107,41 +102,23 @@ export default function Login() {
           return;
         }
 
-        const { error: updateError } =
-          await supabase.auth.updateUser({
-            password,
-          });
-
+        const { error: updateError } = await supabase.auth.updateUser({ password });
         if (updateError) {
-          setError(updateError.message);
+          setError(formatAuthError(updateError, city, 'password-update'));
           return;
         }
 
-        setMessage(
-          'Şifren başarıyla yenilendi. Giriş ekranına yönlendiriliyorsun.'
-        );
-
+        setMessage('Şifren başarıyla yenilendi. Giriş ekranına yönlendiriliyorsun.');
         await supabase.auth.signOut();
-
-        window.setTimeout(() => {
-          navigate('/login', {
-            replace: true,
-          });
-        }, 1500);
-
+        window.setTimeout(() => navigate('/login', { replace: true }), 1500);
         return;
       }
 
       const trimmedEmail = email.trim();
-
       const authError =
         mode === 'login'
           ? await signIn(trimmedEmail, password)
-          : await signUp(
-              trimmedEmail,
-              password,
-              fullName.trim()
-            );
+          : await signUp(trimmedEmail, password, fullName.trim());
 
       if (authError) {
         setError(authError);
@@ -149,21 +126,24 @@ export default function Login() {
       }
 
       if (rememberMe) {
-        localStorage.setItem(
-          'rememberedEmail',
-          trimmedEmail
-        );
+        localStorage.setItem(rememberedEmailKey, trimmedEmail);
       } else {
-        localStorage.removeItem('rememberedEmail');
+        localStorage.removeItem(rememberedEmailKey);
       }
     } catch (submitError) {
-      console.error(
-        'Kimlik doğrulama hatası:',
-        submitError
-      );
-
+      console.error('Kimlik doğrulama hatası:', submitError);
       setError(
-        'İşlem sırasında beklenmeyen bir hata oluştu. Lütfen tekrar dene.'
+        formatAuthError(
+          submitError,
+          city,
+          mode === 'forgot'
+            ? 'recovery'
+            : mode === 'reset'
+              ? 'password-update'
+              : mode === 'signup'
+                ? 'signup'
+                : 'login'
+        )
       );
     } finally {
       setLoading(false);
@@ -180,38 +160,17 @@ export default function Login() {
   }
 
   function getSubtitle() {
-    if (mode === 'signup') {
-      return 'Yeni kullanıcı oluştur';
-    }
-
-    if (mode === 'forgot') {
-      return 'Şifre yenileme bağlantısı iste';
-    }
-
-    if (mode === 'reset') {
-      return 'Yeni şifreni belirle';
-    }
-
-    return 'Giriş yap';
+    if (mode === 'signup') return 'Yeni kullanıcı oluştur';
+    if (mode === 'forgot') return 'Şifre yenileme bağlantısı iste';
+    if (mode === 'reset') return 'Yeni şifreni belirle';
+    return `${getCityLabel(city)} sistemine giriş yap`;
   }
 
   function getSubmitLabel() {
-    if (loading) {
-      return 'Bekle...';
-    }
-
-    if (mode === 'signup') {
-      return 'Kayıt Ol';
-    }
-
-    if (mode === 'forgot') {
-      return 'Şifre Yenileme Bağlantısı Gönder';
-    }
-
-    if (mode === 'reset') {
-      return 'Yeni Şifreyi Kaydet';
-    }
-
+    if (loading) return 'Bekle...';
+    if (mode === 'signup') return 'Kayıt Ol';
+    if (mode === 'forgot') return 'Şifre Yenileme Bağlantısı Gönder';
+    if (mode === 'reset') return 'Yeni Şifreyi Kaydet';
     return 'Giriş Yap';
   }
 
@@ -227,32 +186,47 @@ export default function Login() {
             alt=""
             className="mx-auto h-16 w-16 rounded-2xl object-contain shadow-lg"
           />
-
           <img
-            src={theme === 'dark'
-              ? '/brand/kavis-wordmark-dark.png'
-              : '/brand/kavis-wordmark-light.png'}
+            src={
+              theme === 'dark'
+                ? '/brand/kavis-wordmark-dark.png'
+                : '/brand/kavis-wordmark-light.png'
+            }
             alt="KAVİS"
             className="mx-auto h-auto w-44 object-contain"
           />
-
           <h1 className="text-2xl font-bold text-white">
             Klinik Akış ve Vaka İzleme Sistemi
           </h1>
-
-          <p className="text-slate-400">
-            {getSubtitle()}
-          </p>
+          <p className="text-slate-400">{getSubtitle()}</p>
         </div>
+
+        {mode !== 'reset' && (
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-800/60 p-1">
+            {(['ankara', 'istanbul'] as const).map(option => (
+              <button
+                key={option}
+                type="button"
+                disabled={!isCityConfigured(option)}
+                onClick={() => changeCity(option)}
+                className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${
+                  city === option
+                    ? 'bg-cyan-600 text-white shadow'
+                    : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                } disabled:cursor-not-allowed disabled:opacity-40`}
+              >
+                {getCityLabel(option)}
+              </button>
+            ))}
+          </div>
+        )}
 
         {mode === 'signup' && (
           <input
             className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 text-white outline-none focus:border-cyan-400"
             placeholder="Ad Soyad"
             value={fullName}
-            onChange={e =>
-              setFullName(e.target.value)
-            }
+            onChange={e => setFullName(e.target.value)}
             required
             autoComplete="name"
           />
@@ -271,28 +245,16 @@ export default function Login() {
           />
         )}
 
-        {(mode === 'login' ||
-          mode === 'signup' ||
-          mode === 'reset') && (
+        {(mode === 'login' || mode === 'signup' || mode === 'reset') && (
           <input
             className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 text-white outline-none focus:border-cyan-400"
             type="password"
-            placeholder={
-              mode === 'reset'
-                ? 'Yeni şifre'
-                : 'Şifre'
-            }
+            placeholder={mode === 'reset' ? 'Yeni şifre' : 'Şifre'}
             value={password}
-            onChange={e =>
-              setPassword(e.target.value)
-            }
+            onChange={e => setPassword(e.target.value)}
             required
             minLength={mode === 'reset' ? 8 : 6}
-            autoComplete={
-              mode === 'login'
-                ? 'current-password'
-                : 'new-password'
-            }
+            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
           />
         )}
 
@@ -302,9 +264,7 @@ export default function Login() {
             type="password"
             placeholder="Yeni şifreyi tekrar yaz"
             value={passwordConfirm}
-            onChange={e =>
-              setPasswordConfirm(e.target.value)
-            }
+            onChange={e => setPasswordConfirm(e.target.value)}
             required
             minLength={8}
             autoComplete="new-password"
@@ -316,9 +276,7 @@ export default function Login() {
             <input
               type="checkbox"
               checked={rememberMe}
-              onChange={e =>
-                setRememberMe(e.target.checked)
-              }
+              onChange={e => setRememberMe(e.target.checked)}
               className="accent-cyan-500"
             />
             Beni hatırla
@@ -330,7 +288,6 @@ export default function Login() {
             {error}
           </p>
         )}
-
         {message && (
           <p className="text-emerald-300 text-sm bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-xl">
             {message}
@@ -348,19 +305,14 @@ export default function Login() {
           <>
             <button
               type="button"
-              onClick={() =>
-                switchMode('forgot')
-              }
+              onClick={() => switchMode('forgot')}
               className="w-full text-slate-300 hover:text-white text-sm"
             >
               Şifremi unuttum
             </button>
-
             <button
               type="button"
-              onClick={() =>
-                switchMode('signup')
-              }
+              onClick={() => switchMode('signup')}
               className="w-full text-cyan-300 text-sm"
             >
               Hesabın yoksa kayıt ol
@@ -393,9 +345,7 @@ export default function Login() {
             type="button"
             onClick={async () => {
               await supabase.auth.signOut();
-              navigate('/login', {
-                replace: true,
-              });
+              navigate('/login', { replace: true });
             }}
             className="w-full text-cyan-300 text-sm"
           >

@@ -7,7 +7,8 @@ import {
   useState,
 } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
-import { supabase, timeout } from '../lib/supabase';
+import { formatAuthError } from '../lib/authErrors';
+import { getActiveCity, supabase, timeout } from '../lib/supabase';
 
 export type Profile = {
   id: string;
@@ -24,7 +25,11 @@ type AuthContextValue = {
   profile: Profile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<string | null>;
-  signUp: (email: string, password: string, fullName: string) => Promise<string | null>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string
+  ) => Promise<string | null>;
   signOut: () => Promise<void>;
 };
 
@@ -40,68 +45,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadProfile = useCallback(
-    async (currentUser: User | null) => {
-      if (!currentUser) {
-        setProfile(null);
-        return;
-      }
+  const loadProfile = useCallback(async (currentUser: User | null) => {
+    if (!currentUser) {
+      setProfile(null);
+      return;
+    }
 
-      const name = fallbackName(currentUser);
-      const { data, error } = await timeout(
+    const name = fallbackName(currentUser);
+    const { data, error } = await timeout(
+      supabase.from('profiles').select('*').eq('id', currentUser.id).maybeSingle(),
+      8000
+    );
+
+    if (error) {
+      console.error('Profil yükleme hatası:', error);
+      setProfile({ id: currentUser.id, full_name: name });
+      return;
+    }
+
+    if (!data) {
+      const { data: inserted, error: insertError } = await timeout(
         supabase
           .from('profiles')
-          .select('*')
-          .eq('id', currentUser.id)
+          .upsert({
+            id: currentUser.id,
+            full_name: name,
+            email: currentUser.email ?? null,
+          })
+          .select()
           .maybeSingle(),
         8000
       );
 
-      if (error) {
-        console.error('Profil yükleme hatası:', error);
-        setProfile({
-          id: currentUser.id,
-          full_name: name,
-        });
-        return;
+      if (insertError) {
+        console.error('Profil oluşturma hatası:', insertError);
       }
 
-      if (!data) {
-        const {
-          data: inserted,
-          error: insertError,
-        } = await timeout(
-          supabase
-            .from('profiles')
-            .upsert({
-              id: currentUser.id,
-              full_name: name,
-            })
-            .select()
-            .maybeSingle(),
-          8000
-        );
+      setProfile(inserted || { id: currentUser.id, full_name: name });
+      return;
+    }
 
-        if (insertError) {
-          console.error(
-            'Profil oluşturma hatası:',
-            insertError
-          );
-        }
-
-        setProfile(
-          inserted || {
-            id: currentUser.id,
-            full_name: name,
-          }
-        );
-        return;
-      }
-
-      setProfile(data);
-    },
-    []
-  );
+    setProfile(data);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -121,20 +106,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    init();
+    void init();
     const { data } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
       setLoading(false);
 
       window.setTimeout(() => {
-        void loadProfile(
-          currentSession?.user ?? null
-        ).catch(error => {
-          console.error(
-            'Oturum sonrası profil yükleme hatası:',
-            error
-          );
+        void loadProfile(currentSession?.user ?? null).catch(error => {
+          console.error('Oturum sonrası profil yükleme hatası:', error);
         });
       }, 0);
     });
@@ -147,58 +127,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(
     async (email: string, password: string) => {
-      const { data, error } = await timeout(
-        supabase.auth.signInWithPassword({
-          email,
-          password,
-        }),
-        10000
-      );
+      try {
+        const { data, error } = await timeout(
+          supabase.auth.signInWithPassword({ email, password }),
+          10000
+        );
 
-      if (error) return error.message;
+        if (error) return formatAuthError(error, getActiveCity(), 'login');
 
-      setSession(data.session);
-      setUser(data.user);
-      await loadProfile(data.user);
-      return null;
+        setSession(data.session);
+        setUser(data.user);
+        await loadProfile(data.user);
+        return null;
+      } catch (error) {
+        return formatAuthError(error, getActiveCity(), 'login');
+      }
     },
     [loadProfile]
   );
 
   const signUp = useCallback(
-    async (
-      email: string,
-      password: string,
-      fullName: string
-    ) => {
-      const { data, error } = await timeout(
-        supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name:
-                fullName || email.split('@')[0],
+    async (email: string, password: string, fullName: string) => {
+      try {
+        const { data, error } = await timeout(
+          supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: { full_name: fullName || email.split('@')[0] },
             },
-          },
-        }),
-        10000
-      );
+          }),
+          10000
+        );
 
-      if (error) return error.message;
-
-      if (data.user) {
-        await loadProfile(data.user);
+        if (error) return formatAuthError(error, getActiveCity(), 'signup');
+        if (data.user && data.user.identities?.length === 0) {
+          return formatAuthError(
+            { code: 'user_already_exists' },
+            getActiveCity(),
+            'signup'
+          );
+        }
+        if (data.user) await loadProfile(data.user);
+        return null;
+      } catch (error) {
+        return formatAuthError(error, getActiveCity(), 'signup');
       }
-
-      return null;
     },
     [loadProfile]
   );
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-    localStorage.clear();
     sessionStorage.clear();
     setSession(null);
     setUser(null);
@@ -207,24 +187,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({
-      user,
-      session,
-      profile,
-      loading,
-      signIn,
-      signUp,
-      signOut,
-    }),
-    [
-      user,
-      session,
-      profile,
-      loading,
-      signIn,
-      signUp,
-      signOut,
-    ]
+    () => ({ user, session, profile, loading, signIn, signUp, signOut }),
+    [user, session, profile, loading, signIn, signUp, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

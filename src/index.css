@@ -979,6 +979,194 @@ html.light-mode [class~="bg-slate-800/70"] {
   background-color: var(--surface-elevated) !important;
 }
 
+/* ================================================================
+   KAVİS VIVID ACCESSIBLE THEME — final contrast-safe theme layer
+   This block intentionally comes last so legacy Tailwind utilities
+   cannot wash out text or controls in either color mode.
+   ================================================================ */
+:root,
+html.light-mode {
+  --app-bg: #f2f8fc;
+  --surface: #ffffff;
+  --surface-elevated: #f8fcff;
+  --surface-soft: #e6f3f9;
+  --nav-bg: #073b57;
+  --primary: #007a91;
+  --primary-hover: #006477;
+  --primary-soft: #d9f3f7;
+  --primary-on: #ffffff;
+  --accent-blue: #225ed8;
+  --text-main: #102a43;
+  --text-secondary: #36566f;
+  --text-muted: #5b7184;
+  --border: #bfd3df;
+  --success: #087a55;
+  --success-soft: #dff5eb;
+  --success-on: #ffffff;
+  --warning: #8a5200;
+  --warning-soft: #fff0c7;
+  --warning-on: #1f1600;
+  --danger: #b42335;
+  --danger-soft: #fde7eb;
+  --danger-on: #ffffff;
+  --shadow: rgba(16, 42, 67, 0.1);
+  color-scheme: light;
+}
+
+html.dark-mode {
+  --app-bg: #061824;
+  --surface: #0d2635;
+  --surface-elevated: #123344;
+  --surface-soft: #163d4e;
+  --nav-bg: #04131e;
+  --primary: #22d3ee;
+  --primary-hover: #67e8f9;
+  --primary-soft: #123f4b;
+  --primary-on: #06202a;
+  --accent-blue: #60a5fa;
+  --text-main: #f7fbff;
+  --text-secondary: #c3d5e1;
+  --text-muted: #9cb3c2;
+  --border: #365a6d;
+  --success: #4ade80;
+  --success-soft: #123e32;
+  --success-on: #052e1a;
+  --warning: #fbbf24;
+  --warning-soft: #4a3712;
+  --warning-on: #241800;
+  --danger: #fb7185;
+  --danger-soft: #4b2130;
+  --danger-on: #350911;
+  --shadow: rgba(0, 0, 0, 0.32);
+  color-scheme: dark;
+}
+
+html.light-mode body,
+html.dark-mode body {
+  background:
+    radial-gradient(circle at 18% -10%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 28rem),
+    radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--accent-blue) 10%, transparent), transparent 24rem),
+    var(--app-bg) !important;
+}
+
+html.light-mode .surface,
+html.dark-mode .surface {
+  box-shadow: 0 10px 28px var(--shadow);
+}
+
+html.light-mode .surface-muted,
+html.dark-mode .surface-muted {
+  box-shadow: 0 5px 16px var(--shadow);
+}
+
+html.light-mode input::placeholder,
+html.light-mode textarea::placeholder,
+html.dark-mode input::placeholder,
+html.dark-mode textarea::placeholder {
+  color: var(--text-muted) !important;
+  opacity: 1;
+}
+
+html.light-mode .button-primary,
+html.dark-mode .button-primary,
+html.light-mode .bg-cyan-500,
+html.dark-mode .bg-cyan-500,
+html.light-mode .bg-cyan-600,
+html.dark-mode .bg-cyan-600 {
+  background-color: var(--primary) !important;
+  color: var(--primary-on) !important;
+}
+
+html.light-mode .button-primary:hover,
+html.dark-mode .button-primary:hover,
+html.light-mode .hover\:bg-cyan-400:hover,
+html.dark-mode .hover\:bg-cyan-400:hover {
+  background-color: var(--primary-hover) !important;
+  color: var(--primary-on) !important;
+}
+
+html.light-mode [class~="bg-emerald-500"],
+html.light-mode [class~="bg-emerald-600"],
+html.dark-mode [class~="bg-emerald-500"],
+html.dark-mode [class~="bg-emerald-600"] {
+  background-color: var(--success) !important;
+  color: var(--success-on) !important;
+}
+
+html.light-mode [class~="bg-amber-400"],
+html.light-mode [class~="bg-amber-500"],
+html.dark-mode [class~="bg-amber-400"],
+html.dark-mode [class~="bg-amber-500"] {
+  background-color: var(--warning) !important;
+  color: var(--warning-on) !important;
+}
+
+html.light-mode [class~="bg-red-500"],
+html.light-mode [class~="bg-red-600"],
+html.dark-mode [class~="bg-red-500"],
+html.dark-mode [class~="bg-red-600"] {
+  background-color: var(--danger) !important;
+  color: var(--danger-on) !important;
+}
+
+html.light-mode [class*="bg-emerald-500/"],
+html.dark-mode [class*="bg-emerald-500/"] {
+  background-color: var(--success-soft) !important;
+}
+
+html.light-mode [class*="bg-amber-500/"],
+html.dark-mode [class*="bg-amber-500/"] {
+  background-color: var(--warning-soft) !important;
+}
+
+html.light-mode [class*="bg-red-500/"],
+html.dark-mode [class*="bg-red-500/"] {
+  background-color: var(--danger-soft) !important;
+}
+
+html.light-mode .app-sidebar,
+html.dark-mode .app-sidebar,
+html.light-mode .app-topbar,
+html.dark-mode .app-topbar {
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--primary) 13%, var(--nav-bg)), var(--nav-bg)) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+html.light-mode .app-sidebar [class*="text-slate-"],
+html.dark-mode .app-sidebar [class*="text-slate-"],
+html.light-mode .app-topbar [class*="text-slate-"],
+html.dark-mode .app-topbar [class*="text-slate-"] {
+  color: #d7e7f0 !important;
+}
+
+html.light-mode .app-sidebar [class*="text-cyan-"],
+html.dark-mode .app-sidebar [class*="text-cyan-"],
+html.light-mode .app-topbar [class*="text-cyan-"],
+html.dark-mode .app-topbar [class*="text-cyan-"] {
+  color: #67e8f9 !important;
+}
+
+html.light-mode button:focus-visible,
+html.light-mode a:focus-visible,
+html.light-mode input:focus-visible,
+html.light-mode select:focus-visible,
+html.light-mode textarea:focus-visible,
+html.dark-mode button:focus-visible,
+html.dark-mode a:focus-visible,
+html.dark-mode input:focus-visible,
+html.dark-mode select:focus-visible,
+html.dark-mode textarea:focus-visible {
+  outline-color: var(--primary);
+  outline-width: 3px;
+}
+
+html.light-mode ::selection,
+html.dark-mode ::selection {
+  background: var(--primary);
+  color: var(--primary-on);
+}
+
 html.light-mode [class~="bg-slate-700/25"],
 html.light-mode [class~="bg-slate-700/30"],
 html.light-mode [class~="bg-slate-700/40"],

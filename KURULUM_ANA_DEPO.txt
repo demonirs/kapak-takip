@@ -1,0 +1,17 @@
+KAVİS İstanbul Ana Depo kurulumu
+
+1. Bu ZIP dosyasını KAVIS-Unified proje klasörüne açın.
+2. CMD'de proje klasöründe çalıştırın:
+   npm run check
+3. Tarayıcı testi için:
+   npm run dev
+
+Kontrol:
+- İstanbul ile girişte menüde Ana Depo görünmelidir.
+- Ankara ile girişte Ana Depo görünmemelidir.
+- Admin veya depo rolü barkodla giriş ve vaka için çıkış yapabilir.
+- Member rolü yalnızca depo listesini ve hareketleri görebilir.
+- PWA'da fiziksel barkod okuyucu/manual yapıştırma çalışır.
+- Android native kamera taraması, uygulamaya sonraki sync/build sırasında eklenir.
+
+Bu paket production deploy veya git push yapmaz.

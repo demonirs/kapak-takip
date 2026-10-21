@@ -8,11 +8,11 @@ import {
   UserCog,
   UsersRound,
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { getActiveCity, supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { notifyAdmins } from '../lib/notifications';
 
-type UserRole = 'admin' | 'member';
+import { ROLE_LABELS, type UserRole } from '../lib/permissions';
 
 type Profile = {
   id: string;
@@ -21,14 +21,15 @@ type Profile = {
   created_at?: string | null;
 };
 
-const SYSTEM_OWNER_ID = 'ae008984-b1c2-428d-ae82-9d5c883905db';
+const SYSTEM_OWNER_ID = '57a70368-292d-4f9b-9bb3-501c3e7b65a6';
 
 const USER_ORDER: Record<string, number> = {
-  'ae008984-b1c2-428d-ae82-9d5c883905db': 0,
-  '4c418bbf-073b-4114-86d0-96fa223ed50d': 1,
-  'b4d9cbf3-52c9-4c5a-a611-0ec27a9c0a4d': 2,
-  '448f8ffa-6bcc-4ddf-bdf4-352902a5612b': 3,
-  'c2aac349-fecc-40df-b347-0102dd70d9e8': 4,
+  '57a70368-292d-4f9b-9bb3-501c3e7b65a6': 0,
+  'ae008984-b1c2-428d-ae82-9d5c883905db': 1,
+  '4c418bbf-073b-4114-86d0-96fa223ed50d': 2,
+  'b4d9cbf3-52c9-4c5a-a611-0ec27a9c0a4d': 3,
+  '448f8ffa-6bcc-4ddf-bdf4-352902a5612b': 4,
+  'c2aac349-fecc-40df-b347-0102dd70d9e8': 5,
 };
 
 type RoleSelectProps = {
@@ -91,7 +92,7 @@ function RoleSelect({
               : 'border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-600'
         }`}
       >
-        <span>{value === 'admin' ? 'Admin' : 'Üye'}</span>
+        <span>{ROLE_LABELS[value as UserRole] || 'Üye'}</span>
         <ChevronDown
           className={`h-4 w-4 shrink-0 transition-transform ${
             isOpen ? 'rotate-180' : ''
@@ -105,7 +106,7 @@ function RoleSelect({
           aria-label={`${userName} rol seçenekleri`}
           className="absolute right-0 z-50 mt-1.5 w-full overflow-hidden rounded-xl border border-slate-600 bg-slate-900 p-1.5 shadow-2xl shadow-black/50"
         >
-          {(['member', 'admin'] as UserRole[]).map(role => {
+          {((getActiveCity() === 'istanbul' ? ['member', 'depo', 'depo_viewer', 'admin'] : ['member', 'admin']) as UserRole[]).map(role => {
             const selected = role === value;
 
             return (
@@ -124,7 +125,7 @@ function RoleSelect({
                     : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                 }`}
               >
-                <span>{role === 'admin' ? 'Admin' : 'Üye'}</span>
+                <span>{ROLE_LABELS[role as UserRole] || 'Üye'}</span>
                 {selected && <Check className="h-4 w-4 text-cyan-300" />}
               </button>
             );
@@ -205,7 +206,7 @@ export default function Users() {
       return;
     }
 
-    const roleText = role === 'admin' ? 'Admin' : 'Üye';
+    const roleText = ROLE_LABELS[role as UserRole] || 'Üye';
     const ok = window.confirm(
       `${targetUser.full_name || 'Bu kullanıcı'} için rol ${roleText} olarak değiştirilsin mi?`
     );
@@ -226,7 +227,7 @@ export default function Users() {
     }
 
     const previousRoleText =
-      targetUser.role === 'admin' ? 'Admin' : 'Üye';
+      ROLE_LABELS[targetUser.role as UserRole] || 'Üye';
 
     try {
       await notifyAdmins({
@@ -265,7 +266,7 @@ export default function Users() {
   }
 
   function normalizedRole(user: Profile): UserRole {
-    return user.role === 'admin' ? 'admin' : 'member';
+    return user.role && user.role in ROLE_LABELS ? user.role as UserRole : 'member';
   }
 
   function isSystemOwner(user: Profile) {
@@ -294,7 +295,7 @@ export default function Users() {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-[11px] font-medium text-slate-300">
         <UserCog className="h-3.5 w-3.5" />
-        Üye
+        {ROLE_LABELS[user.role as UserRole] || 'Üye'}
       </span>
     );
   }
