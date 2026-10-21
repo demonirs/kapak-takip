@@ -155,6 +155,10 @@ const GTIN_MAP: Record<string, number> = {
   '00763000655440': 34,
 };
 
+const GTIN_BY_SIZE: Record<number, string> = Object.fromEntries(
+  Object.entries(GTIN_MAP).map(([gtin, size]) => [size, gtin])
+);
+
 type SizeFilter = 'Kapalı' | 'Tümü' | '23' | '26' | '29' | '34';
 type ScanStatus = 'found' | 'used' | 'not-found';
 
@@ -823,6 +827,10 @@ export default function Stock() {
     string[]
   >([]);
   const [barcode, setBarcode] = useState('');
+  const [manualEntryOpen, setManualEntryOpen] = useState(false);
+  const [manualSize, setManualSize] = useState('29');
+  const [manualLot, setManualLot] = useState('');
+  const [manualExpirationDate, setManualExpirationDate] = useState('');
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraStarting, setCameraStarting] = useState(false);
   const [cameraError, setCameraError] = useState('');
@@ -893,6 +901,8 @@ export default function Stock() {
 
   const hasUnsavedStockWork =
     Boolean(barcode.trim()) ||
+    Boolean(manualLot.trim()) ||
+    Boolean(manualExpirationDate) ||
     (Boolean(parsed) && scanResult?.status === 'not-found') ||
     Boolean(transferCity.trim()) ||
     selectedTransferIds.length > 0;
@@ -1325,7 +1335,7 @@ export default function Stock() {
     }
   }
 
-  function processBarcodeValue(rawBarcode: string) {
+  const processBarcodeValue = useCallback((rawBarcode: string) => {
     setMessage('');
     setParsed(null);
     setScanResult(null);
@@ -1389,7 +1399,7 @@ export default function Stock() {
         barcodeInputRef.current?.focus();
       }, 0);
     }
-  }
+  }, [items]);
 
   function solveBarcode() {
     processBarcodeValue(barcode);
@@ -1528,7 +1538,7 @@ export default function Stock() {
     setCameraPhotoScanning(false);
   }
 
-  function processDetectedCameraCode(rawValue: string) {
+  const processDetectedCameraCode = useCallback((rawValue: string) => {
     const normalizedValue = rawValue.trim();
 
     if (!normalizedValue) return;
@@ -1554,7 +1564,7 @@ export default function Stock() {
     setCameraError('');
     setCameraPhotoScanning(false);
     processBarcodeValue(normalizedValue);
-  }
+  }, [processBarcodeValue]);
 
   async function selectPreferredRearCameraId(
     currentStream: MediaStream
@@ -2228,29 +2238,26 @@ export default function Stock() {
       cancelled = true;
       stopCamera();
     };
-  }, [cameraOpen, cameraSelectedDeviceId]);
+  }, [cameraOpen, cameraSelectedDeviceId, processDetectedCameraCode]);
 
-  async function addToStock() {
-    if (!parsed || scanResult?.status !== 'not-found' || saving) {
-      return;
-    }
-
+  async function createStockEntry(stockEntry: ParsedBarcode) {
+    if (saving) return;
     setSaving(true);
     setMessage('');
 
-    const lotNo = normalizeLot(parsed.lot_no);
+    const lotNo = normalizeLot(stockEntry.lot_no);
 
     try {
       const { data: insertedStock, error: stockError } = await supabase
         .from('kapak_stok')
         .insert({
-          urun_adi: parsed.urun_adi,
-          gtin: parsed.gtin,
+          urun_adi: stockEntry.urun_adi,
+          gtin: stockEntry.gtin,
           kapak_adi: 'EVPROPLUS',
-          kapak_boyutu: parsed.kapak_boyutu,
+          kapak_boyutu: stockEntry.kapak_boyutu,
           lot_no: lotNo,
-          son_kullanma_tarihi: parsed.son_kullanma_tarihi,
-          barkod_raw: parsed.barkod_raw,
+          son_kullanma_tarihi: stockEntry.son_kullanma_tarihi,
+          barkod_raw: stockEntry.barkod_raw,
           durum: 'stokta',
         })
         .select('id')
@@ -2265,10 +2272,10 @@ export default function Stock() {
         .insert({
           kapak_stok_id: insertedStock.id,
           islem: 'giris',
-          urun_adi: parsed.urun_adi,
+          urun_adi: stockEntry.urun_adi,
           lot_no: lotNo,
-          kapak_boyutu: parsed.kapak_boyutu,
-          son_kullanma_tarihi: parsed.son_kullanma_tarihi,
+          kapak_boyutu: stockEntry.kapak_boyutu,
+          son_kullanma_tarihi: stockEntry.son_kullanma_tarihi,
           arsivlendi: false,
         });
 
@@ -2291,33 +2298,94 @@ export default function Stock() {
 
       const successSnapshot: StockEntrySuccess = {
         stockId: insertedStock.id,
-        urunAdi: parsed.urun_adi,
-        size: parsed.kapak_boyutu,
+        urunAdi: stockEntry.urun_adi,
+        size: stockEntry.kapak_boyutu,
         lotNo,
-        expirationDate: parsed.son_kullanma_tarihi,
+        expirationDate: stockEntry.son_kullanma_tarihi,
         notificationStatus: 'pending',
       };
 
       setParsed(null);
       setScanResult(null);
-      markAuditEntryAsFound(parsed, insertedStock.id);
+      markAuditEntryAsFound(stockEntry, insertedStock.id);
       setStockEntrySuccess(successSnapshot);
       setMessage(
         `${lotNo} LOT numaralı kapak stoka eklendi. Seri giriş tamamlanınca özet bildirimi gönderin.`
       );
       await loadStock();
+      return true;
     } catch (error: unknown) {
       setMessage(
         error instanceof Error
           ? error.message
           : 'Kapak stoka eklenemedi.'
       );
+      return false;
     } finally {
       setSaving(false);
 
       window.setTimeout(() => {
         barcodeInputRef.current?.focus();
       }, 0);
+    }
+  }
+
+  async function addToStock() {
+    if (!parsed || scanResult?.status !== 'not-found' || saving) return;
+    await createStockEntry(parsed);
+  }
+
+  async function addManualStock() {
+    if (saving) return;
+
+    const size = Number(manualSize);
+    const lotNo = normalizeLot(manualLot);
+
+    if (!GTIN_BY_SIZE[size]) {
+      setMessage('Geçerli bir kapak ölçüsü seçin.');
+      return;
+    }
+
+    if (!lotNo) {
+      setMessage('LOT / SN bilgisi zorunludur.');
+      return;
+    }
+
+    if (!manualExpirationDate) {
+      setMessage('Son kullanma tarihi zorunludur.');
+      return;
+    }
+
+    const existingItem = items.find(
+      item =>
+        normalizeLot(item.lot_no || '') === lotNo &&
+        Number(item.kapak_boyutu) === size
+    );
+
+    if (existingItem) {
+      setMessage(
+        existingItem.durum === 'stokta'
+          ? `${lotNo} LOT / SN numaralı ${size} mm kapak zaten stokta.`
+          : `${lotNo} LOT / SN numaralı ${size} mm kapak daha önce kullanılmış. Tekrar stoka eklenemez.`
+      );
+      return;
+    }
+
+    const manualEntry: ParsedBarcode = {
+      gtin: GTIN_BY_SIZE[size],
+      urun_adi: `EVPROPLUS-${size}`,
+      kapak_boyutu: size,
+      lot_no: lotNo,
+      son_kullanma_tarihi: manualExpirationDate,
+      barkod_raw: `MANUEL:${size}:${lotNo}:${manualExpirationDate}`,
+    };
+
+    const wasAdded = await createStockEntry(manualEntry);
+
+    if (wasAdded) {
+      setManualLot('');
+      setManualExpirationDate('');
+      setActiveFilter(String(size) as SizeFilter);
     }
   }
 
@@ -3325,6 +3393,98 @@ export default function Stock() {
               )}
             </div>
           </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <PackagePlus className="h-5 w-5 text-emerald-300" />
+              <h2 className="text-sm font-semibold text-white">
+                Manuel Kapak Ekle
+              </h2>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">
+              Barkod okunamadığında ölçü, LOT / SN ve SKT ile stok kaydı oluşturun.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setManualEntryOpen(previous => !previous)}
+            className="inline-flex min-h-10 items-center justify-center rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
+            aria-expanded={manualEntryOpen}
+          >
+            {manualEntryOpen ? 'Formu Kapat' : 'Manuel Giriş Aç'}
+          </button>
+        </div>
+
+        {manualEntryOpen && (
+          <form
+            className="mt-4 grid gap-3 sm:grid-cols-[140px_minmax(0,1fr)_minmax(180px,1fr)_auto] sm:items-end"
+            onSubmit={event => {
+              event.preventDefault();
+              void addManualStock();
+            }}
+          >
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-slate-300">
+                Kapak ölçüsü
+              </span>
+              <select
+                value={manualSize}
+                onChange={event => setManualSize(event.target.value)}
+                disabled={saving}
+                className="min-h-11 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+              >
+                <option value="23">23 mm</option>
+                <option value="26">26 mm</option>
+                <option value="29">29 mm</option>
+                <option value="34">34 mm</option>
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-slate-300">
+                LOT / SN
+              </span>
+              <input
+                value={manualLot}
+                onChange={event => setManualLot(event.target.value.toUpperCase())}
+                placeholder="Örn. R940088"
+                autoComplete="off"
+                disabled={saving}
+                className="min-h-11 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 font-mono text-sm uppercase text-white outline-none placeholder:font-sans placeholder:normal-case placeholder:text-slate-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-slate-300">
+                Son kullanma tarihi
+              </span>
+              <input
+                type="date"
+                value={manualExpirationDate}
+                onChange={event => setManualExpirationDate(event.target.value)}
+                disabled={saving}
+                className="min-h-11 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none [color-scheme:dark] focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={saving || !manualLot.trim() || !manualExpirationDate}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-emerald-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <PackagePlus className="h-4 w-4" />
+              )}
+              {saving ? 'Ekleniyor...' : 'Stoka Ekle'}
+            </button>
+          </form>
         )}
       </section>
 
