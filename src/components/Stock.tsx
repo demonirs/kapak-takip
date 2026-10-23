@@ -3525,7 +3525,7 @@ export default function Stock() {
                 </p>
               ))}
               <p className="text-amber-200">
-                Bu yalnızca yerel ön kontroldür. Sunucudaki güncel kayıtlar ve depo yetkileri henüz doğrulanmaz. Veritabanına kayıt yapılmaz.
+                Ön kontrol: Ölçü, seri numarası ve son kullanma tarihi kontrol edilir. Ankara’ya Kaydet seçildiğinde sunucu kayıtları doğrular ve işlem sonucu bildirilir.
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
