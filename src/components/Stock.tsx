@@ -830,6 +830,38 @@ export default function Stock() {
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
   const [bulkEntryOpen, setBulkEntryOpen] = useState(false);
   const [bulkEntryText, setBulkEntryText] = useState('');
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  // KAVIS_BULK_VALIDATION_V2: Sadece ön kontrol; veritabanına yazmaz.
+  const bulkValidation = bulkEntryText.split(/\r?\n/)
+    .map((line, index) => ({ line: line.trim(), lineNumber: index + 1 }))
+    .filter(row => row.line.length > 0)
+    .map(row => {
+      const parts = row.line.split(',').map(value => value.trim());
+      const size = Number(parts[0]);
+      const lot = (parts[1] || '').toUpperCase();
+      const expiry = parts[2] || '';
+      const errors: string[] = [];
+      if (parts.length !== 3) errors.push('3 alan gerekli');
+      if (![23, 26, 29, 34].includes(size)) errors.push('geçersiz ölçü');
+      if (!/^[A-Z0-9-]{4,40}$/.test(lot)) errors.push('geçersiz SN');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(expiry) ||
+          Number.isNaN(Date.parse(expiry)) ||
+          new Date(expiry + 'T00:00:00Z').toISOString().slice(0, 10) !== expiry)
+        errors.push('geçersiz SKT');
+      else if (expiry < new Date().toISOString().slice(0, 10))
+        errors.push('SKT geçmiş');
+      return { ...row, size, lot, expiry, errors };
+    });
+  const bulkSeen = new Set<string>();
+  for (const row of bulkValidation) {
+    if (row.lot) {
+      if (bulkSeen.has(row.lot)) row.errors.push('listede mükerrer SN');
+      bulkSeen.add(row.lot);
+      if (items.some(item => normalizeLot(item.lot_no || '') === row.lot))
+        row.errors.push('yüklenmiş stok listesinde SN mevcut');
+    }
+  }
+
   const [manualSize, setManualSize] = useState('29');
   const [manualLot, setManualLot] = useState('');
   const [manualExpirationDate, setManualExpirationDate] = useState('');
@@ -2337,6 +2369,51 @@ export default function Stock() {
     await createStockEntry(parsed);
   }
 
+  // KAVIS_ANKARA_BULK_RPC_V1: Tum kayitlar tek DB transaction'inda.
+  async function submitAnkaraBulkStock() {
+    if (saving || bulkSubmitting) return;
+    if (bulkValidation.length === 0 || bulkValidation.some(row => row.errors.length > 0)) {
+      setMessage('Toplu giris icin tum satirlarin on kontrolden gecmesi gerekiyor.');
+      return;
+    }
+    if (bulkValidation.some(row => row.lot === 'R253091')) {
+      setMessage('R253091 hastada kullanildi; tekrar stoga eklenemez.');
+      return;
+    }
+    if (!window.confirm(
+      bulkValidation.length + ' EVPROPLUS kapak ANKARA deposuna kaydedilecek. Islem geri alinmayacak. Onayliyor musunuz?'
+    )) return;
+
+    setBulkSubmitting(true);
+    setMessage('Ankara toplu giris veritabaninda isleniyor...');
+    try {
+      const payload = bulkValidation.map(row => ({
+        size: row.size,
+        lot: row.lot,
+        expiry: row.expiry,
+      }));
+      const { data, error } = await supabase.rpc('bulk_insert_ankara_stock', {
+        p_items: payload,
+      });
+      if (error) throw error;
+      const result = data as {
+        success?: boolean;
+        inserted_count?: number;
+        destination?: string;
+      } | null;
+      if (!result?.success || result.inserted_count !== payload.length || result.destination !== 'Ankara') {
+        throw new Error('Veritabani toplu giris sonucunu dogrulamadi. Tekrar denemeden once stogu kontrol edin.');
+      }
+      setBulkEntryText('');
+      await loadStock();
+      setMessage(result.inserted_count + ' kapak Ankara deposuna basariyla kaydedildi.');
+    } catch (error: unknown) {
+      setMessage(error instanceof Error ? error.message : 'Toplu giris basarisiz.');
+    } finally {
+      setBulkSubmitting(false);
+    }
+  }
+
   async function addManualStock() {
     if (saving) return;
 
@@ -3440,10 +3517,28 @@ export default function Stock() {
               className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white"
               aria-label="Toplu kapak giriş satırları"
             />
-            <p className="text-xs text-slate-400">
-              {bulkEntryText.trim() ? `${bulkEntryText.trim().split(/\r?\n/).length} satır girildi.` : 'Henüz kayıt girilmedi.'}
-              {' '}Bu panel yalnızca hazırlık içindir; veritabanına toplu kayıt yapmaz.
-            </p>
+            <div className="space-y-1 text-xs text-slate-300">
+              <p>{bulkValidation.length} satır • {bulkValidation.filter(row => row.errors.length === 0).length} ön kontrolden geçti • {bulkValidation.filter(row => row.errors.length > 0).length} sorunlu</p>
+              {bulkValidation.filter(row => row.errors.length > 0).slice(0, 20).map(row => (
+                <p key={row.lineNumber} className="text-rose-300">
+                  Satır {row.lineNumber}: {row.errors.join(', ')}
+                </p>
+              ))}
+              <p className="text-amber-200">
+                Bu yalnızca yerel ön kontroldür. Sunucudaki güncel kayıtlar ve depo yetkileri henüz doğrulanmaz. Veritabanına kayıt yapılmaz.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-sky-200">Hedef depo: Ankara</span>
+              <button
+                type="button"
+                disabled={saving || bulkSubmitting || bulkValidation.length === 0 || bulkValidation.some(row => row.errors.length > 0) || bulkValidation.some(row => row.lot === 'R253091')}
+                onClick={() => { void submitAnkaraBulkStock(); }}
+                className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {bulkSubmitting ? 'Kaydediliyor...' : 'Onayla ve Ankara Stoguna Kaydet'}
+              </button>
+            </div>
           </div>
         )}
 
