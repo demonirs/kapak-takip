@@ -828,6 +828,8 @@ export default function Stock() {
   >([]);
   const [barcode, setBarcode] = useState('');
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
+  const [bulkEntryOpen, setBulkEntryOpen] = useState(false);
+  const [bulkEntryText, setBulkEntryText] = useState('');
   const [manualSize, setManualSize] = useState('29');
   const [manualLot, setManualLot] = useState('');
   const [manualExpirationDate, setManualExpirationDate] = useState('');
@@ -3396,29 +3398,54 @@ export default function Stock() {
         )}
       </section>
 
-      <section className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <PackagePlus className="h-5 w-5 text-emerald-300" />
-              <h2 className="text-sm font-semibold text-white">
-                Manuel Kapak Ekle
-              </h2>
-            </div>
-            <p className="mt-1 text-xs text-slate-400">
-              Barkod okunamadığında ölçü, LOT / SN ve SKT ile stok kaydı oluşturun.
-            </p>
-          </div>
-
+      {/* KAVIS_BULK_PANEL_V1: Kompakt stok giris araclari */}
+      <section className="rounded-xl border border-slate-700/40 p-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setManualEntryOpen(previous => !previous)}
-            className="inline-flex min-h-10 items-center justify-center rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
+            onClick={() => {
+              setBulkEntryOpen(false);
+              setManualEntryOpen(previous => !previous);
+            }}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20"
             aria-expanded={manualEntryOpen}
           >
-            {manualEntryOpen ? 'Formu Kapat' : 'Manuel Giriş Aç'}
+            <PackagePlus className="h-4 w-4" />
+            {manualEntryOpen ? 'Manuel Kapat' : 'Manuel Ekle'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setManualEntryOpen(false);
+              setBulkEntryOpen(previous => !previous);
+            }}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-xs font-semibold text-sky-200 hover:bg-sky-500/20"
+            aria-expanded={bulkEntryOpen}
+          >
+            <PackagePlus className="h-4 w-4" />
+            {bulkEntryOpen ? 'Toplu Kapat' : 'Toplu Ekle'}
           </button>
         </div>
+
+        {bulkEntryOpen && (
+          <div className="mt-3 space-y-2 rounded-lg border border-slate-700 bg-slate-900/60 p-3">
+            <p className="text-xs text-slate-300">
+              Ön kontrol: Her satıra ölçü, SN ve SKT yazın. Örnek: 26,R259850,2027-12-11
+            </p>
+            <textarea
+              value={bulkEntryText}
+              onChange={event => setBulkEntryText(event.target.value)}
+              rows={6}
+              placeholder={'26,R259850,2027-12-11\n29,R936913,2028-06-16'}
+              className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2 font-mono text-xs text-white"
+              aria-label="Toplu kapak giriş satırları"
+            />
+            <p className="text-xs text-slate-400">
+              {bulkEntryText.trim() ? `${bulkEntryText.trim().split(/\r?\n/).length} satır girildi.` : 'Henüz kayıt girilmedi.'}
+              {' '}Bu panel yalnızca hazırlık içindir; veritabanına toplu kayıt yapmaz.
+            </p>
+          </div>
+        )}
 
         {manualEntryOpen && (
           <form
